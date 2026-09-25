@@ -1,0 +1,1690 @@
+SIAM J. COMPUT.                                    c 2008 Society for Industrial and Applied Mathematics
+                                                   
+Vol. 38, No. 4, pp. 1574–1601
+
+
+
+
+ THE COMBINED POWER OF CONDITIONS AND INFORMATION
+  ON FAILURES TO SOLVE ASYNCHRONOUS SET AGREEMENT∗
+         ACHOUR MOSTEFAOUI† , SERGIO RAJSBAUM‡ , MICHEL RAYNAL† , AND
+                                     CORENTIN TRAVERS†
+
+    Abstract. To cope with the impossibility of solving agreement problems in asynchronous sys-
+tems made up of n processes and prone to t process crashes, system designers tailor their algorithms
+to run fast in “normal” circumstances. Two orthogonal notions of “normality” have been studied in
+the past through failure detectors that give processes information about process crashes, and through
+conditions that restrict the inputs to an agreement problem. This paper investigates how the two
+approaches can beneﬁt from each other to solve the k-set agreement problem, where processes must
+agree on at most k of their input values (when k = 1 we have the famous consensus problem). It
+proposes novel failure detectors for solving k-set agreement and a protocol that combines them with
+conditions, establishing a new bridge among asynchronous, synchronous, and partially synchronous
+systems with respect to agreement problems. The paper also proves a lower bound when solving the
+k-set agreement problem with a condition.
+
+   Key words. asynchronous system, condition, consensus, failure detection, input vector, legal
+condition, set agreement, process crash, shared memory, snapshot
+
+    AMS subject classifications. 68Q10, 68Q25, 68Q85
+
+    DOI. 10.1137/050645580
+
+
+     1. Introduction. Distributed services have to run eﬃciently and reliably in
+complex environments with unpredictable processing and communication delays, where
+components can fail in various ways. It is unavoidable to encounter scenarios where
+system performance will degrade, or even manual intervention will be required. There-
+fore, system designers tailor their applications to run fast in “normal” circumstances
+while having expensive recovery procedures in the rare cases of “abnormal” circum-
+stances. Two complementary notions of “normality” have been considered, mirroring
+the traditional computer science duality of control and data. On the control side we
+have the failure detector approach [8], which abstracts away useful failure pattern
+information, available in common operating scenarios. On the data side, we have the
+condition-based approach [36], which looks at common input data patterns of a cer-
+tain distributed problem we are interested in. The aim of this paper is to study how
+the two approaches interact and can beneﬁt from each other, with respect to solving
+agreement problems.
+    1.1. Context of the paper. Distributed services often rely on an underlying
+agreement protocol. The most popular and fundamental of the agreement problems is
+consensus, which is actually indispensable for a lot of services. This paper investigates
+the possibilities and limitations of solving consensus, and other weaker agreement
+problems, in a system with failure detectors and conditions.
+   ∗ Received by the editors November 21, 2005; accepted for publication (in revised form) July 7,
+
+2008; published electronically November 21, 2008. An extended abstract of this paper appeared in
+the proceedings of PODC 2005. This work was supported by grants from LAFMI (Franco-Mexican
+Lab in Computer Science), DGAPA-UNAM, and the European Network of Excellence ReSIST.
+     http://www.siam.org/journals/sicomp/38-4/64558.html
+   † IRISA, Campus de Beaulieu, 35042 Rennes Cedex, France (achour@irisa.fr, raynal@irisa.fr,
+
+ctravers@irisa.fr).
+   ‡ Instituto de Matemáticas, Universidad Nacional Autónoma de México, D. F. 04510, Mexico
+
+(rajsbaum@math.unam.mx).
+                                                1574
+
+
+
+
+     Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+                 COMBINED CONDITIONS AND FAILURE INFORMATION                                1575
+
+     Agreement problems. The consensus problem can informally be stated as
+follows. Each process proposes a value, and the processes that are not faulty have
+to decide the same value such that the value decided is one of the proposed values.
+As a familiar example, it is easy to see that the atomic broadcast problem relies on
+consensus as it requires that all of the processes deliver the messages they broadcast
+in the same order: They have, consequently, to agree in one way or another on the
+same message delivery order. However, it is well known that the consensus problem
+has no solution in message-passing asynchronous systems made up of n processes that
+need to tolerate a single process crash failure [16].
+     The k-set agreement problem [9] relaxes the consensus requirement to allow up
+to k diﬀerent values, out of the proposed values, to be decided; when k = 1, we
+have the consensus problem. Set agreement is an abstraction of problems that are
+weaker than consensus. Its discovery was motivated by the search for a problem that is
+solvable when k −1 processes can crash, but not when k can crash, in an asynchronous
+system. Since then, it has been very valuable in the development of the foundations of
+distributed computing. The proofs in [6, 29, 50] showing that k-set agreement is not
+solvable in a system of k + 1 processes where k can crash uncovered a deep connection
+between distributed computing and topology and motivated a signiﬁcant amount of
+subsequent research.
+     The situation is totally diﬀerent in synchronous systems, where both consensus
+and k-set agreement can be solved for any value of t (the maximum number of process
+crashes) [10, 49]. However, there are limitations on how fast these problems can
+be solved in a synchronous system, as a function of the number of failures t to be
+tolerated. It has been shown that consensus requires t + 1 rounds in the worst case
+[15, 33], and there are protocols that meet this lower bound. These results have been
+generalized for the set agreement problem in [10, 20, 48].
+     The following two complementary notions of “normality” have been considered1
+to cope with the consensus and set agreement asynchronous impossibility results and
+synchronous lower bounds.
+     Control: Enriching the underlying system. The ﬁrst approach focuses on
+the behavior of the underlying system. In this case “normal circumstance” means
+a period during which the system behaves in a relatively synchronous way. Namely,
+periods during which upper bounds on process execution speeds and on message trans-
+mission delays hold (various such partially synchronous models have been considered,
+e.g., [14]), or periods during which message exchange patterns satisfy some properties
+(e.g., the notion of winning/losing responses introduced in [35]) that allow solving
+consensus. A failure detector abstracts away such low-level assumptions by provid-
+ing processes with a primitive they can invoke that returns information on process
+failures. One of the noteworthy features of failure detectors is the modular approach
+they favor: One can independently, on one side, solve a problem with the help of a
+particular class of failure detector, and, on another side, implement the assumed fail-
+ure detector with the help of the underlying timing or order assumptions. The design,
+transportability, and proof of protocols then become modular and easier to achieve.
+     Chandra and Toueg introduced the failure detector notion [8] and deﬁned eight
+classes that can be used to solve asynchronous consensus. Together with Hadzilacos,
+they later showed that one of these classes is the weakest class of failure detectors
+to solve consensus when t < n/2 [7] (n being the total number of processes, and t
+an upper bound on the number of faulty processes). The weakest failure detector
+   1 There are other approaches, like randomization or stronger shared memory primitives.
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+1576              MOSTEFAOUI, RAJSBAUM, RAYNAL, AND TRAVERS
+
+
+for consensus and any value of t was identiﬁed in [12]. These results are of great
+theoretical interest because they identify the minimum knowledge about failures that
+needs to be abstracted to solve consensus. Failure detectors to solve set agreement
+have also been proposed [27, 44, 52], but we do not know yet what is the minimum
+knowledge about failures that needs to be abstracted to solve this problem.
+     The failure detector approach has favored the design of indulgent protocols [21].
+A protocol is indulgent with respect to its failure detector if it never violates its
+safety property. This means that, when the underlying failure detector satisﬁes its
+speciﬁcation (normal circumstances) the protocol terminates correctly; and, when the
+underlying failure detector does not satisfy its speciﬁcation (abnormal circumstances),
+it is possible that the protocol does not terminate, but if it terminates, it does so
+correctly. Various indulgent failure detector-based consensus protocols have been
+proposed (e.g., [8, 23, 31, 43, 46, 51]).
+     Data: Restricting the inputs. The condition-based approach [36] consists in
+looking at certain combinations of input values of a given distributed problem. It is
+often the case in practice that some combinations of the input values of processes occur
+more frequently than others. For example, in an election, it is often the case that the
+diﬀerence in the number of votes that candidates receive is signiﬁcant. More precisely,
+an input vector contains the values proposed by the processes in an execution. A
+condition C is a set of input vectors, each representing a common combination of
+inputs to the problem. If a protocol solves k-set agreement for C, then whenever the
+input vector belongs to C, all of the correct processes decide. The solution should be
+indulgent in the sense that if correct processes decide while the input vector does not
+belong to the condition, they do not decide more than k values.
+     It was discovered in [36] that there is a family of conditions, called x-legal, that tie
+together asynchronous and synchronous systems with respect to consensus solvability.
+Informally, in an x-legal condition any two input vectors I1, I2 that force diﬀerent de-
+cisions have d(I1, I2) > x (Hamming distance), assuming n > x. Thus, in a sense, x is
+the “power” of the condition; larger values of x make it easier to solve consensus. As-
+                                                                                  [d]
+suming up to t process crashes and d ≤ t (d can have a negative value), let St be the
+                                                [0]
+set of all x-legal conditions, x = t−d (e.g., St consists of the t-legal conditions). Then
+                       [−t]              [−1]      [0]   [1]         [t]
+                     St       ⊂ · · · ⊂ St      ⊂ St ⊂ St ⊂ · · · ⊂ St ,
+         [t]
+where St includes the condition made up of all of the possible input vectors. For a
+                 [d]
+condition C ∈ St , −t ≤ d ≤ t, and a system prone to t process crashes, we have the
+following:
+      • For values of d ≤ 0, for inputs in C, consensus is solvable by more and more
+        eﬃcient protocols in a shared memory asynchronous system as we go from
+        d = 0 to d = −t [40].
+      • For values of d > 0, consensus is not solvable in an asynchronous system, but,
+        for inputs in C, it is solvable in a message-passing synchronous system with
+        more and more rounds, as we go from d = 1 (two rounds) to d = t (t + 1
+                                                             [d]          [d−1]
+        rounds), and this is tight [37] (namely, when C ∈ St and C ∈   / St     , (d + 1)
+        rounds are suﬃcient and necessary in worst case scenarios).
+      • d = 0 is the borderline case. On one hand, asynchronous consensus can be
+        solved (despite up to t faulty processes) for a condition C if and only if C is
+        t-legal [36]. On the other hand, consensus can be solved optimally (2 rounds)
+        in a message-passing synchronous system [37] for any t-legal condition.
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+                COMBINED CONDITIONS AND FAILURE INFORMATION                            1577
+
+    The condition-based approach has been considered also for set agreement (and
+for other problems), but a characterization of the conditions that allow solving set
+agreement was not known (see section 1.3 for more about this and other related works).
+     1.2. Motivation and results. As we have seen, failure detectors and conditions
+are two orthogonal approaches to cope with the impossibility of solving agreement
+problems in asynchronous systems prone to t process crashes. So, the natural question
+that comes to mind is,
+         What is the relation between the condition-based approach and the
+         failure detection-based approach when solving asynchronous agree-
+         ment problems?
+More speciﬁcally, we are interested in studying how the two approaches can cooperate
+to solve set agreement problems. We would like to understand which combinations
+of failure detectors and conditions can be used to solve k-set agreement for a given
+value of k.
+         For a given condition C, what is a failure detector that abstracts away
+         the synchrony needed to solve k-set agreement?
+These and similar questions are the topic addressed in the paper.
+     The paper contains three main contributions. While trying to answer the previous
+questions, we discovered a new class of failure detectors. We present an asynchronous
+condition-based set agreement protocol based on this kind of failure detector. We
+present a lower bound showing that our protocol is optimal. The next three sections
+describe these results in more detail.
+     1.2.1. A new class of failure detectors. The ﬁrst contribution of the paper is
+the deﬁnition of a new class of failure detectors that we denote φyt , 0 ≤ y ≤ t. A failure
+detector of φyt provides a primitive, denoted queryy (S), that can be invoked by a
+process with a set of process identities S to be informed whether they have crashed
+or not. Roughly speaking, queryy (S) returns true only when all of the processes in
+S have crashed. If at least one process in S is alive, the output should be false. If |S|
+is outside the range t − y < |S| ≤ t, the query returns no useful information.
+     Notice that the nature of our failure detectors is diﬀerent from the standard failure
+detectors of [8], that return a set of processes suspected to have crashed, and accept
+no input parameter. The motivation is that often a process pi is interested in the
+failures of only a speciﬁc part of the network, namely S, while the standard failure
+detectors must ﬁnd out the failure status of all processes in the network, even if pi
+cares only about the state of a single process pj .
+     For each value of y between 0 and t, there is a class of failure detectors, φyt . The
+class φyt provides more information on failures than the class φy−1  t   . So, the class φtt
+                                  0
+is the most powerful, while φt is the weakest (it actually provides no dependable
+information on failures). Indeed, as shown in the paper, φyt can be used to solve k-set
+agreement for smaller values of k than φy−1 t  .
+     The paper also compares the power of the φyt failure detectors and the power of
+the classic failure detector classes introduced by Chandra and Toueg [8]. It is shown
+that it is possible to build any class φyt , 0 ≤ y ≤ t, from a perfect failure detector
+as deﬁned in [8]. (A perfect failure detector eventually detects all crashed processes
+and never suspects erroneously a noncrashed process.) In contrast, none of the other
+classes of classic failure detectors can be used to build a failure detector of a class φyt ,
+1 ≤ y ≤ t. When we consider the construction in the other direction, we show that
+no class φyt , 0 ≤ y < t, can be used to build any of the classic failure detector classes.
+When y = t, φtt can be used to build a failure detector of the class P.
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+1578              MOSTEFAOUI, RAJSBAUM, RAYNAL, AND TRAVERS
+
+
+    1.2.2. A condition-based set agreement algorithm using failure detec-
+tors. A second contribution of the paper is the design of a condition-based set agree-
+ment protocol with access to a failure detector of the class φyt , 0 ≤ y ≤ t. The
+considered model is the classical asynchronous read/write shared memory distributed
+system prone to at most t process crashes. The protocol can be instantiated with any
+                  [d]
+condition C ∈ St , 0 ≤ d ≤ t. As we have seen, x = t − d represents the power of the
+condition. That is, once n and t are ﬁxed, the protocol is parameterized by the power
+of the failure detector (captured by y) and the power of the condition (captured by
+x = t − d).
+    We use the following terminology. We say that “a protocol solves the k-set agree-
+ment problem” if the correct processes always decide; we say that “a protocol solves
+the condition-based k-set agreement problem” if the correct processes decide at least
+“in normal circumstances,” where “normal circumstances” means when (1) the in-
+put vector belongs to the condition C; or when (2) a process decides or less than k
+processes crash; or when (3) at least t − d processes crash initially.
+    The proposed protocol solves the condition-based k-set agreement for k = 1 +
+max(0, d − y). Making more explicit the power y of the failure detector and the power
+x = t − d of the condition, we have k = 1 + max(0, t − (x + y)). This shows how,
+by adding the power of the condition and the power of the failure detector, we can
+counterbalance the power t of the “adversary,” in order to reduce the value of k.
+When we consider the boundary values of y and d, the protocol solves the following
+problems:
+      • d = t corresponds to the case where there is no additional power provided
+         by the condition, as then condition C may contain all possible input vectors.
+         But, as any input vector belongs to this trivial condition, all correct processes
+         always decide, and, consequently, the protocol solves the k-set agreement
+         problem. More precisely,
+            – If y = t (strongest failure detector), the protocol solves the consensus
+              problem, k = 1.
+            – If y = 0 (no failure detector), the protocol solves the trivial (t + 1)-set
+              agreement problem.
+            – If 0 < y < t, the protocol solves k-set agreement, with k = t+1−y. When
+              we compare to the previous case, this shows the beneﬁt provided by a
+              failure detector of the class φyt . The number of decided values linearly de-
+              creases according to the power of the failure detector, as measured by y.
+      • d = 0 means that the condition C is t-legal, which means that condition-
+         based consensus can be solved despite asynchrony and up to t crashes, with
+         no failure detector. So, at most one value is decided, and all of the correct
+         processes terminate in normal circumstances. So, the protocol then solves
+         condition-based consensus. (Let us notice that this is independent of the
+         value of y.)
+      • if y = 0 (no failure detector), the protocol then relies only on the condition
+         and solves the condition-based k-set agreement problem for k = d + 1. No
+         more than (d + 1) values are decided, and the termination of the correct
+         processes is guaranteed at least in normal circumstances: The number of
+         decided values decreases linearly according to the parameter d deﬁning the
+         condition.
+         This case is particularly interesting as it exhibits a new link relating syn-
+         chronous and asynchronous systems. More precisely, when the condition C
+                       [d]
+         belongs to St and the input vector belongs to C, (1) it is possible to solve
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+                COMBINED CONDITIONS AND FAILURE INFORMATION                            1579
+
+           consensus in at most (d + 1) rounds in a synchronous system [37]; and (2)
+           it is possible to solve (d + 1)-set agreement in an asynchronous system, both
+           systems being prone to t crashes. The optimal time bound for synchronous
+           condition-based consensus is equal to the number of decided values in asyn-
+           chronous condition-based set agreement. This time (in synchronous systems)
+           versus the number of decided values (in asynchronous systems) relation sheds
+           a new light on the global picture concerning the relations between synchronous
+           and asynchronous systems.
+      When we look at the general case, where the condition-based k-set agreement
+problem is solved with k = 1 + max(0, d − y), we see that when y ≥ d, condition-based
+consensus is solved. This means that, if d is ﬁxed, we need only to take a failure
+detector of the class φdt to solve condition-based consensus (failure detectors of any
+class φyt , with y > d are stronger than necessary). A similar reasoning can be done
+when y is ﬁxed, and we have the choice of the condition class.
+      The proposed protocol is indulgent [21, 23]: It never violates its safety require-
+ment (no more than k = 1 + max(0, d − y) values are decided), and the correct
+processes always terminate when the input vector belongs to the condition (“normal
+circumstances”). Interestingly, a simple modiﬁcation provides a protocol version in
+which all of the correct processes always terminate. This is obtained at the price of an
+increase in the number of values that can be decided when the input vector does not
+belong to the (t − d)-legal condition C, namely, up to k  = t + 1 − y diﬀerent values
+can then be decided. When the system is equipped with a failure detector of the class
+φtt , this protocol variant solves the consensus problem whatever the condition it is
+instantiated with.
+      1.2.3. A lower bound. A third contribution of the paper is a lower bound
+result showing that no protocol with access to a failure detector of the class φyt can
+solve k-set condition-based agreement for k ≤ max(0, d − y), if the condition is in
+  [d]
+St . The proof is by reduction to the standard t-resilient k-set agreement problem,
+that is known to be impossible if t ≥ k [6, 28, 29, 50]. This lower bound result has
+two nice corollaries. One states that (in the absence of a failure detector) there is
+no condition-based k-set agreement protocol such that k ≤ d for any (t − d)-legal
+condition (a previously open problem). The second one states that, among all of the
+failure detector classes of the family (φyt )0≤y≤t , the class φyt is the weakest that allows
+solving the k-set agreement problem for k > t − y.
+    1.3. Related work.
+    The condition-based approach for consensus and set agreement. The
+condition-based approach has been applied to problems other than consensus like
+interactive consistency [17] and, more related to our work, set agreement [3, 39]. The
+paper [3] characterizes the set of input vectors that allow us to solve (n − 1)-set
+agreement, wait-free, namely, when t = n − 1. Their notion of solvability is diﬀerent
+from ours, since they assume that a protocol never receives input vectors outside of
+the condition. In [39], another family of conditions for set agreement is deﬁned, but
+no general lower bounds were proved. Randomization as a means of circumventing
+the set agreement asynchronous impossibility result has been considered in [45].
+    Failure detectors. Most of the research about failure detectors has been di-
+rected at solving consensus, but there have also been proposals of failure detectors
+for solving other problems. Failure detectors for implementing various objects and
+for solving nonblocking atomic commit have been studied (e.g., [12, 22, 47]). The
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+1580              MOSTEFAOUI, RAJSBAUM, RAYNAL, AND TRAVERS
+
+
+weakest class of failure detectors to solve consensus was identiﬁed in [7, 12]. For our
+work, weaker classes of failure detectors are especially relevant, since set agreement is
+an easier problem than consensus (and if conditions are considered, it becomes even
+easier). Weaker classes of failure detectors were considered in [18, 44, 47, 52].
+     Failure detectors for set agreement. Among the failure detectors which are
+not strong enough to solve consensus, the limited scope accuracy failure detectors
+[25, 44, 52] have been studied with respect to set agreement. To illustrate this notion,
+let us consider the class denoted Sx . A failure detector of that class satisﬁes the
+following two properties. The completeness property states that the processes that
+crash are eventually suspected in a permanent way. The limited scope accuracy
+property states that there is a correct process that is not suspected by a set—cluster—
+of x processes (some of these x processes may be correct, while others may be faulty).
+An Sx -based k-set agreement protocol is presented in [44]. This protocol assumes that
+t < k + x − 1 (which means that (t + 1) − (x − 1) is the smallest value of k that it can
+tolerate). Using topological methods, it has been shown in [27] that this is actually a
+lower bound for any Sx -based k-set agreement protocol (from which it follows that the
+previous protocol is optimal with respect to the number of faulty processes that can
+be tolerated). When the limited scope accuracy property has to hold only after some
+unknown but ﬁnite time, we get the class denoted 3Sx . It is shown in [27] that any
+3Sx -based k-set agreement protocol requires t < min(n/2, k + x − 1). A 3Sx -based
+protocol meeting this lower bound is also presented in [27]. It is shown in [2] that
+t < x is a necessary and suﬃcient requirement to transform any failure detector of
+the class 3Sx into a failure detector of the class 3Sy for y > x.
+     The class of anonymously perfect failure detectors. A failure detector of
+our class φyt returns a binary output and can be invoked with a parameter S that
+contains a set of process identities. In contrast, the classic failure detectors of [8]
+return a set of identities, and are invoked with no parameter. A failure detector class
+whose output is binary has been introduced by Guerraoui to solve the nonblocking
+atomic commit problem [22], but, diﬀerently from ours, a failure detector of this class
+does not accept a parameter to invoke it. This class, called anonymously perfect failure
+detectors and denoted ?P, is deﬁned as follows. Each process has a ﬂag (initially equal
+to false) that is eventually set to true if and only if a process has crashed (the identity
+of the crashed process is not necessarily known, hence the name “anonymous”).
+     The deﬁnition of ?P has been extended in [18] to take into account the fact that
+ processes have crashed (instead of a single one). This class, denoted ?P  , provides
+each process with a ﬂag that is eventually set to true if and only if at least  processes
+have crashed (observe that ?P is ?P 1 ).
+     So, a failure detector of the class ?P  answers true only if there is a set S of 
+processes that have crashed. The set S is not known to the processes. Diﬀerently,
+when we consider φyt , the set S is user-deﬁned and speciﬁc to each invocation.
+    A variant of Ω. A generalization of the class of leader failure detectors, de-
+noted Ω, has been introduced in [47]. More explicitly, Ωz is the class of all failure
+detectors that provide the processes with a primitive leader() satisfying the follow-
+ing properties. First, leader() always returns a set of at most z process identities.
+Second, there is a time τ such that, after τ , all of the invocations of leader() by
+the correct processes return the same set of processes, and this set includes at least
+one correct process. It is easy to see that Ω1 is Ω, and Ωn provides no information
+on failures. That is, in general, Ωz is weaker than the weakest failure detector for
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+                  COMBINED CONDITIONS AND FAILURE INFORMATION                                1581
+
+consensus. However, Neiger introduced them to study questions about augmenting
+the synchronization power of types in the wait-free hierarchy [26], and their relation
+to set agreement was not studied.
+    In a follow-up paper [38], we study the relation of Ωz to set agreement. More-
+over, we study our new failure detectors, with respect to 3Sx , Ωz , and show which
+reductions among these classes are possible and which are not.
+     1.4. Organization of the paper. The paper is made up of nine sections. After
+this introduction and a short section introducing the computation model considered in
+the paper, section 3 presents the new failure detector classes φyt . (Section 8 compares
+them to classic failure detectors by Chandra and Toueg.) Section 4 provides a quick
+overview of the most relevant notions (for this paper) of the condition-based approach,
+including a deﬁnition of the condition-based k-set agreement problem. Section 5
+presents a generic k-set agreement protocol that is based on the combined power of
+                                                                     [d]
+a failure detector of the class φyt and a condition of the class St . The protocol is
+discussed in section 6, where, at the price of an increase of the number of decided
+values, an always terminating version is presented. Section 7 focuses on the lower
+bound result. Finally, section 9 summarizes the content of the paper.
+     2. About the model of computation. This paper considers the usual asyn-
+chronous model with n processes p1 , . . . , pn , where at most t can crash 1 ≤ t < n.
+The processes communicate through a shared memory made up of single-writer, mul-
+tireaders atomic registers.
+     We assume that processes have access to an oracle that provides possibly unre-
+liable information on process failures. A failure detector provides processes with a
+primitive they can invoke to get information from the oracle on process failures.
+    3. The failure detector classes {φyt }0≤y≤t .
+     3.1. Deﬁnition. This section introduces a new class of failure detectors, pa-
+rameterized by an integer y, 0 ≤ y ≤ t, denoted φyt . (A comparison to classic failure
+detectors is done in section 8.) The power of a such a failure detector depends on the
+value of y. As we are about to see, a failure detector is more powerful for larger values
+of y, because it can return information about more speciﬁc regions of the network,
+namely, about smaller sets S of processes, with |S| > t − y.
+     More precisely, a failure detector of the class φyt provides a primitive queryy (S)
+that returns a boolean answer. A process invokes it with the parameter S, a set of
+processes speciﬁc to each invocation. Intuitively, if pi invokes queryy (S), the answer
+will be true only when all processes in S have crashed. In that sense, these failure
+detectors are diﬀerent from the standard failure detectors, introduced by Chandra and
+Toueg [8], that return a set of processes suspected to have crashed, and do not accept
+an input parameter.2 The motivation is that often a process pi is interested in the
+failures of only a speciﬁc sector of the network, namely S, while the Chandra–Toueg
+failure detectors must ﬁnd out the failure state of all processes in the network, even
+if pi cares only about the state of only one process pj .
+     A query queryy (S) such that t − y < |S| ≤ t is relevant, otherwise it is irrelevant.
+Intuitively, “relevant” means that it provides dependable information on failures. The
+class φyt is deﬁned by the following properties:
+
+    2 We have shown in [38] that there are transformations between the φ failure detectors and a
+
+version with no input parameter. It is consequently possible to deﬁne them according to the failure
+pattern only.
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+1582              MOSTEFAOUI, RAJSBAUM, RAYNAL, AND TRAVERS
+
+
+       • Triviality property. If |S| ≤ t − y, then queryy (S) returns true. If |S| > t,
+         then queryy (S) returns false.
+       • Safety property. If queryy (S) is relevant, then if at least one process in S
+         has not crashed when queryy (S) is invoked, the invocation returns false.
+       • Liveness property. Let queryy (S) be a relevant query. Let τ be a time such
+         that, at time τ , all of the processes in S have crashed. There is a time τ  ≥ τ
+         such that all of the invocations of queryy (S) after τ  return true.
+     The triviality property says that the invoking process gets back a true output
+when the set S is too small, because, in this case, the failure detector is not powerful
+enough to answer reliably on a region of the network that is too focused. If the set S
+is too big, the output is false, because, by deﬁnition, no more than t processes can fail.
+The safety property states that if the output of a relevant query is true, then all of the
+processes in S have crashed. The liveness property states that queryy (S) eventually
+outputs true when all of the processes in S have crashed (and the query is relevant).
+
+     3.2. Ranking the classes {φyt }0≤y≤t . A failure detector of the class φ0t pro-
+vides no information related to failures as the invocation queryy (S) answers always
+true if |S| ≤ t, and false if |S| > t. At the other extreme, with a failure detector of
+the class φtt , a process can query about the failure status of a single speciﬁc process,
+since queryy (S) may return signiﬁcant failure information about sets S of any size,
+1 ≤ |S| ≤ t. That is, φ0t and φtt are two extreme classes. This section compares the
+power of distinct classes of failure detectors denoted φy1           y2
+                                                            t and φt .
+     Definition 1. For two classes of failure detectors A and B, we denote A ≤ B,
+and say that B is at least as strong as A if any failure detector in B can be used to
+build a failure detector in A. We also say that B is stronger than A (denoted A < B)
+if A ≤ B and B ≤ A. The classes A and B are equivalent, (denoted A ≡ B) if A ≤ B
+and B ≤ A.
+     We shall see that φy1                       y2                        y1
+                           t is stronger than φt if y1 > y2, since φt provides more
+                                     y2
+information about failures than φt . Given a run of the processes, let queryy (S) be
+a failure detector query invocation that, from some time on, is indeﬁnitely repeated.
+Let us examine the outputs returned by the inﬁnite sequence of queries when the
+failure detector belongs to φy1           y2
+                                t and φt , respectively. Notice that t − y2 > t − y1
+(since y1 > y2).
+       • Case 1: |S| > t. Both outputs are systematically equal to false.
+       • Case 2: |S| ≤ t − y1. Both outputs are systematically equal to true.
+       • Case 3: t − y2 < |S| ≤ t (so, we also have t − y1 < |S| ≤ t) for a relevant
+         query. If at least one process of S never crashes, both outputs are always
+         equal to false. If all of the processes of S crash, eventually both outputs are
+         permanently equal to true.
+       • Case 4: t − y1 < |S| ≤ t − y2. In this case, the output is always true if the
+         failure detector belongs to the class Φy2                         y1
+                                                   t . If it belongs to Φt , the output is
+         as in Case 3 (it depends on the failures).
+     The last case, namely, when t−y1 < |S| ≤ t−y2, exhibits a noteworthy diﬀerence
+between φy1          y2   y1                                            y2
+            t and φt : φt provides information on failures while φt does not. Indeed,
+                                                                y1
+for y1 > y2, it is impossible to build a failure detector in φt from one in φy2   t . On the
+other hand, any failure detector in φy1 t  can  be used  to  build a failure  detector in φy2
+                                                                                           t
+by returning true if |S| ≤ t − y2, returning false if |S| > t, and returning the output
+of φy1
+     t if t − y2 < |S| ≤ t. (Formally, the next theorem is a consequence of Corollary
+2 of section 7.)
+     Theorem 1. (y1 > y2) ⇒ (φy2             y1
+                                       t < φt ).
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+                COMBINED CONDITIONS AND FAILURE INFORMATION                         1583
+
+    4. The condition-based approach. The condition-based approach was intro-
+duced in [36] to study conditions restricting the inputs to consensus that make the
+problem solvable in an asynchronous system where t processes can crash. This line of
+research has been extended to study conditions for other problems and in other dis-
+tributed computing models [3, 17, 32, 36, 37, 39, 53]. In this paper, we are interested
+in conditions for the set agreement problem in an asynchronous system.
+
+    4.1. Conditions. Let V be the set of values that can be proposed by the pro-
+cesses. Moreover, let ⊥ ∈  / V be a default value. An input vector is a size n vector
+over V ∪ {⊥}. The input vector J proposed in an execution has in its ith entry J[i]
+the value of V proposed by pi , or ⊥ if pi did not take any step in the execution. We
+usually denote by I an input vector with all entries in V, and with J an input vector
+that may have some entries equal to ⊥; such a vector J is called a view. The set Vxn
+consists of all of the input vectors, with at most x entries equal to ⊥, and V n = V0n .
+    Definition 2. A condition C is a subset of V n .
+    Notation. For any pair of vectors J1, J2 ∈ Vxn , J1 is contained in J2, denoted
+J1 ≤ J2, if for all k : J1[k] = ⊥ ⇒ J1[k] = J2[k]. Moreover, J1 < J2 if J1 ≤ J2 and
+J1 = J2, which means that J2 has at least one non-⊥ value that J1 does not have.
+Also, #a (J) denotes the number of occurrences of a value a in the vector J, with
+a ∈ V ∪ {⊥}. For a set of input vectors C ⊆ V n , Cx is the set of all vectors J, with at
+most x entries equal to ⊥ and such that J ≤ I for some I ∈ C. Finally, dist(J, J  ) is
+the Hamming distance separating J and J  , where J and J  are two vectors of Vxn .
+
+     4.2. Legality of a condition. The main result of the condition-based approach
+to solve asynchronous consensus is based on the following deﬁnition as formulated in
+[17, 53].
+     Definition 3. A condition C is x-legal if there exists a function h : C → V with
+the following properties:
+       • for all I ∈ C: h(I) = a ⇒ #a (I) > x, and
+       • for all I1, I2 ∈ C: h(I1) = h(I2) ⇒ dist(I1, I2) > x.
+     A fundamental result of the condition-based approach is a characterization of the
+conditions C for which consensus can be solved (for a precise deﬁnition of solving
+consensus for C, see Deﬁnition 5, with k = 1).
+     Theorem 2 (see [36]). There is a t-fault tolerant protocol solving consensus for
+C if and only if C is t-legal.
+     A general method to deﬁne t-legal conditions is described in [40], and two natural
+t-legal conditions are described in [36].
+     It is convenient to extend h to vectors J with ⊥ values. The lemma that follows
+shows that this is easy, provided J ∈ Cx .
+     Lemma 1. Let C be an x-legal condition, and I1, I2 ∈ C, J ∈ Cx such that
+J ≤ I1 and J ≤ I2. Then h(I1) = h(I2).
+     Proof. Assume for contradiction that h(I1) = h(I2). We have dist(I1, I2) > x
+because C is x-legal. From the fact that J has at most x entries equal to ⊥ and
+J ≤ I1, we have dist(J, I1) ≤ x (similarly, we also have dist(J, I2) ≤ x). From these
+inequalities, the fact that the entries of J that diﬀer in I1 and I2 are only its ⊥
+entries, and again the fact that J has at most x entries equal to ⊥, we conclude that
+dist(I1, I2) ≤ x. A contradiction.
+     Using this lemma we have a consistent deﬁnition.
+     Definition 4. Let C be an x-legal condition and J be any vector in Cx . The
+function h is extended to J by taking any I ∈ C, with J ≤ I and letting h(J) = h(I).
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+1584               MOSTEFAOUI, RAJSBAUM, RAYNAL, AND TRAVERS
+
+                                                                               [d]
+     Assuming up to t process crashes and −t ≤ d ≤ t, let St be the set of all
+                                [0]
+(t − d)-legal conditions (thus St consists of the t-legal conditions). It is easy to check
+that
+                         [−t]              [−1]      [0]   [1]           [t]
+                       St       ⊂ · · · ⊂ St      ⊂ St ⊂ St ⊂ · · · ⊂ St ,
+         [t]
+where St includes the condition made up of all of the possible input vectors.
+                                                                                                [d]
+    Notation. In the rest of the paper, Ctd denotes a condition that belongs to St .
+    4.3. The k-set agreement problem.
+     k-set agreement. Consensus is a fundamental problem in distributed computing
+that is impossible in an asynchronous system even with a single crash failure. While
+consensus requires all processes to decide on the same value, k-set agreement [9]
+permits the processes to choose up to k diﬀerent values. The problem is solvable
+when k − 1 processes can crash, but not when k can crash. The proofs [6, 29, 50] of
+this result uncovered a deep connection between distributed computing and topology
+and motivated a signiﬁcant amount of subsequent research.
+     The set of values V that can be proposed is assumed to be such that |V| > k.
+Each process starts an execution with an arbitrary input value from V, the value it
+proposes, and all correct processes have to decide on a value such that (1) any decided
+value has been proposed, and (2) no more than k diﬀerent values are decided. The
+consensus problem is k-set agreement for k = 1.
+     Condition-based set agreement. We are interested in conditions C that, when
+satisﬁed, make k-set agreement solvable in an asynchronous system where at most t
+                                                                         [d]
+process can crash. As we shall see, k-set agreement is solvable for C ∈ St if k ≥ d+1.
+     Notice that, if an input vector J ∈ Ct occurs in an execution of a protocol, then
+as far as the processes with non-⊥ values in J can tell, the input vector could belong
+to I ∈ C, because they cannot distinguish from another execution where the other
+processes wake up and propose their values after the former processes have made their
+                        [d]
+decision. Given C ∈ St , we say that C is d-satisﬁed for input vector J if J ∈ Ct or
+#⊥ (J) ≥ t − d.
+     Definition 5. A t-fault tolerant protocol solves the k-set agreement problem for
+                    [d]
+a condition C ∈ St if in every execution with input vector J, the protocol satisﬁes
+the following properties:
+       • Validity. Every decided value is a proposed value.3
+       • Agreement. No more than k diﬀerent values are decided.
+       • Termination. Every correct process must decide if (1) C is d-satisﬁed for J
+         and no more than t processes crash, or (2.a) a process decides, or (2.b) fewer
+         than k processes crash.
+     The ﬁrst two are the safety requirements of the standard set agreement problem,
+and they should hold even if the input pattern does not belong to C. The third
+item requires termination under “normal” operating scenarios: (1) inputs that could
+belong to C or at least t − d processes crash, and (2.a) executions where a process
+decides, or (2.b) fewer than k processes crash (a situation where k-set agreement is
+solvable without conditions).
+
+   3 It is shown in [13] that the solvability of k-set agreement is highly sensitive to the validity
+
+property adopted.
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+                 COMBINED CONDITIONS AND FAILURE INFORMATION                               1585
+
+    Notice that, if set agreement is solvable for a condition C, then it is solvable for
+any C  contained in C: the same protocol works. As mentioned above, when t < k,
+k-set agreement is solvable for V n , hence for any condition C.
+    5. Combining conditions with φyt to solve set agreement. This section
+presents a set agreement protocol with access to a failure detector of the class φyt ,
+                                                                                      [d]
+0 ≤ y ≤ t, and instantiated with the function h of a (t − d)-legal condition C ∈ St ,
+0 ≤ d ≤ t. It is a t-fault tolerant protocol that solves k-set agreement for Ct , where
+                                                                                 d
+
+k = 1 + max(0, d − y) (recall Deﬁnition 5). Thus, all of the pairs (d, y) such that d ≤ y
+allow solving condition-based consensus.
+     5.1. Base objects. In order to make the protocol simpler to understand, it is
+presented in a modular way. More speciﬁcally, it relies on the following base ob-
+jects: Three arrays of atomic registers, a consensus object, an adopt–commit-abort
+object, and a condition-set agreement object. An adopt–commit-abort object and a
+condition-set agreement object can always be implemented on top of base read/write
+registers. As far as the consensus object is concerned, as we will see, it can always be
+implemented in the particular context in which it is used by the processes.
+     The shared memory. The shared memory is made up of three arrays (denoted
+V [1..n], W [1..n], and DEC [1..n]) of single-writer multireader atomic registers. All
+are initialized to [⊥, . . . , ⊥]. The jth entry of an array X[1..n] can be read by any
+process, but only pi can write to the ith component X[i]. To simplify the presentation
+we assume that, in addition to these atomic read and write operations, a process pi can
+also invoke the nonprimitive operation snapshot(X) that allows it to read the content
+of all of the registers of the array X as if this reading was done instantaneously. (Such
+an operation can be implemented in shared memory systems made up of single-writer,
+multireader atomic registers despite any number of process crashes (1 ≤ t < n) [1, 4].)
+In accordance with the terminology deﬁned in [30], the read, write, and snapshot()
+operations are linearizable (i.e., they appear as if they had been executed one after
+the other, in agreement with their real-time occurrence order).
+    The underlying consensus object. A consensus object is accessed by a process
+pi when pi invokes the operation alg cons(vi ), where vi is the value proposed by pi .
+Such an object allows any subset of processes to invoke alg cons(). Its properties are
+the following:
+       • Termination. Any correct participating process decides a value.
+       • Validity. A decided value is a proposed value.
+       • Agreement. No two diﬀerent values are decided.
+    As we will see, the underlying consensus object is used when more than t − y
+process crash. It is shown in Theorem 8 that, in this case, a failure detector of the
+class P (the class of perfect failure detectors [8]; see section 8) can be built from
+a failure detector of the class φyt (such a construction is described in the proof of
+Theorem 8), and consensus can be solved in a single-writer multireader atomic register
+asynchronous system enriched with such a failure detector.4
+     The underlying adopt–commit-abort object. The adopt–commit-abort ob-
+ject we use here is a simple variant of the adopt–commit-abort object introduced in
+[19, 52] in the context of shared memory systems, and an object introduced in [43]
+   4 A 3P-based alg cons() protocol is described in [42]. That protocol uses an underlying adopt–
+
+commit-abort object. (Trivially, any failure detector in P is also in 3P.) Other shared memory
+consensus algorithms based on failure detectors can be found in [5, 24, 34].
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+1586               MOSTEFAOUI, RAJSBAUM, RAYNAL, AND TRAVERS
+
+
+in the context of message-passing systems.5 Such an object has a single operation,
+denoted adopt commit(). A process pi invokes adopt commit(vi ), where vi is the value
+it proposes to the adopt–commit-abort object and obtains a pair (d, v) as a result,
+where d is control tag and v a value. The object is deﬁned by the following properties.
+      • Termination. Any correct participating process decides a pair (d, v).
+      • Validity. If a process decides (d, v), then d ∈ {commit, adopt, abort}, and v
+         is a proposed value.
+      • Agreement. If a process decides (commit, v), then any other process that
+         decides, decides (d, v), with d ∈ {commit, adopt}.
+      • Obligation. If all of the participating processes propose the same value v,
+         then only the pair (commit, v) can be decided.
+    Intuitively, the adopt–commit-abort object is an abortable variant of consensus.
+Let us observe that a process that decides (abort, −), can conclude that no process
+decides (commit, −). However, when a process decides (adopt, −), it cannot conclude
+which control tag has been decided by the other processes.
+    The underlying condition-set agreement object. A condition-set agree-
+ment object has a single operation, denoted cond algo(). This object is designed to
+solve a set agreement problem with the help of a (t − d)-legal condition C. A pro-
+cess uses this object only in the particular context where the input vector J is such
+#⊥ (J) ≤ t − y.
+    A process pi invokes cond algo(Vi ), where Vi is its local view of the input vector
+J (we have then Vi ≤ J and #⊥ (Vi ) ≤ t − y), and only when the views can be ordered
+by containment, Vi ≤ Vj or Vj ≤ Vi for all i, j. If it returns from that invocation, pi
+obtains a value v. The object is deﬁned by the following properties.
+      • Termination. Every correct process decides if (1) J ∈ Ct or #⊥ (J) ≥ t − d
+         (C is d-satisﬁed for J), or (2.a) a process decides, or (2.b) more than (n − k)
+         correct processes invoke cond algo().
+      • Validity. A decided value is a value that has been proposed by a process in
+         its input view.
+      • Agreement. At most, k = 1 + max(0, d − y) values are decided.
+    5.2. The set agreement protocol.
+    Description of the protocol. The k-set agreement protocol based on a condi-
+              [d]
+tion in C ∈ St and a failure detector of the class φyt is described in Figure 1. The
+variables subscripted with i are local variables of pi . A process is made up of two
+tasks: a main task T 1 and a background task T 2. The behavior of the task T 1 can
+be decomposed into four parts.
+      • A process ﬁrst writes the value vi it proposes into V [i] (line 1). Then, using
+        the snapshot() operation, it reads the array of proposed values until that array
+        contains “enough” values (line 2). “Enough” means here that there are no
+        more than (t − y) missing values, or there are more than (t − y) processes that
+        have crashed; this is known from the invocation queryy (Si ). (Let us recall
+        that, when |Si | ≤ t − y, queryy (Si ) answers always true).
+      • Then, the behavior of pi depends on the number of values it knows. If there
+        are too many crashes (line 4), pi sets a local variable propi to the value
+   5 A wait-free implementation of an adopt–commit-abort object from single-writer multireader
+
+atomic registers can be found in [52]. An implementation in message-passing systems, where a
+majority of processes is correct, is presented in [43]. For completeness, an implementation of an
+adopt–commit-abort object is described in Appendix A.
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+                COMBINED CONDITIONS AND FAILURE INFORMATION                                  1587
+
+                                  [d,y]
+        Function k-set agreementn,t       (vi )
+
+        task T 1:
+         (1) V [i] ← vi ;
+         (2) repeat Vi ← snapshot (V ); Si ← {j | Vi [j] = ⊥}
+         (3)                              until queryy (Si ) end repeat;
+         (4) case (#⊥ (Vi ) > t − y) then prop i ← CONS ; wi ← ⊥
+         (5)       (#⊥ (Vi ) ≤ t − y) then prop i ← COND; wi ← cond algo(Vi )
+         (6) end case;
+         (7) W [i] ← wi ; (di , resi ) ← adopt commit(prop i ); Wi ← snapshot(W );
+         (8) case (res i = CON S) ∨ (di = abort)
+         (9)                  then DEC [i] ← cond algo(vi ); return (DEC [i])
+         (10)      (res i = CON D) ∧ (di = commit)
+         (11)                 then DEC [i] ← Wi [j] such that Wi [j] = ⊥; return(DEC [i])
+         (12)      (res i = CON D) ∧ (di = adopt)
+         (13)                 then esti ← Wi [j] such that Wi [j] = ⊥;
+         (14)                         DEC [i] ← cond algo(esti ); return(DEC [i])
+         (15) end case
+
+        task T 2:
+         (16) j ← 0;
+         (17) repeat forever j ← (j mod n) + 1;
+         (18)                if (DEC [j] = ⊥) then return(DEC [j]) end if
+         (19) end repeat
+
+
+
+                 Fig. 1. A k-set agreement protocol with k = 1 + max(0, d − y).
+
+
+
+
+        CONS to try to decide a value from the underlying consensus algorithm (let
+        us remind that, when there are more than (t − y) crashes, it is possible to
+        solve consensus from φyt ). In the other case, pi knows enough proposed values
+        to decide from the condition (line 5); pi computes, consequently, a value wi
+        that could be decided from the condition and sets propi to COND.
+      • The process then uses the underlying adopt–commit-abort object (line 7) in
+        order to try agreeing on the same tag, namely, CONS or COND. Moreover,
+        each pi deposits in the array W [1..n] the value it has computed at line 4 or
+        line 5 and reads that array with the snapshot() operation.
+      • The last part depends on the result returned by the adopt–commit-abort
+        object.
+           – If pi obtains di = abort or resi = CONS , it concludes that no value
+              can be decided from the condition. It consequently uses the consensus
+              object to decide a value (lines 8–9).
+           – If pi obtains resi = COND, at least one entry of Wi is not equal to
+              ⊥. Then, if, additionally, di = commit, pi concludes that any value
+              deposited in W can be decided from the condition, and it decides it
+              (lines 10–11).
+           – If pi obtains resi = COND together with di = adopt, it does not know
+              if the other processes pj have obtained dj = commit or dj = abort. So,
+              to be consistent, pi participates in the underlying consensus to which it
+              proposes a value that could be decided from the condition (lines 12–14).
+              It then decides the value returned by the consensus object.
+    The aim of task T 2 is to guarantee that a correct process always decides as soon
+as a process decides. To that end, when a process pj is about to decide in task
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+1588                MOSTEFAOUI, RAJSBAUM, RAYNAL, AND TRAVERS
+
+
+T 1 (execution of the return(v) statement), it ﬁrst writes v in DEC [j].6 Task T 2
+of a process pi is then a simple loop statement that terminates when the predicate
+(∃j : DEC [j] = ⊥) becomes true. The execution of the return() statement by a
+                                                      [d,y]
+process pi terminates its execution of k-set agreementn,t (vi ).
+
+     Proof of correctness.
+     Theorem 3. When instantiated with a failure detector of the class φyt and a
+                  [d]
+condition C in St , the protocol described in Figure 1 solves the condition-based k-set
+agreement problem where k = 1 + max(0, d − y).
+     Proof. Validity property (a decided value has been proposed by a process). Let us
+observe that a decided value deci is either an initial value vj proposed to the consensus
+by a process pj (line 9) or a value wi obtained by a process pi from the condition-set
+agreement object (lines 11 and 14). The validity property follows immediately from
+the corresponding validity property of the consensus object and the condition-set
+agreement object, and hence line 18 preserves validity.
+     Agreement property (at most k diﬀerent values are decided). Let us observe
+that, due to the agreement property of the adopt–commit-abort object, it is not
+possible for two processes pi and pj that have invoked adopt commit() at line 7 to
+be such that both the predicate (res i = CON S) ∨ (di = abort) and the predicate
+(res j = CON D) ∧ (dj = commit) are true. It follows from that observation that it is
+not possible for a process pi to execute line 9 while another process pj executes line
+11. So, there are only two cases to consider (in addition to the trivial case of line 18).
+       • No process begins executing line 9 or 14. In that case, these processes decide
+         the value returned by the consensus object. Due to the consensus agreement
+         property, there is a single such value.
+       • No process begins executing line 11 or 14. In that case, these processes
+         decide a value returned from the condition-set agreement object . Due to the
+         condition agreement property, there are at most k = 1 + max(0, d − y) such
+         values, which proves the case.
+     Termination property. Let J be the input vector. We have to show that every
+correct process decides if (1) the condition C is d-satisﬁed for J, or (2.a) a process
+decides, or (2.b) fewer than k processes crash.
+     Let us notice that, as there are at most t process crashes (model assumption),
+the repeat loop of lines 2–3 always terminates. Moreover, let us also observe that,
+due to the termination property of the adopt–commit-abort object, any invocation of
+adopt commit() issued by a correct process terminates (observation O1).
+     Let us also observe that the underlying consensus protocol is used only when the
+number of crashes is greater than t − y (line 4), i.e., when a failure detector of the
+class P can be built from a failure detector of the class φyt (item (3) of Theorem
+8). The termination property of the consensus object ensures that all of the correct
+processes that invoke cons alg() terminate their operation (observation O2). Let us
+now proceed by a case analysis.
+       • Case (1): We have to show that any correct process decides when the condi-
+         tion C is d-satisﬁed for J, where J is the input vector.
+         In that case, it follows from item (1) of the termination property of the
+         condition-set agreement object that any invocation cond algo() issued by a
+
+    6 This write plays the same role as the reliable broadcast of the decided value in message-passing
+
+systems (e.g., see the consensus protocols in [8, 23, 43, 51]). Their aim is to prevent a process from
+deadlocking.
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+                 COMBINED CONDITIONS AND FAILURE INFORMATION                                1589
+
+        correct process terminates. This, combined with the observations O1 and O2,
+        allows us to conclude that any correct process terminates when C is d-satisﬁed
+        for J.
+      • Case (2.a): We have to show that any correct process decides, as soon as a
+        process decides.
+        This property is trivially guaranteed by the management of the array DEC [1..n]
+        and task T 2.
+      • Case (2.b): We have to show that any correct process decides when fewer
+        than k processes crash.
+        If no correct process accesses the condition-set agreement object, the fact that
+        any correct process decides follows from the observations O1 and O2. So, let
+        us consider the case where correct processes access the condition object. As
+        k = 1 + max(0, d − y) and fewer than k processes crash, this means that at
+        most max(0, d − y) processes crash. Moreover, as t ≥ d, we have t − y ≥ d − y.
+        It follows (from the properties of the failure detector φyt ) that all of the
+        processes pi that execute the repeat loop (lines 2–3) and do not crash while
+        executing that loop, eventually exit it, and we have then #⊥ (Vi ) ≤ t − y.
+        They consequently all of access the condition-set agreement object at line 5.
+        It follows that all of the correct processes (there are more than (n − k) of
+        them) invoke the condition-set agreement object. Due to item (2.b) of the
+        termination property of the condition-set agreement object, it follows that
+        any correct process decides in the k-set agreement protocol.
+    5.3. Implementation of a condition-set agreement object.
+    Description of the protocol. A t-fault tolerant protocol implementing a
+condition-set agreement object is described in Figure 2. This protocol is instantiated
+with a function h associated with a (t − d)-legal condition C. It uses a deterministic
+function F () and a predicate P (). The function F () takes a view J as a parameter
+and returns a non-⊥ value of the vector J. The value  is a default value not in V
+and diﬀerent from ⊥. It is assumed that the function h is extended to all views J of
+C, with at most t − d entries equal to ⊥ as in Deﬁnition 4. The predicate P () is true
+on all such views:
+                                                           
+                        P (Vi ) ≡ ∃I ∈ C such that Vi ≤ I .
+
+Thus, P () is used to test if pi ’s current view Vi of the input vector could originate
+from a vector of the condition.7
+     The protocol can be seen as a case analysis. The ﬁrst step is for pi to check
+whether #⊥ (Vi ) ≤ t − d in order to beneﬁt from the condition. If #⊥ (Vi ) > t − d, pi
+cannot beneﬁt from it and consequently decides a value from its local view Vi at line
+18 (the processes executing that line decide at most max(0, d − y) diﬀerent values).
+     Otherwise, we have #⊥ (Vi ) ≤ t − d, and then pi has enough non-⊥ entries in
+its view Vi to test if the condition can help it decide. So, pi enters the lines 2–17.
+There are three cases. If P (Vi ) is satisﬁed (ﬁrst case), pi decides the value from the
+condition and writes it in the shared array D to help other processes decide (line 4).
+     If P (Vi ) is not satisﬁed (second case), pi ﬁrst checks if #⊥ (Vi ) = t−d. If so (second
+case), it knows that no other process will evaluate P to true in the previous line, and
+    7 It is shown in [36] that, for some conditions, there are very eﬃcient ways to compute the
+
+predicate P (). As an example, for the (t − d)-legal condition C1 (deﬁned in section 4.2), we have
+P (Vi ) ≡ #max(J ) (Vi ) > (t − d) − #⊥ (Vi ).
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+1590               MOSTEFAOUI, RAJSBAUM, RAYNAL, AND TRAVERS
+
+
+Function cond algo (Vi )     % We have #⊥ (Vi ) ≤ t − y, and Vi ≤ Vj or Vj ≤ Vi for all i, j %
+
+(1) if (#⊥ (Vi ) ≤ t − d)
+(2)    then if P (Vi )
+(3)             then % The processes executing this line decide the same value %
+(4)                    wi ← h(Vi ); D[i] ← wi ; return (wi )
+(5)             else if (#⊥ (Vi ) = t − d)
+(6)                      then % The processes executing this line decide the same value %
+(7)                             wi ← F (Vi ); D[i] ← wi ; return (wi )
+(8)                      else % If processes execute these lines, at most k value can be decided %
+(9)                        D[i] ← ;                                                                  
+(10)                       repeat Di ←snapshot (D) until (∃j : Di [j] = ⊥, ) ∨ (#⊥ (Di ) < k) ;
+(11)                       if (∃j : Di [j] = ⊥, ) then return (Di [j] such that Di [j] = ⊥, )
+(12)                                               else ∀j : if (Di [j] = ) then Yi [j] ← V [j]
+(13)                                                                          else Yi [j] ← ⊥ end if;
+(14)                                                      wi ← F (Yi ); D[i] ← wi ; return (wi )
+(15)                       end if
+(16)                   end if
+(17)         end if
+(18) else wi ← F (Vi ); D[i] ← wi ; return (wi ) % Here (t − d) < (#⊥ (Vi ) ≤ t − y) %
+(19)        % The processes executing that line decide at most max(0, d − y)) values %
+     end if
+
+
+                                   Fig. 2. A condition protocol.
+
+
+
+that any other process pj , with #⊥ (Vj ) = t − d has Vi = Vj , so it deterministically
+decides F (Vi ) (line 7).
+     In the third case, #⊥ (Vi ) < t − d, and pi writes  in D[i] to indicate it cannot
+decide from its local view Vi (so, D[j] = ⊥ means that pj has not yet ﬁnished executing
+its protocol or has crashed). Then, as it cannot decide by itself, pi starts the “best
+eﬀort termination” part of the protocol (lines 9–15). It enters a loop (line 10), during
+which it looks for a decided value (∃j : Di [j] = ⊥, ) and decides if there is one (line
+11) or a conﬁguration where #⊥ (Di ) < k (this is the only place where k is used in the
+protocol). If the condition ( ∃j : Di [j] = ⊥, ) ∧ (#⊥ (Di ) < k) is satisﬁed, pi builds
+a local view of the input vector corresponding to the processes that have executed
+at least until line 9. As we will see in the proof, if several such views (Yi , Yj , etc.)
+are computed, due to the invocations of snapshot(D) at line 10 that precede their
+construction, the associated containment property implies that these views (Yi , Yj ,
+etc.) are also ordered by containment. The process pi then decides the value F (Yi ).
+Let us notice that, as #⊥ (Di ) < k, the vector Yi has at most k − 1 entries equal to
+⊥. It follows that at most k diﬀerent values can be decided at line 14. Let α be the
+number of values decided at line 4, 7, 11, and 18, and let β be the number of values
+decided at lines 14. The proof will show that α + β ≤ k.
+
+     Correctness proof.
+     Theorem 4. When instantiated with a (t − d)-legal condition C, the proto-
+col described in Figure 2 implements a condition-set agreement object with k = 1 +
+max(0, d − y).
+     Proof. Validity property (a decided value is a value proposed in the input view
+of a process). This property follows directly from the fact that both the function h()
+and the function F () extract a non-⊥ value from the vector they are applied to.
+     Agreement property (at most k = 1 + max(0, d − y) diﬀerent values are decided).
+The processes that decide, do it at line 4, 7, 11, 14, or 18. We determine the maxi-
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+                 COMBINED CONDITIONS AND FAILURE INFORMATION                                 1591
+
+mum number of values that are decided by the processes at each of these lines of the
+protocol.
+       • Consider the processes that decide at line 4.
+         These processes pi are such that (#⊥ (Vi ) ≤ t − d) and P (Vi ) is satisﬁed. We
+         show that a single value can be decided at line 4.
+         Let pi and pj be two processes that decide at line 4. Due to the use of a
+         snapshot operation, we have either Vi ≤ Vj or Vj ≤ Vi . Let us consider that
+         Vi ≤ Vj .
+         We then have (1) #⊥ (Vi ) ≤ t − d and #⊥ (Vj ) ≤ t − d, (2) both P (Vi ) and
+         P (Vj ) are satisﬁed, i.e., ∃I1 ∈ C such that Vi ≤ I1 and ∃I2 ∈ C such that
+         Vi ≤ Vj ≤ I2, (3) and the condition is (t − d)-legal. It follows from these
+         three items and Lemma 1 that h(Vi ) = h(Vj ) = h(I1 ) = h(I2 ). Consequently,
+         no more than one value can be decided by the processes executing line 4.
+       • Consider the processes that decide at line 7.
+         These processes pi are such that (#⊥ (Vi ) = t−d) and P (Vi ) is not satisﬁed. In
+         this case, at most one value is decided at line 7, because, due to the snapshot
+         containment property, all processes that execute this line have exactly the
+         same view Vi . Moreover, if a process executes this line, no process executes
+         line 4. This is because any process pj that executes line 4 has a view Vj such
+         that (#⊥ (Vj ) ≤ t − d = #⊥ (Vi )), and as we have either Vi < Vj or Vj < Vi ,
+         we conclude that Vi < Vj . Consequently, if pi executes line 7, P (Vi ) is false,
+         and hence P (Vj ) is also false as Vi ≤ Vj , by deﬁnition of the predicate P ().
+       • Consider the processes that decide at line 18.
+         These processes pi are such that (t − y ≥ #⊥ (Vi ) > t − d). We show that
+         these processes decide at most max(0, d − y) diﬀerent values.
+         Due to the containment property on the vectors provided by the snapshot
+         operation, any pair of processes pi and pj that execute line 18 are such that
+         Vi ≤ Vj (or Vj ≤ Vi ). We conclude from that observation that the processes
+         that execute line 18 have at most max(0, (t − y) − (t − d))=max(0, d − y)
+         diﬀerent vectors. As F is deterministic, at most max(0, d − y) diﬀerent values
+         can be decided by the processes that decide at line 18.
+         It follows that, when we consider the processes that decide at line 4, 7, or 18,
+         at most k = 1 + max(0, t − d) diﬀerent values can be decided.
+       • Consider the processes that decide at line 11.
+         A process pi that decides at line 11 decides a value (that it retrieves in D[j])
+         that has been decided by another process pj (pj has deposited that value in
+         D[j] at line 4, 7, 14, or 18). Consequently, no additional value can be decided
+         at line 11.
+       • Finally, consider the processes that decide at line 14.
+         Let β be the number of diﬀerent values decided by the processes that execute
+         line 14. Let α be the number of values decided by the processes that execute
+         line 4, 7, or 18. We claim that α + β ≤ k = 1 + max(0, t − d).
+It follows from this case analysis that at most k = 1 + max(0, t − d) diﬀerent values
+can be decided, which proves the theorem.
+     Proof of the claim. Let us consider two time instants t0 and t1 deﬁned as follows:
+- t0 = ﬁrst time instant where #⊥ (D) = k − 1 (or +∞ if it never happens),
+- t1 = ﬁrst time instant where ∃ D[j] ∈   / {, ⊥} (or +∞ if it never happens).8
+
+
+   8 If both t and t are equal to +∞, no process decides, and the claim is trivially true.
+              0     1
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+1592              MOSTEFAOUI, RAJSBAUM, RAYNAL, AND TRAVERS
+
+
+     Let us ﬁrst consider t1 ≤ t0 . Let us notice that a process pi stops the repeat loop
+of line 10 as soon as (∃ Di [j] ∈/ {, ⊥} ∨ #⊥ (Di ) < k). As the test that (at line 11)
+immediately follows the exit of the repeat loop privileges the case (∃ Di [j] ∈   / {, ⊥})
+with respect to the case (#⊥ (Di ) < k) when both are satisﬁed, it follows that pi
+immediately executes the return () statement at line 11. Consequently, when t1 ≤ t0 ,
+any process pi that enters the loop of line 10 and then decides, decides at line 11. We
+then have β = 0 (no process decides at line 14).
+     Let us now consider the case t0 < t1 . Let us ﬁrst observe that, since the function
+F () is deterministic and each Yi computed at lines 12–13 contains at most (k − 1)
+entries equal to ⊥, it follows that the β values decided at line 14 correspond to (at
+least) β diﬀerent Yi vectors, which means (due to line 12) at least β diﬀerent Di
+vectors.
+     Due to the containment property of the invocations of the snapshot (D) invoca-
+tions at line 10, the previous β Di vectors are totally ordered (see the deﬁnition of
+“<” in section 4.1), e.g., Di1 < Di2 < · · · < Diβ < · · · and contain only ⊥ and 
+entries. Moreover, for any pair of such vectors, there is at least one entry which is
+equal to ⊥ in one vector and to  in the other. As D is initialized to [⊥, . . . , ⊥] and
+there are at least β diﬀerent Dix , we conclude that at least (β − 1) values  have
+been written into D after t0 (because, due to the snapshot (D) operations, we have
+#⊥ (Di1 ) ≤ k − 1 at time t0 , #⊥ (Di2 ) ≤ k − 2 at time t0 , t0 > t0 , etc.).
+     Before being decided, the α diﬀerent values decided at lines 4, 7, and 18 have
+been written into the array D (they are decided after t1 ). Due to the deﬁnition of t1 ,
+they have been written into D at or after t1 , i.e. (from the case assumption), after t0 .
+     Hence, after t0 , α entries of D have been set to proposed values by lines 4, 7, and
+18, and (β − 1) entries have been set to . As, at t0 , the number of entries of D
+that were equal to ⊥ was equal to (k − 1), it follows that α + (β − 1) ≤ (k − 1), i.e.,
+α + β ≤ k, which proves the claim when t0 < t1 . End of the proof of the claim.
+     Termination property (let J be the actual input vector). Every correct process
+decides if (1) J ∈ Ct or #⊥ (J) ≥ t − d -C is d-satisﬁed for J-, or (2.a) a process
+decides, or (2.b) more than (n − k) correct processes invoke cond algo().
+     If the input vector Vi , Vi ≤ J, is such that #⊥ (Vi ) > t − d, the process pi trivially
+decides at line 18. When #⊥ (Vi ) = t − d, the test on line 5 leads to termination. On
+another side, if #⊥ (Vi ) ≤ t − d and J ∈ Ct , then P (Vi ) is satisﬁed, and pi decides at
+line 4. So, the case (1) is done.
+     Let us consider case (2.a). Before deciding a value at line 4, 7, 14, or 18, a process
+deposits that value in the array D. It follows that, after a process has decided, the
+repeat loop of line 10 always terminates, and any process that executes line 11 decides,
+which proves the case.
+     Let us ﬁnally consider case (2.b). Let us assume that more than (n − k) correct
+processes invoke the object and no one decides. This means that none of them executes
+line 4, 7, or 18. They all, consequently, enter the repeat loop at line 10, from which
+we conclude that eventually the predicate #⊥ (Di ) < k becomes true. It follows that
+the correct processes exit the repeat loop and decide.
+    6. Discussion.
+     6.1. Initial crashes: No condition is needed. The theorem that follows
+considers a particular case, namely, the case where the faulty processes crash before
+the protocol starts its execution.
+     Theorem 5. Consider an execution of the protocol described in Figure 1 instan-
+tiated with a failure detector of the class φyt . Let us assume that more than (t − y)
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+                COMBINED CONDITIONS AND FAILURE INFORMATION                           1593
+
+processes have crashed before the protocol starts. The protocol then solves the consen-
+sus problem (whatever the (t − d)-legal condition it is instantiated with).
+     Proof. If more than (t − y) processes have initially crashed, due to the property
+of the queryy () invocations at line 3, we have (#⊥ (Vi ) > t − y) for any process
+pi . It follows that, for any process pi , we have propi = CONS (line 4). Due to
+the obligation property of the adopt–commit-abort object, every process pi obtains
+(commit, CONS ). Consequently, all of the processes invoke the underlying consensus
+object, which proves the theorem.
+     Remark 1. The previous theorem considers the case where the faulty processes
+have crashed before the protocol starts. It is interesting to observe that a similar result
+appears in [16], where a consensus protocol is presented for asynchronous systems
+where a majority of processes are correct, and the faulty processes crash before the
+protocol starts its execution.
+
+     6.2. An always terminating version of the protocol. It is possible to trade
+safety for liveness by providing a version of the protocol where every correct process
+always decides. This can be obtained at the price of an enlarged set of possibly decided
+values. More precisely, let I be an input vector, and let C be the (t−d)-legal condition
+the protocol is instantiated with. When I ∈ C, at most k = 1 + max(0, d − y) values
+are decided; when I ∈  / C, up to k  = t + 1 − y values can be decided. Interestingly, this
+always terminating version of the protocol provides a new insight into the way the pa-
+rameters t, y (power of the failure detection) and d (power of the condition) are related.
+     In the protocol described in Figure 2, the statement that can prevent a correct
+process pi from terminating is the repeat loop at line 10. This occurs when pi enters
+lines 9–15, Vi being such that #⊥ (Vi ) ≤ min(t − y, t − d) (assumption on the input
+parameter and line 1), while P (Vi ) is equal to false (line 2). The modiﬁcation to get
+an always terminating cond algo() protocol is very simple: It consists in replacing the
+lines 9–15 in Figure 2 by a weakened statement that always terminates, namely,
+         [9-15]’     if (∃j : D[j] = ⊥) then return (D[j] such that D[j] = ⊥)
+                                          else wi ← F (Vi ); D[i] ← wi ; return (wi )
+                     end if
+     Theorem 6. Let us consider the protocol depicted in Figure 2 instantiated with a
+(t−d)-legal condition C, where lines 9–15 are replaced by the statement [9–15]’. Every
+correct process decides. Let I be an input vector. If I ∈ C, at most k = 1+max(0, d−y)
+values are decided. If I ∈ / C, at most k  = t + 1 − y values can be decided.
+     Proof. Every correct process trivially terminates, and a decided value comes from
+a proposed vector (same proof as in Theorem 4).
+     As far as the number of values that are decided is concerned, let us ﬁrst consider
+the case where the input vector belongs to the condition. In that case, when a process
+pi executes line 2, P (Vi ) is trivially satisﬁed. It follows that the new line [9-15]’ is
+never executed. Consequently, Theorem 4 remains valid when I ∈ C, and at most
+k = 1 + max(0, d − y) values are then decided.
+     Considering now the case where the input vector does not belong to the condition,
+let us ﬁrst observe that if a process pi decides at line [9-15]’ a value D[j] such that
+D[j] = ⊥, it does not decide a new value as D[j] is counted as a decided value at line 4,
+7, 18 or in the else part of the new if statement. So, let us count the number of values
+that can be decided by the processes executing line 4 or the else part of the new line
+[9-15]’. For each such process pi , we have #⊥ (Vi ) ≤ t−max(y, d+1). Moreover (due to
+the containment property on the vectors Vi provided by the cond algo() invocations),
+we have Vi ≤ Vj (or Vj ≤ Vi ) for two processes executing line 4 or the else part of
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+1594               MOSTEFAOUI, RAJSBAUM, RAYNAL, AND TRAVERS
+
+
+line [9-15]’. It then follows that there are at most k1 = t − max(y, d + 1) + 1 diﬀerent
+vectors Vi for the processes that execute line 4 or the else part of line [9-15]’. Let
+us observe that if a process pj decides at line 4, the same vector Vj will not be used
+to decide another value at line [9-15]’. Finally, due to that observation and the fact
+that F () is deterministic, at most k1 diﬀerent values can be decided by the processes
+executing line 4 or the else part of line [9-15]’. On the other side, the processes that
+execute line 18 decide at most k2 = max(0, d − y) diﬀerent values (the proof is the
+same as the corresponding proof in Theorem 4). Recall that all of the processes that
+execute line 7 decide the same value. Finally, summing up, we get k  = k1 + k2 + 1,
+i.e., k  = (t − max(y, d + 1) + 1) + (max(0, d − y) + 1), which can be simpliﬁed to
+provide k  = t + 1 − y.
+      Let us notice that when the input vector does not belong to the condition, the
+maximal number of values that can be decided, namely, k  = t + 1 − y, does not
+depend on d. If the information on failure is maximal (y = t), the protocol solves
+consensus. At the other extreme, if there is no information on failures (y = 0) and
+there is no power provided by the condition, the protocol solves the trivial version of
+the set agreement problem, namely, k  = t + 1.
+     7. A lower bound. This section presents a lower bound matching Theorem 3.
+     Theorem 7. When instantiated with a failure detector of the class φyt and a
+(t − d)-legal condition, no protocol solves the condition-based k-set agreement problem
+for k ≤ max(0, d − y).
+     Proof. Assume for contradiction that a protocol solves the k-set agreement prob-
+lem for k ≤ max(0, d − y). Hence, d > y and max(0, d − y) = d − y. Partition
+the processes in two groups: the main processes p1 , . . . , pn−t+d and the secondary
+processes, pn−t+d+1 , . . . , pn . Consider the executions where the secondary processes
+crash before taking any steps. These are executions with at least t − d failures. By
+Deﬁnition 5, all correct process must decide whatever the input vector. Now, consider
+the subset of these executions with at most d−y additional failures. The total number
+of failures is at most t − y failures. Recall that any relevant query is invoked with
+a set the size of which is greater than (t − y). So, all relevant invocations queryy ()
+issued by the main processes will include at least one correct process and thus will
+return false, and all other invocations return the trivial output. Thus, in these execu-
+tions, the failure detector gives no information, and therefore the main processes have
+to solve the standard set agreement problem (i.e., terminate for every input vector),
+tolerating d − y failures. The results of [6, 28, 29, 50] (more speciﬁcally, Corollary 5.5
+in [28]) imply that, in one of these executions, at least d − y + 1 diﬀerent values are
+decided, a contradiction.
+     The following corollaries are direct consequences of the previous theorem. They
+consider the extreme cases where there is either no failure detector (i.e., y = 0) or no
+condition (i.e., d = t). The ﬁrst corollary answers an open problem stated in [3, 39].
+The second corollary shows the optimality9 of φyt .
+     Corollary 1. Let C be a (t − d)-legal condition. There is no condition-based
+k-set agreement protocol for C when k ≤ d.
+     Corollary 2. When considering the family (φyt )0≤y≤t of failure detector classes,
+  y
+φt , with y = t − k + 1, is the weakest that allows solving the k-set agreement problem.
+
+   9 This result complements another k-set agreement minimality result [27], which shows that,
+
+among the family (Sx )1≤x≤t+1 of perpetual failure detectors (introduced in [44, 52]), Sx is the
+weakest to solve the k-set agreement problem for k > t − x + 1.
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+                COMBINED CONDITIONS AND FAILURE INFORMATION                           1595
+                                               P
+
+
+
+
+                               3P                             S
+
+
+
+
+                                        3S ≡ 3W ≡ Ω
+
+
+               Fig. 3. Relations among Chandra–Toueg’s failure detector classes.
+
+
+    8. Comparing φyt with Chandra and Toueg’s failure detector classes.
+     8.1. Chandra and Toueg’s failure detector classes. This section presents
+the failure detectors introduced by Chandra and Toueg, used in this paper. These
+classes are deﬁned from the following completeness and accuracy properties [8]:
+- Strong (Weak) completeness. Eventually, every process that crashes is permanently
+suspected by every (some) correct process.
+- Perpetual strong accuracy. No process is suspected before it crashes.
+- Eventual strong accuracy. There is a time after which no correct process is suspected.
+- Perpetual weak accuracy. Some correct process is never suspected.
+- Eventual weak accuracy. There is a time after which some correct process is never
+suspected.
+     The classes we are interested in are the following [8]. They are collectively called
+“Chandra and Toueg’s failure detector classes” in the rest of the paper.
+       • P: The class of perfect failure detectors. It includes all of the failure detectors
+         satisfying strong completeness and perpetual strong accuracy.
+       • S: The class of strong failure detectors. It includes all of the failure detectors
+         satisfying strong completeness and perpetual weak accuracy. We have P ⊆ S.
+       • 3P: The class of eventually perfect failure detectors. It includes all of the
+         failure detectors satisfying strong completeness and eventual strong accuracy.
+         We have P ⊆ 3P.
+       • 3S: The class of eventually strong failure detectors. It includes all of the
+         failure detectors satisfying strong completeness and eventual weak accuracy.
+         We have 3P ⊆ 3S, and S ⊆ 3S.
+     The class 3S is the weakest that allows solving the consensus problem and is
+equivalent to the class 3W in shared memory systems and in message-passing systems
+with reliable channels [8, 7]. It has also been shown that 3S and the class of leader
+failure detectors, denoted Ω, are equivalent in systems where each process initially
+knows all of the process identities [7, 11, 41].
+     Figure 3 summarizes Chandra and Toueg’s failure detector classes. Following
+Deﬁnition 1, an arrow from A to B means that A ≥ B (any failure detector of the
+class A can be used to build a failure detector of the class B). The absence of a path
+from A to B means that it is not the case A ≥ B (given any failure detector of the
+class A, it is not possible to build a failure detector of the class B). Finally, A ≡ B
+if A ≤ B and B ≤ A. The ﬁgure follows from [7, 8].
+    8.2. φyt with respect to Chandra and Toueg’s failure detector classes.
+This section studies the relation between φyt and the classic failure detectors intro-
+duced by Chandra and Toueg. We show that φtt allows building a perfect failure
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+1596              MOSTEFAOUI, RAJSBAUM, RAYNAL, AND TRAVERS
+
+
+            init: suspectedi ← ∅
+
+            repeat forever for all j such that pj ∈ ({p1 , . . . , pn } \ suspectedi) do
+                   if queryt ({pj }) then suspectedi ← suspectedi ∪ {pj } end if
+            end repeat
+
+                            Fig. 4. From φtt to P (algorithm for pi ).
+
+detector, namely, P ≤ φtt (Theorem 8). Therefore, P is equivalent to φtt as φtt ≤ P
+(from their deﬁnitions).
+      Theorem 8. (1) P ≡ φtt . Let f denote the actual number of process crashes in a
+run. (2) If f ≤ t−y, φyt , 0 ≤ y ≤ t−1 does not allow building a failure detector of any
+of Chandra and Toueg’s failure detector classes (e.g., 3S, 3P, Ω). (3) If f > t − y,
+φyt , 0 ≤ y ≤ t − 1 allows building a failure detector of the class P.
+      Proof. Let us ﬁrst consider item (1). The construction described in Figure 4
+constructs a perfect failure detector from a failure detector of the class φtt . This
+construction works as follows. A process that queries the perfect failure detector
+obtains the current value of the set suspectedi . As y = t, queryt (S)—where S is
+made up of a single process p—eventually returns true if and only if p has crashed.
+The strong completeness and strong accuracy properties deﬁning the class P follow.
+Moreover, φtt ≤ P follows directly from their deﬁnitions. Therefore, P is equivalent
+to φtt .
+      For proving item (2), let us ﬁrst observe that, an implementation that systemat-
+ically suspects all of the processes trivially satisﬁes the completeness property of any
+of Chandra and Toueg’s failure detector classes but prevents its accuracy property
+from being satisﬁed. So, assuming that φyt (0 ≤ y ≤ t − 1) allows implementing the
+accuracy property of any of Chandra and Toueg’s failure detector classes, we show
+that it does not allow implementing the associated (weak or strong) completeness
+property.
+      Let us consider any run during which no more than x = t−y (1 ≤ x ≤ t) processes
+crash. Due to the deﬁnition of φyt , we have the following:
+         • Any queryt (S), where |S| ≤ t − y = x always returns true whatever the x
+           (≥ 1) processes composing S. This follows from the triviality property of φyt ,
+           |S| ≤ t − y = x.
+         • Any queryt (S), where |S| > x always returns false whatever the processes
+           composing S. This follows from the safety property of φyt , as at least one
+           process among these processes has not crashed.
+These observations show that, when no more than x = t − y (1 ≤ x ≤ t) processes
+crash, the boolean value returned by a query depends only on the number of processes
+deﬁning S (it depends neither on which processes are in S, nor on the failure pattern).
+It follows that, when no more than x = t − y (1 ≤ x ≤ t) processes crash, there is
+no way for a process to know if a given process has crashed or not, thereby making
+impossible to implement the (weak or strong) completeness property of any of Chandra
+and Toueg’s failure detector classes.
+      The proof of item (3) consists in designing an algorithm that, in runs where
+f > t − y, builds a failure detector of the class P from a failure detector of the class
+φyt . Let us ﬁrst observe that, as f > t − y, there is a set S such as |S| = t − y + 1,
+and, after some ﬁnite time, queryy (S) returns true forever. The algorithm is the
+following.
+         • Each set suspectedi is initialized to ∅. Initially, each process pi issues queryy
+           (X) for all of the possible sets X of size |X| = t − y + 1 until such a query
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+                COMBINED CONDITIONS AND FAILURE INFORMATION                          1597
+
+                  when queryy (S) is invoked by pi :
+                       case (|S| ≤ t − y)     then return (true)
+                            (|S| > t)         then return (false)
+                            (t − y < |S| ≤ t) then return (S ⊆ suspectedi)
+                       end case
+
+                          Fig. 5. From P to φyt (algorithm for pi ).
+
+
+         returns true. Due to the fact that all of the queries are relevant (t−y < |X| ≤
+         t), and the previous observation, this eventually happens. When it occurs, pi
+         considers the corresponding set (say S) and executes suspectedi ← S.
+       • Then, for each pj ∈ / suspectedi , pi regularly executes queryy (S ∪ {pj }). If
+         the query returns true, pi can conclude from the property of φyt that pj has
+         crashed. It consequently adds pj to suspectedi . Otherwise, pi keeps on issuing
+         queryy (S ∪ {pj }).
+It follows from the deﬁnition of S and the safety and liveness properties of φyt that the
+sets suspectedi of the correct processes eventually include all of the crashed processes
+and never includes a “not yet” crashed process, i.e., they satisfy the properties that
+deﬁne the class P of perfect failure detectors [8].
+     8.3. From Chandra and Toueg’s failure detectors to φyt . Figure 5 presents
+a simple protocol transforming any failure detector of the class P into a failure detector
+of the class φyt . The underlying set suspectedi satisﬁes (by assumption) the properties
+deﬁning the class P. In contrast, we show that there is no protocol transforming any
+failure detector of the class φyt , for y < t, into a failure detector of the class P.
+     Theorem 9. The protocol of Figure 5 transforms any failure detector of the class
+P into a failure detector of the class φyt for 0 ≤ y ≤ t.
+     Proof. The triviality property of φyt is ensured by the ﬁrst two case statements.
+The safety property follows from the fact that, due to the perpetual strong accuracy of
+the underlying failure detector, suspectedi contains only crashed processes. Finally,
+the liveness property of φyt follows from the fact that, due to the completeness of
+the underlying failure detector, the set suspectedi eventually contains all crashed
+processes.
+     The next theorem states that there is no protocol transforming a failure detector
+of the class S, 3P, 3S, or 3W into a failure detector of the class φyt for 0 < y.
+It is surprising that these failure detectors are not strong enough to implement φyt ,
+even when y < t, as in this case φyt cannot solve consensus (Corollary 2), while these
+failure detectors can solve consensus. (In the case of y = t, both φtt and those failure
+detectors can solve consensus.)
+     Theorem 10. For 1 ≤ y ≤ t, φyt ≤ S, φyt ≤ 3P, φyt ≤ 3S, and φyt ≤ 3W.
+     Proof. The impossibility comes from the fact that nothing prevents the sets
+suspectedi from containing correct processes for an unbounded amount of time. As
+3S < 3P and 3W < 3P, it is suﬃcient to prove it for 3P, as far as 3S, 3W, and
+3P are concerned. The proof for S is verbatim the same as the one for 3P (replacing
+only 3P by S).
+     The proof consists in assuming (for contradiction) that there is a protocol trans-
+forming a failure detector of the class 3P into a failure detector of the class φyt . Let
+us consider a run where an inﬁnite sequence of relevant queries is issued, all of the
+form queryy (S), for the same S, t − y < |S| ≤ t, and suppose that all processes in
+S are initially crashed. The answers returned by the protocol deﬁne then a sequence
+consisting of a ﬁnite preﬁx of false answers followed by an inﬁnite suﬃx of true an-
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+1598              MOSTEFAOUI, RAJSBAUM, RAYNAL, AND TRAVERS
+
+
+swers (by the safety and liveness property of φyt ). Let τ be a time instant after which
+all of the invocations of queryy (S) return true.
+     However, it could be that no process ever crashes, and no process in S takes a step
+until after τ + δ (where δ > 0 is an arbitrary ﬁnite period), with 3P suspecting each
+process exactly as in the previous fault-prone run from the very beginning until τ + δ.
+     As 3P provides each process with the same outputs in both runs until time τ + δ,
+it follows that the queries queryy (S) issued between τ and τ + δ returns true in both
+runs. This contradicts the safety property of φyt in the failure-free run.
+      9. Conclusion. This paper focused on the combination of two approaches to
+solve the k-set agreement problem, namely, failure detectors and conditions. It has
+proposed novel failure detectors for solving the k-set agreement problem, that, when
+combined with a condition, establish a new bridge among asynchronous, synchronous,
+and partially synchronous systems with respect to agreement problems.
+      The paper has presented three main contributions. The ﬁrst is the new class
+of failure detectors denoted φyt , 0 ≤ y ≤ t. The processes can invoke a primitive
+queryy (S) with any set S of process identities. Roughly speaking, queryy (S) returns
+true only when all processes in S have crashed, provided t − y < |S| ≤ t. These failure
+detectors seem interesting in their own right. They have been thoroughly investigated
+and compared to the classical failure detectors introduced by Chandra and Toueg.
+      The second contribution of the paper is a condition-based protocol that solves the
+k-set agreement problem, with k = 1 + max(0, t − (x + y)), for a condition C of power
+x and a failure detector of power y, with termination guaranteed for inputs in C. By
+“power” we mean the following: C is x-legal if and only if it can be used to solve
+x-fault tolerant asynchronous consensus and the failure detector is in the class φyt ,
+0 ≤ y ≤ t. Several noteworthy properties and variants of this protocol (that provides
+a new way to solve asynchronous set agreement and, in particular, consensus) have
+been studied.
+      The third contribution is a corresponding lower bound, showing that there is no
+φyt -based k-set agreement protocol for (t − d)-legal conditions with k ≤ max(0, d − y).
+It follows from this lower bound that there is no condition-based k-set agreement
+protocol such that k ≤ d for any (t − d)-legal condition.
+    Appendix A. An adopt–commit-abort object implementation.
+    As announced in the paper, this appendix describes an implementation of an
+adopt–commit-abort protocol. The implementation described in Figure 6 is a merge
+of the one described in [52] (designed for an asynchronous shared memory system)
+and the one described in [43] designed for an asynchronous message-passing system).
+It uses two arrays of one-writer multireader atomic registers denoted PHASE 1[1..n]
+and PHASE 2[1..n], both initialized to [⊥, . . . , ⊥]. Then, an entry of such an array
+contains a pair or remains equal to ⊥.
+    The behavior of a process pi can be decomposed into three phases.
+      • Phase 1 (lines 1–2). A process pi ﬁrst deposits its input value vi in PHASE 1[i]
+         to make public the fact that vi has been proposed to the adopt–commit-abort
+         object. Then, it reads (asynchronously) the whole array PHASE 1[1..n] to
+         know if other values have been proposed. The local set set1i is used to keep
+         these values.
+      • Phase 2 (lines 3–6). During the second phase, if (from its point of view) no
+         value diﬀerent from its value vi has been proposed, pi sets PHASE 2[i] to the
+         pair (single, vi ), otherwise it sets PHASE 2[i] to the pair (several, vi ). Then,
+         pi determines how many pairs (x, v) have been deposited in PHASE 2[1..n].
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+                 COMBINED CONDITIONS AND FAILURE INFORMATION                                1599
+
+       Function adopt commit (vi )
+
+        (1) PHASE 1[i] ← vi ;
+        (2) set1i ← {v | PHASE 1[j] = v ∧ v = ⊥ ∧ 1 ≤ j ≤ n};
+        (3) if (set1i = {vi }) then PHASE 2[i] ← (single, vi )
+        (4)                    else PHASE 2[i] ← (several, vi )
+        (5) end if ;
+        (6) set2i ← {(x, v) | PHASE 2[j] = ⊥ ∧ PHASE 2[j] = (x, v) ∧ 1 ≤ j ≤ n};
+        (7) case set2i = {(single, v)}                          then return (commit, v)
+        (8)       set2i = {(single, v), (several, v ), . . . } then return (adopt, v)
+        (9)       (single, v) ∈
+                              / set2i                           then return (abort, vi )
+        (10) end case.
+
+
+
+                        Fig. 6. A shared memory adopt-commit protocol.
+
+
+         (Let us recall that we have PHASE 2[k] = ⊥ until pk deposits a pair in
+         PHASE 2[k].) These non-⊥ values (pairs) are collected in the set set2i .
+      • Phase 3 (lines 7–10). Finally, pi computes the ﬁnal value it will return as the
+         result of its invocation.
+            – If set2i contains only the pair (single, v), pi returns (commit, v): it
+              “commits” the value v.
+            – If set2i contains several pairs and one of them is (single, v), then pi
+              “adopts” that value v by returning (adopt, v).
+            – Finally, when set2i does not contain (single, v), pi has seen no value to
+              be adopted or committed. It consequently “aborts,” returning the value
+              vi it has initially proposed.
+    The proof of the termination, validity, and obligation properties of the adopt–
+commit-abort object are trivial. A proof of the agreement property for the shared
+memory model can be found in [52]. A proof for a message-passing model can be found
+in [43] (that proof assumes a majority of correct processes). That proof consists
+in showing that, for any pair of processes pi and pj that execute line 6, we have
+set2i = {(single, v)} ⇒ (single, v) ∈ set2j (i.e., line 7 and line 9 are “mutually
+exclusive”).
+    Acknowledgments, We would like to thank Rachid Guerraoui for interesting
+questions during PODC 2005 that helped us reﬁne our approach, and Matthieu Roy
+and Xavier Defago for discussions on the set agreement problem and the implementa-
+tion of failure detectors. Finally, we want to thank the anonymous referees for their
+very careful reading and valuable comments.
+
+                                        REFERENCES
+
+ [1] Y. Afek, H. Attiya, D. Dolev, E. Gafni, M. Merritt, and N. Shavit, Atomic snapshots
+         of shared memory, J. ACM, 40 (1993), pp. 873–890.
+ [2] E. Anceaume, A. Fernandez, A. Mostefaoui, G. Neiger, and M. Raynal, Necessary and
+         suﬃcient conditions for transforming limited accuracy failure detectors, J. Comput. Sys-
+         tem Sci., 68 (2004), pp. 123–133.
+ [3] H. Attiya and Z. Avidor, Wait-free n-set consensus when inputs are restricted, in Proceedings
+         of the 16th International Symposium on Distributed Computing (DISC’02), Lecture Notes
+         Comput. Sci. 2508, D. Malkhai, ed., Springer-Verlag, New York, 2002, pp. 326–338.
+ [4] H. Attiya and O. Rachman, Atomic snapshots in O(n log n) operations, SIAM J. Comput.,
+         27 (1998), pp. 319–340.
+ [5] H. Attiya and J. Welch, Distributed Computing, Fundamentals, Simulation and Advanced
+         Topics, 2nd ed., Wiley Ser. Parallel Distrib. Comput., Wiley, New York, 2004.
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+1600               MOSTEFAOUI, RAJSBAUM, RAYNAL, AND TRAVERS
+
+
+ [6] E. Borowsky and E. Gafni, Generalized FLP impossibility results for t-resilient asynchronous
+         computations, in Proceedings of the 25th ACM Symposium on the Theory of Computing
+         (STOC’93), ACM Press, 1993, pp. 91–100.
+ [7] T.D. Chandra, V. Hadzilacos, and S. Toueg, The weakest failure detector for solving con-
+         sensus, J. ACM, 43 (1996), pp. 685–722.
+ [8] T.D. Chandra and S. Toueg, Unreliable failure detectors for reliable distributed systems, J.
+         ACM, 43 (1996), pp. 225–267.
+ [9] S. Chaudhuri, More choices allow more faults: Set consensus problems in totally asynchronous
+         systems, Inform. and Comput., 105 (1993), pp. 132–158.
+[10] S. Chaudhuri, M. Herlihy, N. Lynch, and M. Tuttle, Tight bounds for k-set agreement, J.
+         ACM, 47 (2000), pp. 912–943.
+[11] F. Chu, Reducing Ω to 3W, Inform. Process. Lett., 76 (1998), pp. 293–298.
+[12] C. Delporte-Gallet, H. Fauconnier, R. Guerraoui, V. Hadzilacos, P. Kouznetsov,
+         and S. Toueg, The weakest failure detectors to solve certain fundamental problems in
+         distributed computing, in Proceedings of the 23rd International ACM Symposium on Prin-
+         ciples of Distributed Computing (PODC’04), ACM Press, 2004, pp. 338–346.
+[13] R. De Prisco, D. Malkahi, and M. Reiter, On k-set consensus problems in asynchronous
+         systems, IEEE Trans. Parallel Distrib. Syst., 12 (2001), pp. 7–21.
+[14] C. Dwork, N. Lynch, and L. Stockmeyer, Consensus in the presence of partial synchrony,
+         J. ACM, 35 (1988), pp. 288–323.
+[15] M.J. Fischer and N. Lynch, A lower bound for the time to assure interactive consistency,
+         Inform. Process. Lett., 71 (1982), pp. 183–186.
+[16] M.J. Fischer, N.A. Lynch, and M.S. Paterson, Impossibility of distributed consensus with
+         one faulty process, J. ACM, 32 (1985), pp. 374–382.
+[17] R. Friedman, A. Mostefaoui, S. Rajsbaum, and M. Raynal, Distributed agreement problems
+         and their connection with error-correcting codes, IEEE Trans. Comput., 56 (2007), pp. 865–
+         875.
+[18] R. Friedman, A. Mostefaoui, and M. Raynal, The notion of veto number for distributed
+         agreement problems, in Proceedings of the 6th International Workshop on Distributed
+         Computing (IWDC’04), Lecture Notes Comput. Sci. 3326, N. Das et al., eds., Springer-
+         Verlag, New York, 2004, pp. 315–325.
+[19] E. Gafni, Round-by-round fault detectors: Unifying synchrony and asynchrony, in Proceedings
+         of the 17th ACM Symposium on Principles of Distributed Computing (PODC’00), ACM
+         Press, 1998, pp. 143–152.
+[20] E. Gafni, R. Guerraoui, and B. Pochon, From a static impossibility to an adaptive lower
+         bound: The complexity of early deciding set agreement, in Proceedings of the 37th ACM
+         Symposium on Theory of Computing (STOC’05), ACM Press, 2005.
+[21] R. Guerraoui, Indulgent algorithms, in Proceedings of the 19th International ACM Sympo-
+         sium on Principles of Distributed Computing (PODC’00), ACM Press, 2000, pp. 289–297.
+[22] R. Guerraoui, Non-blocking atomic commit in asynchronous systems with failure detectors,
+         Distrib. Comput., 15 (2002), pp. 17–25.
+[23] R. Guerraoui and M. Raynal, The information structure of indulgent consensus, IEEE
+         Trans. Comput., 53 (2004), pp. 453–466.
+[24] R. Guerraoui and M. Raynal, The alpha of asynchronous consensus, Comput. J., 50 (2007),
+         pp. 53–67.
+[25] R. Guerraoui and A. Schiper, Gamma-accurate failure detectors, in Proceedings of the 10th
+         Workshop on Distributed Algorithms (WDAG’96), Lect. Notes Comput. Sci. 1151, O.
+         Babaoglu and K. Marzullo, eds., Springer-Verlag, New York, 1996, pp. 269–286.
+[26] M.P. Herlihy, Wait-free synchronization, ACM Trans. Program. Lang. Syst., 11 (1991),
+         pp. 124–149.
+[27] M.P. Herlihy and L.D. Penso, Tight bounds for k-set agreement with limited scope accuracy
+         failure detectors, Distrib. Comput., 18 (2005), pp. 157–166.
+[28] M.P. Herlihy and S. Rajsbaum, Algebraic spans, Math. Structures Comput. Sci., 10 (2000),
+         pp. 549–573.
+[29] M.P. Herlihy and N. Shavit, The topological structure of asynchronous computability, J.
+         ACM, 46 (1999), pp. 858–923.
+[30] M.P. Herlihy and J.L. Wing, Linearizability: A correctness condition for concurrent objects,
+         ACM Trans. Program. Lang. Syst., 12 (1990), pp. 463–492.
+[31] M. Hurfin, A. Mostefaoui, and M. Raynal, A versatile family of consensus protocols based
+         on Chandra and Toueg’s unreliable failure detectors, IEEE Trans. Comput., 51 (2002),
+         pp. 395–408.
+[32] T. Izumi and T. Masuzawa, Condition adaptation in synchronous consensus, IEEE Trans.
+         Comput., 55 (2006), pp. 843–853.
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+                 COMBINED CONDITIONS AND FAILURE INFORMATION                                  1601
+
+[33] L. Lamport and M. Fischer, Byzantine Generals and Transaction Commit Protocols,
+         manuscript, 1982.
+[34] W.-K. Lo and V. Hadzilacos, Using failure detectors to solve consensus in asynchronous
+         shared memory systems, in Proceedings of the 8th International Workshop on Distributed
+         Computing (WDAG’94), Lect. Notes Comput. Sci. 857, G. Tel and P. Vitányi, eds.,
+         Springer-Verlag, New York, 1994, pp. 280–295.
+[35] A. Mostefaoui, E. Mourgaya, and M. Raynal, Asynchronous implementation of failure
+         detectors, in Proceedings of the International IEEE Conference on Dependable Systems
+         and Networks (DSN’03), IEEE Computer Press, 2003, pp. 351–360.
+[36] A. Mostefaoui, S. Rajsbaum, and M. Raynal, Conditions on input vectors for consensus
+         solvability in asynchronous distributed systems, J. ACM, 50 (2003), pp. 922–954.
+[37] A. Mostefaoui, S. Rajsbaum, and M. Raynal, Synchronous condition-based consensus, Dis-
+         trib. Comput., 18 (2006), pp. 325–343.
+[38] A. Mostefaoui, S. Rajsbaum, M. Raynal, and C. Travers, On the computability power
+         and the robustness of set agreement-oriented failure detector classes, Distrib. Comput., to
+         appear: DOI 10.1007/s00446-008-0064-2, 2008.
+[39] A. Mostefaoui, S. Rajsbaum, M. Raynal, and M. Roy, Condition-based protocols for set
+         agreement problems, in Proceedings of the 16th International Symposium on Distributed
+         Computing (DISC’02), Lect. Notes Comput. Sci. 2508, D. Malkhai, ed., Springer-Verlag,
+         New York, 2002, pp. 48–62.
+[40] A. Mostefaoui, S. Rajsbaum, M. Raynal, and M. Roy, Condition-based consensus solv-
+         ability: A hierarchy of conditions and eﬃcient protocols, Distrib. Comput., 17 (2004),
+         pp. 1–20.
+[41] A. Mostefaoui, S. Rajsbaum, M. Raynal, and C. Travers, From 3W to Ω: A simple
+         bounded quiescent reliable broadcast-based transformation, J. Parallel Distrib. Comput., 67
+         (2007), pp. 125–129.
+[42] A. Mostefaoui, S. Rajsbaum, M. Raynal, and C. Travers, The Combined Power of Condi-
+         tions and Information on Failures to Solve Asynchronous Set Agreement, Technical report
+         1897, IRISA, Université de Rennes, Rennes, France, 2008.
+[43] A. Mostéfaoui and M. Raynal, Solving consensus using Chandra and Toueg’s unreliable
+         failure detectors: A general quorum-based approach, in Proceedings of the 13th Interna-
+         tional Symposium on Distributed Computing (DISC’99), Lect. Notes Comput. Sci. 1693,
+         P. Jayanti, ed., Springer-Verlag, New York, 1999, pp. 49–63.
+[44] A. Mostefaoui and M. Raynal, k-set agreement with limited accuracy failure detectors, in
+         Proceedings of the 19th International ACM Symposium on Principles of Distributed Com-
+         puting (PODC’00), ACM Press, 2000, pp. 143–152.
+[45] A. Mostefaoui and M. Raynal, Randomized k-set agreement, in Proceedings of the 13th
+         International ACM Symposium on Parallel Algorithms and Architectures (SPAA’01), ACM
+         Press, 2001, pp. 291–297.
+[46] A. Mostefaoui and M. Raynal, Leader-based consensus, Parallel Process. Lett., 11 (2001),
+         pp. 95–107.
+[47] G. Neiger, Failure detectors and the wait-free hierarchy, in Proceedings of the 14th Interna-
+         tional ACM Symposium on Principles of Distributed Computing (PODC’95), ACM Press,
+         1995, pp. 100–109.
+[48] Ph. Raı̈pin Parvédy, M. Raynal, and C. Travers, Strongly-terminating early-stopping
+         k-set agreement in synchronous systems with general omission failures, in Proceed-
+         ings of the 13th Colloquium on Structural Information and Communication Complex-
+         ity (SIROCCO’06), Lect. Notes Comput. Sci. 4056, P. Flocchini and L. Gasieniec, eds.,
+         Springer-Verlag, New York, 2006, pp. 182–196.
+[49] M. Raynal, Consensus in synchronous systems: A concise guided tour, in Proceedings of the
+         9th IEEE Paciﬁc Rim International Symposium on Dependable Computing (PRDC’02),
+         IEEE Computer Press, 2002, pp. 221–228.
+[50] M. Saks and F. Zaharoglou, Wait-free k-set agreement is impossible: The topology of public
+         knowledge, SIAM J. Comput., 29 (2000), pp. 1449–1483.
+[51] A. Schiper, Early consensus in an asynchronous system with a weak failure detector, Distrib.
+         Comput., 10 (1997), pp. 149–157.
+[52] J. Yang, G. Neiger, and E. Gafni, Structured derivations of consensus algorithms for fail-
+         ure detectors, in Proceedings of the 17th International ACM Symposium on Principles of
+         Distributed Computing (PODC’98), ACM Press, 1998, pp. 297–308.
+[53] Y. Zibin, Condition-based consensus in synchronous systems, in Proceedings of the 17th Inter-
+         national Symposium on Distributed Computing, Lect. Notes Comput. Sci. 2848, F. Fich.,
+         ed., Springer-Verlag, New York, 2003, pp. 239–248.
+
+
+
+
+    Copyright © by SIAM. Unauthorized reproduction of this article is prohibited.
+

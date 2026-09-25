@@ -1,0 +1,431 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<html xmlns="http://www.w3.org/1999/xhtml" lang="ja" xml:lang="ja">
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <meta http-equiv="Content-Script-Type" content="text/javascript" />
+        <meta http-equiv="Content-Style-Type" content="text/css" />
+
+
+        <link rel="stylesheet" href="/dspace/tabber/tabber.css" type="text/css" />
+        <script type="text/javascript" src="/dspace/tabber/tabber.js"></script>
+
+
+        <title>JAIST Repository: 無効な識別子</title>
+        <link rel="stylesheet" href="/dspace/styles.css.jsp" type="text/css" />
+        <link rel="shortcut icon" href="/dspace/favicon.ico" type="image/x-icon" />
+
+        
+
+        
+    <script type="text/javascript" src="/dspace/utils.js"></script>
+    </head>
+
+    
+    
+    <body>
+
+        
+        
+        
+        <table align="center" width="100%">
+          <tr align="center">
+            <td>
+              <table class="pageBanner" align="center" width="950" border="0" cellpadding="0" cellspacing="0">
+                <tr align="left">
+
+                  <td>
+                    <a href="/dspace/">
+                    <img src="/dspace/image/logo2_ja.jpg" border="0" alt="" /></a><br />
+                    <div align="right">
+                      <a href="/dspace/">トップページ</a>|
+                      <a href=https://www.jaist.ac.jp/index.html>北陸先端科学技術大学院大学</a>|
+                      <a href=https://www.jaist.ac.jp/library/index-jp.html>附属図書館</a>
+                    </div>
+                  </td>
+
+
+                </tr>
+
+
+
+              </table>
+                <table class="page_title_subline">
+
+                  <tr>
+                    <td class="page_title_subline_link">
+
+                    </td>
+                    <td class="page_title_subline_none_left"></td>
+                    <td class="page_title_subline_search">
+
+                    
+              <form id="search" name="search" method="get" action="/dspace/simple-search" onsubmit="search_space();">
+                      <div class="page_title_subline_search_area">
+
+
+                        <input type="radio" name="search_type" value="_general_" checked="checked" />全て
+                        <input type="radio" name="search_type" value="_author_"  />教員登録文献
+                        <input type="text" name="query" id="tequery" size="28" />
+                        <input type="submit" name="submit" value="検索" />
+                        <a href="/dspace/advanced-search">詳細検索</a>
+                      </div>
+              </form>
+                    </td>
+                    <td class="page_title_subline_none_right"></td>
+                    <td class="page_title_subline_locale">
+                    
+                    </td>
+                  </tr>
+
+
+
+
+
+
+
+
+              </table>
+        
+
+        
+
+
+
+
+
+        
+
+        
+        
+              <table class="centralPane" align="center" width="950" border="0" cellpadding="0" cellspacing="0">
+                <tr align="left" valign="top" style="width:950px;">
+        
+
+            
+
+            <td class="navigationBar">
+                
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <table><tr><th>
+    <table cellspacing="0" bgcolor="#000033" width="130" align="center">
+    <tr><td style="height:1;"></td></tr></table>
+    <table cellspacing="0" bgcolor="#000033" width="134" align="center">
+    <tr><td style="height:1;"></td></tr></table>
+    <table cellspacing="0" bgcolor="#000033" width="136" align="center">
+    <tr><td style="height:1;"></td></tr></table>
+    <table cellspacing="0" bgcolor="#000033" width="138" align="center">
+    <tr><td style="height:2;"></td></tr></table>
+    <table cellspacing="0" bgcolor="#000033" width="140">
+    <tr><td style="height:20; font-size:13px; color:#FFFFFF;" nowrap="nowrap">
+    <b>
+
+         <span class="navigationBarSublabel">一覧</span>
+    </b>
+    </td><td></td></tr></table>
+    <table cellpadding="5" bgcolor="#CCCCCC" width="140">
+    <tr>
+    <td style="font-size:13px;color:#000000;line-height:1.5;">
+           <div align="left"><a href="/dspace/community-list">コミュニティ<br />&amp;&nbsp;コレクション</a>
+    <br />
+    <a href="/dspace/browse-title">タイトル</a>
+    <br />
+    <a href="/dspace/browse-author">著者</a>
+    <br />
+    <a href="/dspace/browse-date">日付</a>
+    <br />
+
+
+    <a href="/dspace/JAIST/theses">学位論文</a>
+    <br />
+    
+
+
+    <a href="/dspace/JAIST/publication">リサーチレポート・テクニカルメモランダム</a>
+
+
+
+    </div></td></tr></table>
+
+    <table cellspacing="0" bgcolor="#CCCCCC" width="138" align="center">
+    <tr><td style="height:2;"></td></tr></table>
+    <table cellspacing="0" bgcolor="#CCCCCC" width="136" align="center">
+    <tr><td style="height:1;"></td></tr></table>
+    <table cellspacing="0" bgcolor="#CCCCCC" width="134" align="center">
+    <tr><td style="height:1;"></td></tr></table>
+    <table cellspacing="0" bgcolor="#CCCCCC" width="130" align="center">
+    <tr><td style="height:1;"></td></tr></table>
+    </th></tr></table>
+
+    <table><tr><th>
+        <table cellspacing="0" bgcolor="#000033" width="130" align="center">
+        <tr><td style="height:1;"></td></tr></table>
+        <table cellspacing="0" bgcolor="#000033" width="134" align="center">
+        <tr><td style="height:1;"></td></tr></table>
+        <table cellspacing="0" bgcolor="#000033" width="136" align="center">
+        <tr><td style="height:1;"></td></tr></table>
+        <table cellspacing="0" bgcolor="#000033" width="138" align="center">
+        <tr><td style="height:2;"></td></tr></table>
+        <table cellspacing="0" bgcolor="#000033" width="140">
+        <tr><td style="height:20; font-size:13px; color:#FFFFFF;" nowrap="nowrap">
+        <b>
+
+    <span class="navigationBarSublabel">登録利用者:
+        </span>
+        </b>
+        </td><td></td></tr></table>
+        <table cellpadding="5" bgcolor="#CCCCCC" width="140">
+        <tr><td style="font-size:13px;color:#000000;line-height:1.5;">
+    <div align="left">
+        <!--
+        <a href="/dspace/subscribe">メール受信登録</a>
+    <br />
+        -->
+           <a href="/dspace/mydspace">登録者ページ</a>
+    <br />
+
+    <small>利用者(E-people)</small>
+    </div>
+    </td></tr></table>
+
+        <table cellspacing="0" bgcolor="#CCCCCC" width="138" align="center">
+        <tr><td style="height:2;"></td></tr></table>
+        <table cellspacing="0" bgcolor="#CCCCCC" width="136" align="center">
+        <tr><td style="height:1;"></td></tr></table>
+        <table cellspacing="0" bgcolor="#CCCCCC" width="134" align="center">
+        <tr><td style="height:1;"></td></tr></table>
+        <table cellspacing="0" bgcolor="#CCCCCC" width="130" align="center">
+        <tr><td style="height:1;"></td></tr></table>
+        </th></tr></table>
+
+    <table><tr><th>
+    <table cellspacing="0" bgcolor="#CCCCCC" width="130" align="center">
+    <tr><td style="height:1;"></td></tr></table>
+    <table cellspacing="0" bgcolor="#CCCCCC" width="134" align="center">
+    <tr><td style="height:1;"></td></tr></table>
+    <table cellspacing="0" bgcolor="#CCCCCC" width="136" align="center">
+    <tr><td style="height:1;"></td></tr></table>
+    <table cellspacing="0" bgcolor="#CCCCCC" width="138" align="center">
+    <tr><td style="height:2;"></td></tr></table>
+    <table cellspacing="0" bgcolor="#CCCCCC" width="140"><tr><td>
+    <table cellpadding="5" bgcolor="#CCCCCC" width="140">
+        <tr><td style="height:20; font-size:13px; color:#000000;">
+        <div align="left">
+            
+            <script type="text/javascript">
+<!-- Javascript starts here
+document.write('<a href="#" onClick="var popupwin = window.open(\'/dspace/help/index.html\',\'dspacepopup\',\'height=600,width=550,resizable,scrollbars\');popupwin.focus();return false;">ヘルプ<\/a>');
+// -->
+</script><noscript><a href="/dspace/help/index.html" target="dspacepopup">ヘルプ</a></noscript></div>
+    </td></tr></table></td></tr></table>
+    <table cellspacing="0" bgcolor="#CCCCCC" width="138" align="center">
+    <tr><td style="height:2;"></td></tr></table>
+    <table cellspacing="0" bgcolor="#CCCCCC" width="136" align="center">
+    <tr><td style="height:1;"></td></tr></table>
+    <table cellspacing="0" bgcolor="#CCCCCC" width="134" align="center">
+    <tr><td style="height:1;"></td></tr></table>
+    <table cellspacing="0" bgcolor="#CCCCCC" width="130" align="center">
+    <tr><td style="height:1;"></td></tr></table>
+    </th></tr></table>
+
+    <table><tr><th>
+        <table cellspacing="0" bgcolor="#CCCCCC" width="130" align="center">
+        <tr><td style="height:1;"></td></tr></table>
+        <table cellspacing="0" bgcolor="#CCCCCC" width="134" align="center">
+        <tr><td style="height:1;"></td></tr></table>
+        <table cellspacing="0" bgcolor="#CCCCCC" width="136" align="center">
+        <tr><td style="height:1;"></td></tr></table>
+        <table cellspacing="0" bgcolor="#CCCCCC" width="138" align="center">
+        <tr><td style="height:2;"></td></tr></table>
+        <table cellspacing="0" bgcolor="#CCCCCC" width="140"><tr><td>
+        <table cellpadding="5" bgcolor="#CCCCCC" width="140">
+        <tr><td style="height:20; font-size:13px; color:#000000;">
+        <div align="left"><a href="https://dspace.lyrasis.org/about/">当システムについて</a></div>
+        </td></tr></table></td></tr></table>
+        <table cellspacing="0" bgcolor="#CCCCCC" width="138" align="center">
+        <tr><td style="height:2;"></td></tr></table>
+        <table cellspacing="0" bgcolor="#CCCCCC" width="136" align="center">
+        <tr><td style="height:1;"></td></tr></table>
+        <table cellspacing="0" bgcolor="#CCCCCC" width="134" align="center">
+        <tr><td style="height:1;"></td></tr></table>
+        <table cellspacing="0" bgcolor="#CCCCCC" width="130" align="center">
+        <tr><td style="height:1;"></td></tr></table>
+        </th></tr></table>
+
+
+
+
+
+
+            </td>
+
+            
+
+            
+            
+            
+            <td class="pageContents"><!-- agrex -->
+
+
+                
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <h1>無効な識別子</h1>
+    <p>識別子 10119/4784/1/DSpace.pdf は、システムのconstants.type0としては正しくありません。その理由としては以下の原因が考えられます:</p>
+
+    <ul>
+        <li>ページのURLが間違っています。当システムの外部からリンクを辿った結果、この画面が表示された場合は、元のリンクが間違っています。</li>
+        <li>入力したIDが間違っています。もう一度入力してください。</li>
+    </ul>
+    <p>ご不明な点がございましたら、管理者までご連絡ください。</p>
+
+    
+
+
+
+  
+
+
+
+
+<center>
+  <p>JAIST Repository 管理者の連絡先:</p>
+
+    <table>
+        <tr>
+            <td class="standard">E-mail:</td>
+            <td class="standard"><a href="mailto:ir-sys@ml.jaist.ac.jp">ir-sys@ml.jaist.ac.jp</a></td>
+        </tr>
+    </table>
+</center>
+
+
+    <p align="center">
+        <a href="/dspace/">ホームページに戻る</a>
+    </p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    
+                    <p>&nbsp;</p>
+                </td>
+
+            
+
+            </tr>
+
+            
+             <tr class="pageFooterBar">
+                <td colspan="2" class="pageFootnote">
+                    <table class="pageFooterBar" width="950">
+                        <tr>
+                        
+                            <td class="pageFootnote">
+                                <hr />
+                                お問合せ先&nbsp;:
+
+
+                                北陸先端科学技術大学院大学　附属図書館 (ir-sys[at]ml.jaist.ac.jp)
+                            </td>
+                            <td nowrap="nowrap" valign="middle"></td>
+                        
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+      </td>
+      </tr>
+      </table>
+    </body>
+</html>
+

@@ -1,0 +1,642 @@
+                                Simple CHT:
+        A New Derivation of the Weakest Failure Detector for Consensus
+
+                                              Petr Kuznetsov
+
+                                 TU Belrin/Deutsche Telekom Laboratories
+
+
+
+                                                  Abstract
+
+   The paper proposes an alternative proof that Ω, an oracle that outputs a process identifier and guaran-
+tees that eventually the same correct process identifier is output at all correct processes, provides minimal
+information about failures for solving consensus in read-write shared-memory systems: every oracle that
+gives enough failure information to solve consensus can be used to implement Ω.
+   Unlike the original proof by Chandra, Hadzilacos and Toueg (CHT), the proof presented in this paper
+builds upon the very fact that 2-process wait-free consensus is impossible. Also, since the oracle that is used
+to implement Ω can solve consensus, the implementation is allowed to directly access consensus objects. As
+a result, the proposed proof is shorter and conceptually simpler than the original one.
+
+
+1   Introduction
+
+   The presence of faults and the lack of synchrony make distributed computing interesting. In an asyn-
+chronous system which assumes no bounds on communication delays and relative processing speeds, even
+a basic form of non-trivial synchronization (consensus) is impossible if just one process may fail by crash-
+ing [7, 13]. On the other hand, in a synchronous system, in the bounds exist and known a priori, almost
+any meaningful fault-tolerant synchronization problem becomes solvable. On the other hand, This gap sug-
+gests that the amount of synchrony is a crucial factor in reasoning about solvability of distributed computing
+problems in the presence of faults.
+   Chandra and Toueg proposed failure detectors as a convenient language to describe synchrony assump-
+tions. Informally, a failure detector is a distributed oracle that provides processes with hints about fail-
+ures [5]. The notion of a weakest failure detector [4] captures the exact amount of synchrony needed to
+solve a given problem: D is the weakest failure detector for solving M if (1) D is sufficient to solve M, i.e.,
+there exists an algorithm that solves M using D, and (2) any failure detector D0 that is sufficient to solve M
+provides at least as much information about failures as D does, i.e., there exists a reduction algorithm that
+extract the output of D using the failure information provided by D0 .
+   This paper considers a distributed system in which n crash-prone processes communicate using atomic
+reads and writes in shared memory. In the (binary) consensus problem [7], every process starts with a binary
+input and every correct (never-failing) process is supposed to output one of the inputs such that no two
+processes output different values. Asynchronous (wait-free) consensus is known to be impossible [7, 13], as
+long as at least one process may fail by crashing. Chandra et al. [4] showed that the “eventual leader” failure
+
+                                                      1
+detector Ω is necessary and sufficient to solve consensus. The failure detector Ω outputs, when queried, a
+process identifier, such that, eventually, the same correct process identifier is output at all correct processes.
+   The reduction technique presented in [4] is very interesting in its own right, since it not only allows us to
+determine the weakest failure detector for consensus, but also establishes a framework for determining the
+weakest failure detector for any problem. Informally, the reduction algorithm of [4] works as follows. Let D
+be any failure detector that can be used to solve consensus. Processes periodically query their modules of D,
+exchange the values returned by D, and arrange the accumulated output of the failure detector in the form
+of ever-growing directed acyclic graphs (DAGs). Every process periodically uses its DAG as a stimulus for
+simulating multiple runs of the given consensus algorithm. It is shown in [4] that, eventually, the collection
+of simulated runs will include a critical run in which a single process p “hides” the decided value, and, thus,
+no extension of the run can reach a decision without cooperation of p. As long as a process performing
+the simulation observes a run that the process suspects to remain critical, it outputs the “hiding” process
+identifier of the “first” such run as the extracted output of Ω. The existence of a critical run and the fact that
+the correct processes agree on ever-growing prefixes of simulated runs imply that, eventually, the correct
+processes will always output the identifier of the same correct process.
+   Crucially, the existence of a critical run is established in [4] using the notion of valence [7]: a simulated
+finite run is called v-valent (v ∈ {0, 1}) if all simulated extensions of it decide v. If both decisions 0 and 1
+are “reachable” from the finite run, then the run is called bivalent. Recall that in [7], the notion of valence
+is used to derive a critical run, and then it is shown that such a run cannot exist in an asynchronous system,
+implying the impossibility of consensus. In [4], a similar argument is used to extract the output of Ω in
+a partially synchronous system that allows for solving consensus. Thus, in a sense, the technique of [4]
+rehashes arguments of [7]. It is challenging to find a proof that Ω is necessary to solve consensus building
+upon the very fact that 2-process wait-free consensus is impossible.
+   This paper addresses this challenge. It is shown that Ω is necessary to solve consensus using the very
+impossibility of 2-process wait-free consensus, without “opening the box” and considering the problem
+semantics. The resulting proof is shorter and simpler that the original proof of [4].
+   On the technical side, the paper uses two fundamental results and one observation. First, the technique
+of Zieliński [15] that allows us to construct, given an algorithm A that uses a failure detector D, an asyn-
+chronous algorithm A0 that simulates runs of A using a static sample of D’s output (captured in a DAG),
+instead of the “real” output of the failure detector. The live processor set that run A0 may be different than
+the live set of processor implied by the sample of D. Therefore, the asynchronous algorithm A0 guarantees
+that every infinite simulated run is safe (every prefix of it is a finite run of A), but not necessarily live (some
+correct process may not be able to make progress).
+   Second, the paper also makes use of the BG-simulation technique [1, 3] that allows k + 1 processes
+simulate, in a wait-free manner, a k-resilient (with at most k faulty processes) run of A0 . Using a series
+of consensus instances (provided by the algorithm A using D), processes locally simulate the very same
+sequence of 1-resilient runs and eventually identify a “never-deciding” 1-resilient run of A0 . Since A0 is
+an asynchronous simulation of A, a 1-resilient run of A0 that includes infinitely many steps of each correct
+process should be deciding. Thus, exactly one correct process appears in the 1-resilient never-deciding run
+only finitely often. To emulate Ω, it is thus sufficient to output the process that appears the least in that
+1-resilient run. Eventually, all correct process agree on the same never-deciding 1-resilient run, and will
+always output the same correct process. The observation here is that a reduction algorithm may directly
+access consensus objects, since it is given a failure detector which can be used to solve consensus.
+   The rest of the paper is organized as follows. Section 2 describes the system model. Sections 3 presents
+the reduction algorithm. Section 4 overviews the related work and Section 5 concludes the paper by dis-
+
+
+                                                        2
+cussing implications of the presented results.
+
+2     Model
+
+  The model of processes communicating through read-write shared objects and using failure detectors is
+based on [4, 9, 10, 11]. The details necessary for showing the results of this paper are described below.
+
+2.1     Processes and objects
+
+   A distributed system is composed of a set Π of n processes {p1 , . . . , pn } (n ≥ 2). Processes are subject to
+crash failures. A process that never fails is said to be correct. Processes that are not correct are called faulty.
+Process communicate through applying atomic operations on a collection of shared objects. In this paper,
+the shared objects are registers, i.e., they export only conventional atomic read-write operations.
+
+2.2     Failure patterns and failure detectors
+
+   A failure pattern F is a function from the time range T = {0} ∪ N to 2Π , where F (t) denotes the set of
+processes that have crashed by time t. Once a process crashes, it does not recover, i.e., ∀t : F (t) ⊆ F (t+1).
+The set of faulty processes in F , ∪t∈T F (t), is denoted by faulty(F ). Respectively, correct(F ) = Π −
+faulty(F ). A process p ∈ F (t) is said to be crashed at time t. An environment is a set of failure patterns.
+This paper considers environments that consists of failure patterns in which at least one process is correct.
+   A failure detector history H with range R is a function from Π × T to R. H(pi , t) is interpreted as the
+value output by the failure detector module of process pi at time t. A failure detector D with range RD is
+a function that maps each failure pattern to a (non-empty) set of failure detector histories with range RD .
+D(F ) denotes the set of possible failure detector histories permitted by D for failure pattern F . Possible
+ranges of failure detectors are not a priori restricted.
+
+2.3     Algorithms
+
+   An algorithm A using a failure detector D is a collection of deterministic automata, one for each process
+in the system. Ai denotes the automaton on which process pi runs the algorithm A. Computation proceeds
+in atomic steps of A. In each step of A, process pi
+
+    (i) invokes an atomic operation (read or write) on a shared object and receives a response or queries its
+        failure detector module Di and receives a value from D, and
+
+    (ii) applies its current state, the response received from the shared object or the value output by D to the
+         automaton Ai to obtain a new state.
+
+A step of A is thus identified by a tuple (pi , d), where d is the failure detector value output at pi during that
+step if D was queried, and ⊥ otherwise.
+   If the state transitions of the automata Ai do not depend on the failure detector values, the algorithm A is
+called asynchronous. Thus, for an asynchronous algorithm, a step is uniquely identified by the process id.
+
+
+
+
+                                                        3
+2.4    Runs
+
+    A state of A defines the state of each process and each object in the system. An initial state I of A
+specifies an initial state for every automaton Ai and every shared object.
+    A run of algorithm A using a failure detector D in an environment E is a tuple R = hF, H, I, S, T i
+where F ∈ E is a failure pattern, H ∈ D(F ) is a failure detector history, I is an initial state of A, S is an
+infinite sequence of steps of A respecting the automata A and the sequential specification of shared objects,
+and T is an infinite list of increasing time values indicating when each step of S has occurred, such that for
+all k ∈ N, if S[k] = (pi , d) with d 6= ⊥, then pi ∈  / F (T [k]) and d = H(pi , T [k]).
+    A run hF, H, I, S, T i is fair if every process in correct(F ) takes infinitely many steps in S, and k-resilient
+if at least n − k processes appear in S infinitely often. A partial run of an algorithm A is a finite prefix of a
+run of A.
+    For two steps s and s0 of processes pi and pj , respectively, in a (partial) run R of an algorithm A, we say
+that s causally precedes s0 if in R, and we write s → s0 , if (1) pi = pj , and s occurs before s0 in R, or (2) s
+is a write step, s0 is a read step, and s occurs before s0 in R, or (3) there exists s00 in R, such that s → s00 and
+s00 → s0 .
+
+2.5    Consensus
+
+   In the binary consensus problem, every process starts the computation with an input value in {0, 1} (we
+say the process proposes the value), and eventually reaches a distinct state associated with an output value
+in {0, 1} (we say the process decides the value). An algorithm A solves consensus in an environment E if in
+every fair run of A in E, (i) every correct process eventually decides, (ii) every decided value was previously
+proposed, and (iii) no two processes decide different values.
+   Given a an algorithm that solves consensus, it is straightforward to implement an abstraction cons that
+can be accessed with an operation propose(v) (v ∈ {0, 1}) returning a value in {0, 1}, and guarantees that
+every propose operation invoked by a correct process eventually returns, every returned value was previously
+proposed, and no two different values are ever returned.
+
+2.6    Weakest failure detector
+
+   We say that an algorithm A using D0 extracts the output of D in E, if A implements a distributed variable
+D-output such that for every run R = hF, H 0 , S, T i of A in which F ∈ E, there exists H ∈ D(F ) such that
+for all pi ∈ Π and t ∈ T, D-outputi (t) = H(pi , t) (i.e., the value of D-output at pi at time t is H(pi , t)). We
+say that A is a reduction algorithm. (A more precise definition of a reduction algorithm is given in [11].)
+   If, for failure detectors D and D0 and an environment E, there is a reduction algorithm using D0 that
+extracts the output D in E, then we say that D is weaker than D0 in E.
+   D is the weakest failure detector to solve a problem M (e.g., consensus) in E if there is an algorithm that
+solves M using D in E and D is weaker than any failure detector that can be used to solve M in E.
+
+3     Extracting Ω
+
+   Let A be an algorithm that solves consensus using a failure detector D. The goal is to construct an
+algorithm that emulates Ω using A and D. Recall that to emulate Ω means to output, at each time and at
+each process, a process identifiers such that, eventually, the same correct process is always output.
+
+
+                                                         4
+     Shared variables:
+       for all pi ∈ Π: Gi , initially empty graph
+
+1    ki := 0
+2    while true do
+3       for all pj ∈ Π do Gi ← Gi ∪ Gj
+4       di := query failure detector D
+5       ki := ki + 1
+6       add [pi , di , ki ] and edges from all other vertices
+             of Gi to [pi , di , ki ], to Gi
+
+
+                                  Figure 1. Building a DAG: the code for each process pi
+
+
+3.1     Overview
+
+   As in [4], the reduction algorithm of this paper uses failure detector D to construct an ever-growing
+directed acyclic graph (DAG) that contains a sample of the values output by D in the current run and
+captures some temporal relations between them. Following [15], this DAG can be used by an asynchronous
+algorithm A0 to simulate a (possibly finite and unfair) run of A. Recall that, using BG-simulation [1, 3], 2
+processes can simulate a 1-resilient run of A0 . The fact that 1-resilient 2-process consensus is impossible
+implies that the simulation must produce at least one ”non-deciding” 1-resilient run of A0 .
+   Now every correct process locally simulates all executions of BG-simulation on two processes q1 and
+q2 that simulate a 1-resilient run of A0 of the whole system Π. Eventually, every correct process locates a
+never-deciding run of A0 and uses the run to extract the output of Ω: it is sufficient to output the process
+that takes the least number of steps in the “smallest” non-deciding simulated run of A0 . Indeed, exactly one
+correct process takes finitely many steps in the non-deciding 1-resilient run of A0 : otherwise, the run would
+simulate a fair and thus deciding run of A.
+   The reduction algorithm extracting Ω from A and D consists of two components that are running in
+parallel: the communication component and the computation component. In the communication component,
+every process pi maintains the ever-growing directed acyclic graph (DAG) Gi by periodically querying its
+failure detector module and exchanging the results with the others through the shared memory. In the
+computation component, every process simulates a set of runs of A using the DAGs and maintains the
+extracted output of Ω.
+
+3.2     DAGs
+
+   The communication component is presented in Figure 1. This task maintains an ever-growing DAG that
+contains a finite sample of the current failure detector history. The DAG is stored in a register Gi which can
+be updated by pi and read by all processes.
+   DAG Gi has some special properties which follow from its construction [4]. Let F be the current failure
+pattern, and H ∈ D(F ) be the current failure detector history. Then a fair run of the algorithm in Figure 1
+guarantees that there exists a map τ : Π × RD × N 7→ T, such that, for every correct process pi and every
+time t (x(t) denotes here the value of variable x at time t):
+
+    (1) The vertices of Gi (t) are of the form [pj , d, `] where pj ∈ Π, d ∈ RD and ` ∈ N.
+
+
+
+                                                                5
+        (a) For each vertex v = [pj , d, `], pj ∈
+                                                / F (τ (v)) and d = H(pj , τ (v)). That is, d is the value output
+            by pj ’s failure detector module at time τ (v).
+        (b) For each edge (v, v 0 ), τ (v) < τ (v 0 ). That is, any edge in Gi reflects the temporal order in which
+            the failure detector values are output.
+
+  (2) If v = [pj , d, `] and v 0 = [pj , d0 , `0 ] are vertices of Gi (t) and ` < `0 then (v, v 0 ) is an edge of Gi (t).
+
+  (3) Gi (t) is transitively closed: if (v, v 0 ) and (v 0 , v 00 ) are edges of Gi (t), then (v, v 00 ) is also an edge of
+      Gi (t).
+
+  (4) For all correct processes pj , there is a time t0 ≥ t, a d ∈ RD and a ` ∈ N such that, for every vertex v
+      of Gi (t), (v, [pj , d, `]) is an edge of Gi (t0 ).
+
+  (5) For all correct processes pj , there is a time t0 ≥ t such that Gi (t) is a subgraph of Gj (t0 ).
+
+The properties imply that ever-growing DAGs at correct processes tend to the same infinite DAG G: limt→∞ Gi (t) =
+G. In a fair run of the algorithm in Figure 1, the set of processes that obtain infinitely many vertices in G is
+the set of correct processes [4].
+
+3.3    Asynchronous simulation
+
+   It is shown below that any infinite DAG G constructed as shown in Figure 1 can be used to simulate
+partial runs of A in the asynchronous manner: instead of querying D, the simulation algorithm A0 uses the
+samples of the failure detector output captured in the DAG. The pseudo-code of this simulation is presented
+in Figure 2. The algorithm is hypothetical in the sense that it uses an infinite input, but this requirement is
+relaxed later.
+   In the algorithm, each process pi is initially associated with an initial state of A and performs a sequence
+of simulated steps of A. Every process pi maintains a shared register Vi that stores the vertex of G used for
+the most recent step of A simulated by pi . Each time pi is about to perform a step of A it first reads registers
+V1 , . . . , Vn to obtain the vertexes of G used by processes p1 , . . . , pn for simulating the most recent causally
+preceding steps of A (line 10 in Figure 2). Then pi selects the next vertex of G that succeeds all vertices
+(lines 11-14). If no such vertex is found, pi blocks forever (line 13).
+   Note that a correct process pi may block forever if G contains only finitely many vertices of pi . As a
+result an infinite run of A0 may simulate an unfair run of A: a run in which some correct process takes only
+finitely many steps. But every finite run simulated by A0 is a partial run of A.
+
+Theorem 1 Let G be the DAG produced in a fair run R = hF, H, I, S, T i of the communication component
+in Figure 1. Let R0 = hF 0 , H 0 , I 0 , S 0 , T 0 i be any fair run of A0 using G. Then the sequence of steps
+simulated by A0 in R0 belongs to a (possibly unfair) run of A, RA , with input vector of I 0 and failure pattern
+F . Moreover, the set of processes that take infinitely many steps in RA is correct(F ) ∩ correct(F 0 ), and if
+correct(F ) ⊆ correct(F 0 ), then RA is fair.
+
+Proof. Recall that a step of a process pi can be either a memory step in which pi accesses shared memory
+or a query step in which pi queries the failure detector. Since memory steps simulated in A0 are performed
+as in A, to show that algorithm A0 indeed simulates a run of A with failure pattern F , it is enough to make
+sure that the sequence of simulated query steps in the simulated run (using vertices of G) could have been
+observed in a run RA of A with failure pattern F and the input vector based on I 0 .
+
+
+                                                            6
+     Shared variables:
+       V1 , . . . , Vn := ⊥, . . . , ⊥,
+              {for each pj , Vj is the vertex of G
+              corresponding to the latest simulated step of pj }
+       Shared variables of A
+
+7    initialize the simulated state of pi in A, based on I 0
+8    ` := 0
+9    while true do
+        {Simulating the next pi ’s step of A}
+10      U := [V1 , . . . , Vn ]
+11      repeat
+12         ` := ` + 1
+13         wait until G includes [pi , d, `] for some d
+14      until ∀j, U [j] 6= ⊥: (U [j], [pi , d, `]) ∈ G
+15      Vi := [pi , d, `]
+16      take the next pi ’s step of A using d as the output of D
+
+
+                          Figure 2. DAG-based asynchronous algorithm A0 : code for each pi
+
+
+    Let τ be a map associated with G that carries each vertex of G to an element in T such that (a) for
+any vertex v = [p, d, `] of G, p ∈           / F (τ (v)) and d = H(pj , τ (v)), and (b) for every edge (v, v 0 ) of G,
+                 0
+τ (v) < τ (v ) (the existence of τ is established by property (5) of DAGs in Section 3.2). For each step s
+simulated by A0 in R0 , let τ 0 (s) denote time when step s occurred in R0 , i.e., when the corresponding line 16
+in Figure 2 was executed, and v(s) be the vertex of G used for simulating s, i.e., the value of Vi when pi
+simulates s in line 16 of Figure 2.
+    Consider query steps si and sj simulated by processes pi and pj , respectively. Let v(si ) = [pi , di , `]
+and v(sj ) = [pj , dj , m]. WLOG, suppose that τ ([pi , di , `]) < τ ([pj , dj , m]), i.e., D outputs di at pi before
+outputting dj at pj .
+    If τ 0 (si ) < τ 0 (sj ), i.e., si is simulated by pi before sj is simulated by pj , then the order in which si and
+sj see value di and dj is the run produced by A0 is consistent with the output of D, i.e., the values di and dj
+indeed could have been observed in that order.
+    Suppose now that τ 0 (si ) > τ 0 (sj ). If si and sj are not causally related in the simulated run, then R0 is
+indistinguishable from a run in which si is simulated by pi before sj is simulated by pj . Thus, si and sj can
+still be observed in a run of A.
+    Now suppose, by contradiction that τ 0 (si ) > τ 0 (sj ) and sj causally precedes si in the simulated run,
+i.e., pj simulated at least one write step s0j after sj , and pi simulated at least one read step s0i before si ,
+such that s0j took place before s0i in R0 . Since before performing the memory access of s0j , pj updated Vj
+with a vertex v(s0j ) that succeeds v(sj ) in G (line 15), and s0i occurs in R0 after s0j , pi must have found
+v(s0j ) or a later vertex of pj in Vj before simulating step si (line 10) and, thus, the vertex of G used for
+simulating si must be a descendant of [pj , dj , m], and, by properties (1) and (3) of DAGs (Section 3.2),
+τ ([pi , di , `]) > τ ([pj , dj , m]) — a contradiction. Hence, the sequence of steps of A simulated in R0 could
+have been observed in a run RA of A with failure pattern F .
+    Since in A0 , a process simulates only its own steps of A, every process that appears infinitely often in RA
+is in correct(F 0 ). Also, since each faulty in F process contains only finitely many vertices in G, eventually,
+each process in correct(F 0 ) − correct(F ) is blocked in line 13 in Figure 2, and, thus, every process that
+
+
+                                                              7
+ appears infinitely often in RA is also in correct(F ). Now consider a process pi ∈ correct(F 0 )∩correct(F ).
+ Property (4) of DAGs implies that for every set V of vertices of G, there exists a vertex of pi in G such that
+ for all v 0 ∈ V , (v 0 , v) is an edge in G. Thus, the wait statement in line 13 cannot block pi forever, and pi
+ takes infinitely many steps in RA .
+    Hence, the set of processes that appear infinitely often in RA is exactly correct(F 0 )∩correct(F ). Specifi-
+ cally, if correct(F ) ⊆ correct(F 0 ), then the set of processes that appear infinitely often in RA is correct(F ),
+ and the run is fair.                                                                                            
+ Note that in a fair run, the properties of the algorithm in Figure 2 remain the same if the infinite DAG G
+ is replaced with a finite ever-growing DAG Ḡ constructed in parallel (Figure 1) such that limt→∞ Ḡ = G.
+ This is because such a replacement only affects the wait statement in line 13 which blocks pi until the first
+ vertex of pi that causally succeeds every simulated step recently ”witnessed” by pi is found in G, but this
+ cannot take forever if pi is correct (properties (4) and (5) of DAGs in Section 3.2). The wait blocks forever
+ if the vertex is absent in G, which may happen only if pi is faulty.
+
+ 3.4    BG-simulation
+
+    Borowsky and Gafni proposed in [1, 3], a simulation technique by which k + 1 simulators q1 , . . . , qk+1
+ can wait-free simulate a k-resilient execution of any asynchronous n-process protocol. Informally, the
+ simulation works as follows. Every process qi tries to simulate steps of all n processes p1 , . . . , pn in a
+ round-robin fashion. Simulators run an agreement protocol to make sure that every step is simulated at most
+ once. Simulating a step of a given process may block forever if and only if some simulator has crashed in
+ the middle of the corresponding agreement protocol. Thus, even if k out of k + 1 simulators crash, at least
+ n − k simulated processes can still make progress. The simulation thus guarantees at least n − k processes
+ in {p1 , . . . , pn } accept infinitely many simulated steps.
+    In the computational component of the reduction algorithm, the BG-simulation technique is used as fol-
+ lows. Let BG(A0 ) denote the simulation protocol for 2 processes q1 and q2 which allows them to simulate,
+ in a wait-free manner, a 1-resilient execution of algorithm A0 for n processes p1 , . . . , pn . The complete
+ reduction algorithm thus employs a triple simulation (Figure 3): every process pi simulates multiple runs of
+ two processes q1 and q2 that use BG-simulation to produce a 1-resilient run of A0 on processes p01 , . . . , p0n in
+ which steps of the original algorithm A are periodically simulated using (ever-growing) DAGs G1 , ..., Gn .
+ (To avoid confusion, we use p0j to denote the process that models pj in a run of A0 simulated by a “real”
+ process pi .)
+    We are going to use the following property which is trivially satified by BG-simulation:
+
+(BG0) A run of BG-simulation in which every simulator take infinitely many steps simulates a run in which
+      every simulated process takes infinitely many steps.
+
+ 3.5    Using consensus
+
+    The triple simulation we are going to employ faces one complication though. The simulated runs of the
+ asynchronous algorithm A0 may vary depending on which process the simulation is running. This is because
+ G1 , ..., Gn are maintained by a parallel computation component (Figure 1), and a process simulating a step
+ of A0 may perform a different number of cycles reading the current version of its DAG before a vertex with
+ desired properties is located (line 13 in Figure 2). Thus, the same sequence of steps of q1 and q2 simulated
+ at different processes may result in different 1-resilient runs of A0 : waiting until a vertex [pi , d, `] appears
+
+
+                                                         8
+                                                            pi
+
+                                           simulates runs of BG(A0) on
+
+                                                                               BG(A0)
+                                                q1                q2
+
+
+                                                      simulate runs of A0 on
+
+                                                                                        A0
+                                    p01         p02               p0n−1         p0n
+
+
+                                                simulate runs of A
+
+  Figure 3. Three levels of simulation: real processes pi simulate a system of two BG-simulators q1 and q2 that
+  run BG(A0 ) to simulate an (n − 1)-resilient run of A0 on p01 , . . . , p0n .
+
+
+
+   r := 0
+   repeat
+      r := r + 1
+      if G contains [pi , d, `] for some d then u := 1
+      else u := 0
+      v := consi,`
+                 r .propose(u)
+   until v = 1
+
+
+  Figure 4. Expanded line 13 of Figure 2: waiting until G includes a vertex [pi , d, `] for some d. Here G is any
+  DAG generated by the algorithm in Figure 1.
+
+
+
+in Gj at process pj may take different number of local steps checking Gj , depending on the time when pj
+executes the wait statement in line 13 of Figure 2.
+    To resolve this issue, the wait statement is implemented using a series of consensus instances consi,`     1 ,
+      i,`
+cons2 , . . . (Figure 4). If pi is correct, then eventually each correct process will have a vertex [pi , d, `] in
+its DAG and, thus, the code in Figure 4 is non-blocking, and Theorem 1 still holds. Furthermore, the use of
+consensus ensures that if a process, while simulating a step of A0 at process pi , went through r steps before
+reaching line 14 in Figure 2, then every process simulating this very step does the same. Thus, a given
+sequence of steps of q1 and q2 will result in the same simulated 1-resilient run of A0 , regardless of when and
+where the simulation is taking place.
+
+3.6   Extracting Ω
+
+  The computational component of the reduction algorithm is presented in Figure 5. In the component,
+every process pi locally simulates multiple runs of a system of 2 processes q1 and q2 that run algorithm
+BG(A0 ), to produce a 1-resilient run of A0 (Figures 2 and 4). Recall that A0 , in its turn, simulates a run of
+
+
+                                                             9
+17   for all binary 2-vectors J0 do
+          { For all possible consensus inputs for q1 and q2 }
+18     σ0 := the empty string
+19     explore(J0 , σ0 )
+
+20   function explore(J, σ)
+21     for all qj = q1 , q2 do
+22       ρ := empty string
+23       repeat
+24          ρ := ρ · qj
+25          let p0` be the process that appears the least in SCHA0 (J, σ · ρ)
+26          Ω-output := p`
+27       until STA (J, σ · ρ) is decided
+28     explore(J, σ · q1 )
+29     explore(J, σ · q2 )
+
+
+     Figure 5. Computational component of the reduction algorithm: code for each process pi . Here STA (J, σ)
+     denotes the state of A reached by the partial run of A0 simulated in the partial run of BG(A0 ) with schedule σ
+     and input state J, and SCHA0 (J, σ) denotes the corresponding schedule of A0 .
+
+
+
+the original algorithm A, using, instead of D, the values provided by an ever-growing DAG G. In simulating
+the part of A0 of process p0i presented in Figure 4, q1 and q2 count each access of a consensus instance consi,`  r
+as one local step of p0i that need to be simulated. Also, in BG(A0 ), when qj is about to simulate the first step
+of p0i , qj uses its own input value as an input value of p0i .
+   For each simulated state S of BG(A0 ), pi periodically checks whether the state of A in S is deciding,
+i.e., whether some process has decided in the state of A in S. As we show, eventually, the same infinite
+non-deciding 1-resilient run of A0 will be simulated by all processes, which allows for extracting the output
+of Ω.
+   The algorithm in Figure 5 explores solo extensions of q1 and q2 starting from growing prefixes. Since,
+by property (BG0) of BG-simulation (Section 3.4), a run of BG(A0 ) in which both q1 and q2 participate
+infinitely often simulates a run of A0 in which every pj ∈ {p01 , . . . , p0n participates infinitely often, and, by
+Theorem 1, such a run will produce a fair and thus deciding run of A. Thus, if there is an infinite non-
+deciding run simulated by the algorithm in Figure 2, it must be a run produced by a solo extension of q1 or
+q2 starting from some finite prefix.
+
+Lemma 2 The algorithm in Figure 5 eventually forever executes lines 23–27.
+
+Proof. Consider any run of the algorithm in Figures 1, 4 and 5. Let F be the failure pattern of that run.
+Let G be the infinite limit DAG approximated by the algorithm in Figure 1. By contradiction, suppose that
+lines 23–27 in Figure 5 never block pi .
+   Suppose that for some initial J0 , the call of explore(J0 , σ0 ) performed by pi in line 19 never returns.
+Since the cycle in lines 23–27 in Figure 5 always terminates, there is an infinite sequence of recursive calls
+explore(J0 , σ0 ), explore(J0 , σ1 ), explore(J0 , σ2 ), . . ., where each σ` is a one-step extension of σ`−1 . Thus,
+there exists an infinite never deciding schedule σ̃ such that the run of BG(A0 ) based on σ̃ and J0 produces
+a never-deciding run of A0 . Suppose that both q1 and q2 appear in σ̃ infinitely often. By property (BG0) of
+BG-simulation (Section 3.4), a run of BG(A0 ) in which both q1 and q2 participate infinitely often simulates
+
+                                                             10
+a run of A0 in which every pj ∈ {p01 , . . . , p0n } participates infinitely often, and, by Theorem 1, such a run
+will produce a fair and thus deciding run of A — a contradiction.
+   Thus, if there is an infinite non-deciding run simulated by the algorithm in Figure 2, it must be a run
+produced by a solo extension of q1 or q2 starting from some finite prefix. Let σ̄ be the first such prefix in
+the order defined by the algorithm in Figure 2 and q` be the first process whose solo extension of σ is never
+deciding. Since the cycle in lines 23–27 always terminates, the recursive exploration of finite prefixes σ
+in lines 28 and 29 eventually reaches σ̄, the algorithm reaches line 22 with σ = σ̄ and qj = q` . Then the
+succeeding cycle in lines 23–27 never terminates — a contradiction.
+   Thus, for all inputs J0 , the call of explore(J0 , σ0 ) performed by pi in line 19 returns. Hence, for every
+finite prefix σ, any solo extension of σ produces a finite deciding run of A. We establish a contradiction, by
+deriving a wait-free algorithm that solves consensus among q1 and q2 .
+   Let G̃ be the infinite limit DAG constructed in Figure 1. Let β be a map from vertices of G̃ to N defined as
+follows: for each vertex [pi , d, `] in G, β([pi , d, `]) is the value of variable r at the moment when any run of
+A0 (produced by the algorithm in Figure 2) exits the cycle in Figure 4, while waiting until [pi , d, `] appears
+in G. If there is no such run, β([pi , d, `]) is set to 0. Note that the use of consensus implies that if in any
+simulated run of A0 , [pi , d, `] has been found after r iterations, then β([pi , d, `]) = r, i.e., β is well-defined.
+   Now we consider an asynchronous read-write algorithm A0β that is defined exactly like A0 , but instead of
+going through the consensus invocations in Figure 4, A0β performs β([pi , d, `]) local steps. Now consider
+the algorithm BG(A0β ) that is defined exactly as BG(A0 ) except that in BG(A0β ), q1 and q2 BG-simulate
+runs of A0β . For every sequence σ of steps of q1 and q2 , the runs of BG(A0 ) and BG(A0β ) agree on the
+sequence of steps of p01 , . . . , p0n in the corresponding runs of A0 and A0β , respectively. Moreover, they agree
+on the runs of A resulting from these runs of A0 and A0β . This is because the difference between A0 and A0β
+consist only in the local steps and does not affect the simulated state of A.
+   We say that a sequence σ of steps of q1 and q2 is deciding with J0 , if, when started with J0 , the run of
+BG(A0β ) produces a deciding run of A. By our hypothesis, every eventually solo schedule σ is deciding
+for each input J0 . As we showed above, every schedule in which both q1 and q2 appear sufficiently often is
+deciding by property (BG0) of BG-simulation. Thus, every schedule of BG(A0β ) is deciding for all inputs.
+   Consider the trees of all deciding schedules of BG(A0β ) for all possible inputs J0 . All these trees have
+finite branching (each vertex has at most 2 descendants) and finite paths. By König’s lemma, the trees are
+finite. Thus, the set of vertices of G̃ used by the runs of A0 simulated by deciding schedules of BG(A0β ) is
+also finite. Let Ḡ be a finite subgraph of G̃ that includes all vertices of G̃ used by these runs.
+   Finally, we obtain a wait-free consensus algorithm for q1 and q2 that works as follows. Each qj runs
+BG(A0β ) (using a finite graph Ḡ) until a decision is obtained in the simulated run of A. At this point, qj
+returns the decided value. But BG(A0β ) produces only deciding runs of A, and each deciding run of A
+solves consensus for inputs provided by q1 and q2 — a contradiction.                                                
+
+
+
+Theorem 3 In all environments E, if a failure detector D can be used to solve consensus in E, then Ω is
+weaker than D in E.
+
+Proof. Consider any run of the algorithm in Figures 1, 4 and 5 with failure pattern F .
+   By Lemma 2, at some point, every correct process pi gets stuck in lines 23–27 simulating longer and
+longer qj -solo extension of some finite schedule σ with input J0 . Since, processes p1 , . . . , pn use a series of
+consensus instances to simulate runs of A0 in exactly the same way, the correct processes eventually agree
+on σ and qj .
+
+
+                                                         11
+   Let e be the sequence of process identifiers in the 1-resilient execution of A0 simulated by q1 and q2 in
+schedule σ · (qj ) with input J0 . Since a 2-process BG-simulation produces a 1-resilient run of A0 , at least
+n − 1 simulated processes in p01 , . . . , p0n appear in e infinitely often. Let U (|U | ≥ n − 1) be the set of such
+processes.
+   Now we show that exactly one correct (in F ) process appears in e only finitely often. Suppose not, i.e.,
+correct(F ) ⊆ U . By Theorem 1, the run of A0 simulated a far run of A, and, thus, the run must be deciding
+— a contradiction. Since |U | ≥ n − 1, exactly one process appears in the run of A0 only finitely often.
+Moreover, the process is correct.
+   Thus, eventually, the correct processes in F stabilize at simulating longer and longer prefixes of the same
+infinite non-deciding 1-resilient run of A0 . Eventually, the same correct process will be observed to take the
+least number of steps in the run and output in line 26 — the output of Ω is extracted.                            
+
+
+
+4       Related Work
+
+   Chandra et al. derived the first “weakest failure detector” result by showing that Ω is necessary to solve
+consensus in the message-passing model in their fundamental paper [4]. The result was later generalized to
+the read-write shared memory model [12, 10]. 1
+   The technique presented in this paper builds atop two fundamental results. The first is the celebrated
+BG-simulation [1, 3] that allows k + 1 processes simulate, in a wait-free manner, a k-resilient run of any n-
+process asynchronous algorithm. The second is a brilliant observation made by Zieliński [15] that any run of
+an algorithm A using a failure detector D induces an asynchronous algorithm that simulates (possibly unfair)
+runs of A. The recursive structure of the algorithm in Figure 5 is also borrowed from [15]. Unlike [15],
+however, the reduction algorithm of this paper assumes the conventional read-write memory model without
+using immediate snapshots [2]. Also, instead of growing ”precedence” and ”detector” maps of [15], this
+paper uses directed acyclic graphs á la [4].
+
+5       Concluding Remarks
+
+   This paper presents a new proof that Ω is the weakest failure detector to solve consensus in read-write
+shared memory models. The proof applies a novel reduction technique, and is based on the very fact that
+wait-free 2-process consensus is impossible, unlike the original technique of [4] that partially rehashes
+elements of the consensus impossibility proof.
+   Several recent papers focused on determining the weakest failure detector for a generalization of con-
+sensus, (n, k)-set agreement, in which n processes have to decide on at most k distinct proposed val-
+ues [14, 6, 9]. For k = 1, the problem is consensus, and the weakest failure detector for (n, 1)-set agreement
+is Ω. Zieliński [15] determined the weakest failure detector for (n, n − 1)-set agreement (sometimes called
+simply set agreement in the literature). However, the case 1 < k < n remained unresolved until recently.
+   As we show in the forthcoming paper [8], the technique proposed in this paper can be applied to determine
+the weakest failure detector for (n, k)-set agreement for any 1 ≤ k ≤ n. Intuitively, BG simulation allows
+k + 1 processes to simulate a k-resilient run of any asynchronous algorithm, and, generalizing the technique
+described in this paper, we can derive an infinite non-deciding k-resilient run R of A0 . At least one correct
+process appears only finitely often in R (otherwise, the run would be deciding). Thus, a failure detector that
+    1
+        The result for the shared memory as stated in [12], but the only published proof of it appears in [10].
+
+
+
+                                                                    12
+periodically outputs the latest n − k processes in growing prefixes of R guarantees that eventually some
+correct process is never output. It can be easily shown that this information about failures is sufficient to
+solve (n, k)-set agreement. For k > 1, we cannot use consensus to make sure that correct processes simulate
+runs of A0 in exactly the same way, regardless of how their local DAGs evolve. Therefore, our generalized
+reduction algorithm employs a slightly more sophisticated “eventual agreement” mechanism to make sure
+that the simulation converges.
+
+Acknowledgements
+
+  I am grateful to Eli Gafni for the crucial observation that a reduction algorithm can directly use consensus
+objects to help processes agree on the simulated executions of A0 .
+
+References
+
+ [1] Elizabeth Borowsky and Eli Gafni. Generalized FLP impossibility result for t-resilient asynchronous computa-
+     tions. In STOC, pages 91–100. ACM Press, May 1993.
+ [2] Elizabeth Borowsky and Eli Gafni. Immediate atomic snapshots and fast renaming. In PODC, pages 41–51,
+     New York, NY, USA, 1993. ACM Press.
+ [3] Elizabeth Borowsky, Eli Gafni, Nancy A. Lynch, and Sergio Rajsbaum. The BG distributed simulation algorithm.
+     Distributed Computing, 14(3):127–146, 2001.
+ [4] Tushar Deepak Chandra, Vassos Hadzilacos, and Sam Toueg. The weakest failure detector for solving consensus.
+     Journal of the ACM, 43(4):685–722, July 1996.
+ [5] Tushar Deepak Chandra and Sam Toueg. Unreliable failure detectors for reliable distributed systems. Journal of
+     the ACM, 43(2):225–267, March 1996.
+ [6] Wei Chen, Jialin Zhang, Yu Chen, and Xuezheng Liu. Weakening failure detectors for -set agreement via the
+     partition approach. In DISC, pages 123–138, 2007.
+ [7] Michael J. Fischer, Nancy A. Lynch, and Michael S. Paterson. Impossibility of distributed consensus with one
+     faulty process. Journal of the ACM, 32(2):374–382, April 1985.
+ [8] Eli Gafni and Petr Kuznetsov. The weakest failure detector for solving k-set agreement. In submission, February
+     2009.
+ [9] Rachid Guerraoui, Maurice Herlihy, Petr Kouznetsov, Nancy A. Lynch, and Calvin C. Newport. On the weakest
+     failure detector ever. In PODC, pages 235–243, August 2007.
+[10] Rachid Guerraoui and Petr Kouznetsov. Failure detectors as type boosters. Distributed Computing, 20(5):343–
+     358, 2008.
+[11] Prasad Jayanti and Sam Toueg. Every problem has a weakest failure detector. In PODC, pages 75–84, 2008.
+[12] Wai-Kau Lo and Vassos Hadzilacos. Using failure detectors to solve consensus in asynchronous shared memory
+     systems. In WDAG, LNCS 857, pages 280–295, September 1994.
+[13] M.C. Loui and H.H. Abu-Amara. Memory requirements for agreement among unreliable asynchronous pro-
+     cesses. Advances in Computing Research, 4:163–183, 1987.
+[14] Michel Raynal and Corentin Travers. In search of the holy grail: Looking for the weakest failure detector for
+     wait-free set agreement. In OPODIS, pages 3–19, 2006.
+[15] Piotr Zieliński. Anti-omega: the weakest failure detector for set agreement. In PODC, August 2008.
+
+
+
+                                                        13
+

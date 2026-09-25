@@ -1,0 +1,33 @@
+# Go 构建产物
+/bin/
+*.exe
+*.test
+*.out
+*.dll
+*.so
+*.dylib
+
+# 构建与测试临时输出
+/.build/
+/build/
+*.prof
+coverage.*
+
+# 便携 Go 工具链与下载缓存（体积大且可重建，见 scripts/bootstrap-go.ps1）
+/.tools/
+
+# Raft 数据目录
+/tmp/raft/
+/data/
+*.db
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# 实验结果默认输出（论文用的结果请显式提交到 results/）
+/out/
+*.csv.tmp

@@ -1,0 +1,196 @@
+                                   Accrual Failure Detectors
+                                             Naohiro Hayashibara
+
+                                         School of Information Science
+                           Japan Advanced Institute of Science and Technology (JAIST)
+                                 1-1 Asahidai, Nomi, Ishikawa 923-1292, Japan
+                                     E-mail: nao-haya@jaist.ac.jp
+
+
+
+1 Introduction                                                    A major obstacle to building a failure detection
+                                                               service is that simultaneously running distributed ap-
+Failure detection is a fundamental building block              plications with different quality-of-service (QoS) re-
+for ensuring fault tolerance in distributed systems.           quirements must be able to tune the service to meet
+For this reason, many people have been advocating              their own needs without interfering with each other.
+that failure detection should be provided as some              Furthermore, some classes of distributed applica-
+form of service [1, 2, 3, 4, 5], similar to IP address         tions require the use of different qualities of ser-
+lookup (DNS) or time synchronization (e.g., NTP).              vice of failure detection to trigger different reac-
+Unfortunately, in spite of important technical break-          tions (e.g., [6, 7, 8]). For instance, an application can
+throughs, this view has met little success so far. We          take precautionary measures when the confidence in
+believe that one of the main reasons is the conven-            a suspicion reaches a given level, and then take more
+tional binary interaction (i.e., trust vs. suspect) that       drastic actions one the confidence raises above a sec-
+makes it difficult to meet the requirements of sev-            ond (much higher) level.
+eral distributed applications running simultaneously.
+For this reason, we advocate a different abstraction
+that helps decoupling application requirements from            2    Solution highlight
+issues related to the underlying system.
+   It is well-known that there exists an inherent trade-      Failure detectors are traditionally based on a binary
+off between (1) conservative failure detection (i.e.,         interaction model wherein processes can only eigher
+reducing the risk of wrongly suspecting a running             trust or suspect the processes that they are monitor-
+process), and (2) aggressive failure detection (i.e.,         ing [9]. In contrast, we propose a novel abstrac-
+quickly detecting the occurrence of a real crash).            tion, called accrual failure detector, whereby a fail-
+Thre exists a continuum of valid choices between              ure monitor service outputs a value on a continu-
+these two extremes, and what defines an appropri-             ous scale rather than information of a binary nature.
+ate choice is strongly related to application require-        Roughly speaking, this value captures the degree of
+ments.                                                        confidence with which a given process is believed
+                                                              to have crashed. If the process actually crashes, the
+   
+     This is a collaborative work with Xavier Défago, Takuya value is guaranteed to accrue over time and tend to-
+Katayama, Péter Urbán and Rami Yared                        ward infinity, hence the name. It is then left to ap-
+
+                                                           1
+                                                                      
+plication processes to set an appropriate suspicion                     , then the likeliness that we will make a
+threshold according to their own QoS requirements.            mistake (i.e., the decision will be contradicted in the
+A low threshold is prone to generate many wrong               future by the reception of a late heartbeat) is about
+                                                                                                         
+suspicions but ensures a quick detection in the event         10%. The likeliness is about 1% with  , 0.1%
+of a real crash. Conversely, a high threshold gen-            with  , and so on.
+erates fewer mistakes but needs more time to detect
+actual crashes.
+                                                              2.3     Mechanism
+2.1 Concept of accrual failure detectors                      The method used for estimating  is in fact rather
+                                                              simple. This is done in three phases. First, heartbeats
+The principal of failure detectors is simple. Instead
+                                                              arrive and their arrival times are stored in a sampling
+of outputting information of a binary nature, accrual
+                                                              window. Second, these past samples are used to de-
+failure detectors output suspicion information on a
+                                                              termine the distribution of inter-arrival times. Third,
+continuous scale. It means that the higher the value,
+                                                              the distribution is in turn used to compute the current
+the higher the chance that the monitored process has
+                                                              value of   .
+crashed.
+   Also we revisited the interaction model between
+processes that require to monitor some others, and            2.4     Experimental result
+failure detectors. In conventional failure detectors
+decide suspicion on monitored processes and give              We have compared the results obtained using the
+application processes its decision as suspicion infor-         failure detector with those of two adaptable fail-
+mation (see Fig.1). In contrast, accrual failure detec-       ure detectors proposed by Chen and Bertier [10,
+tors leave the decision on suspicion up to application        11] when used over a wide-area network (be-
+processes (see Fig.2). They just provide the degree           tween Switzerland and Japan) and a local area net-
+on suspicion and each application decides that a cer-         work (LAN in JAIST). These adaptive failure detec-
+tain process should be suspected or not. Therefore,           tors have similar mechanism for estimating the next
+accrual failure detectors can treat different (some-          heartbeat arrival time. However they still use time-
+time may be diverse) requirements simultaneously              out to decide suspicion. As we said, they are imple-
+and provide information on suspicion to many pro-             mented based on conventional failure detectors and it
+cesses in a scalable manner.                                  means that it is difficult for them to deal with various
+                                                              QoS requirements simultaneously.
+                                                                 Now we just observe the adaptability for network
+2.2 Implementation
+                                                              condition on the  failure detector. The purpose of
+Accrual failure detectors can be implemented in               the experiment is to confirm that the  failure detec-
+many different ways. Now we present a practical               tor does not incur any significant performance cost.
+implementation of accrual failure detectors, called              When compared with Chen’s failure detector,
+the  failure detector. It outputs the value  that         both failure detectors follow the same general ten-
+means the degree of suspicion that the correspond-            dency (see Fig. 3). In our experiment, the  failure
+ing process  has been crashed. It is expressed               detector behaves a little better in the aggressive range
+on a scale that is dynamically adjusted to reflect            of failure detection, whereas Chen’s failure detec-
+current
+        network conditions. Given some threshold             tor behaves a little better in the conservative range.
+   , and assuming that we decide to suspect  when           Bertier’s failure detector did not perform very well
+
+                                                          2
+Figure 1: Interaction of conventional failure detector        Figure 2: Interaction of accrual failure detector and
+and application processes                                     application processes
+
+
+
+in this experiment because it was primarily designed          References
+to be used over LANs.
+   In a LAN, the  failure detector generated nearly          [1] P. Felber, X. Défago, R. Guerraoui, and P. Oser,
+                                                                  “Failure detectors as first class objects,” in Proc. 1st
+one order of magnitude less mistakes than Chen’s
+                                                                  IEEE Intl. Symp. on Distributed Objects and Appli-
+failure detector. In this experiment, Bertier’s failure           cations (DOA’99), Edinburgh, Scotland, Sept. 1999,
+detector performed as a good aggressive failure de-               pp. 132–141.
+tector, which seems consistent with its design goals.
+                                                              [2] N. Hayashibara, A. Cherif, and T. Katayama,
+Although Bertier’s failure detector performed better              “Failure detectors for large-scale distributed sys-
+than Chen’s one, the former has disadvantage that it              tems,” in Proc. 21st IEEE Symp. on Reliable Dis-
+cannot be tuned as significantly as the latter.                   tributed Systems (SRDS-21), Intl. Workshop on Self-
+                                                                  Repairing and Self-Configurable Distributed Sys-
+                                                                  tems (RCDS’2002), Osaka, Japan, Oct. 2002, pp.
+3 Progress and future direction                                   404–409.
+                                                              [3] I. Sotoma and E. R. M. Madeira, “Adaptation - al-
+We have implemented the  failure detector as an in-
+                                                                  gorithms to adaptive fault monitoring and their im-
+stance of accrual failure detectors and analyzed its              plementation on CORBA,” in Proc. 3rd Intl. Symp.
+experimental result [12]. In the result, we confirmed             on Distributed-Objects and Applications (DOA’01),
+that the  failure detector does not have any perfor-             Rome, Italy, Sept. 2001, pp. 219–228.
+mance hit compared with other adaptable failure de-           [4] P. Stelling, I. Foster, C. Kesselman, C. Lee, and
+tectors. Moreover, it can provide information on sus-             G. von Laszewski, “A fault detection service for
+picion to many applications in a scalable manner.                 wide area distributed computations,” in Proc. 7th
+   We are now implementing an another variation of                IEEE Symp. on High Performance Distributed Com-
+accrual failure detectors, called the  failure detec-            puting, July 1998, pp. 268–278.
+tor [13]. It can handle message losses. We also try to        [5] R. van Renesse, Y. Minsky, and M. Hayden, “A
+improve the precision of accuracy for failure detec-              gossip-style failure detection service,” in Middle-
+tion. While, we are describing the definition and the             ware’98, N. Davies, K. Raymond, and J. Seitz, Eds.,
+specification of accrual failure detectors precisely as           The Lake District, UK, Sept. 1998, pp. 55–70.
+a theoretical framework [14]. These issues are used           [6] B. Charron-Bost, X. Défago, and A. Schiper,
+as a part of a generic failure detection service.                 “Broadcasting messages in fault-tolerant distributed
+
+                                                          3
+                        0.4
+                                                                      ϕ FD                                             1              Bertier FD                             ϕ FD
+                                     Bertier FD                     Chen FD                                                                                              Chen FD
+                                                                   Bertier FD                                                                                           Bertier FD
+                        0.1                                                                                           0.1
+ Mistake rate [1/s]
+
+
+
+
+                                                                                              Mistake rate [1/s]
+                                                                                                                   0.01
+                                                                                                                                                   Chen FD
+
+
+                       0.01                                                                                         0.001
+                                                    Chen FD                                                                             ϕ FD
+                                                                                                                   0.0001
+
+                                  ϕ-FD
+                      0.001                                                                                         1e-05
+                              0    0.5             1            1.5             2   2.5                                     0   0.2        0.4       0.6       0.8       1           1.2   1.4
+                                                  Detection time [s]                                                                               Detection time [s]
+
+
+
+Figure 3: Comparison of failure detectors in WAN.                                             Figure 4: Comparison of failure detectors in a LAN.
+Mistake rate and detection time obtained with differ-                                         Heartbeat sending interval is 20 ms. in this experi-
+ent values of the respective parameters. Heartbeat                                            ment
+sending interval is 100 ms. in this experiment
+
+
+
+           systems: the benefit of handling input-triggered and      detector,” in Proc. 15th Intl. Conf. on Dependable
+           output-triggered suspicions differently,” in Proc.        Systems and Networks (DSN’02), Washington, D.C.,
+           21st IEEE Intl. Symp. on Reliable Distributed Sys-        USA, June 2002, pp. 354–363.
+           tems (SRDS-21), Osaka, Japan, Oct. 2002, pp. 244–
+                                                                [12] N. Hayashibara, X. Défago, R. Yared, and
+           249.
+                                                                     T. Katayama, “The  accrual failure detector,” in
+       [7] X. Défago, A. Schiper, and N. Sergent, “Semi-            Proc. 23nd IEEE Int’l Symp. on Reliable Dis-
+           passive replication,” in Proc. 17th IEEE Intl. Symp.      tributed Systems (SRDS’04), Florianópolis, Brazil,
+           on Reliable Distributed Systems (SRDS-17), West           October 2004, pp. 66–78. [Online]. Available:
+           Lafayette, IN, USA, Oct. 1998, pp. 43–50.                 http://ddsg.jaist.ac.jp/en/pub/HDY+04.html
+ [8] P. Urbán, I. Schnayderman, and A. Schiper, “Com- [13] N. Hayashibara, X. Défago, and T. Katayama,
+     parison of failure detectors and group membership:         “Flexible failure detection with  fd,” Japan
+     Performa nce study of two atomic broadcast algo-           Advanced Institute of Science and Tech-
+     rithms,” June 2003, pp. 645–654.                           nology, Ishikawa, Japan, RR IS-RR-2004-
+                                                                006,     February 2004. [Online]. Available:
+ [9] T. D. Chandra and S. Toueg, “Unreliable failure de-        http://ddsg.jaist.ac.jp/en/pub/HDK04.html
+     tectors for reliable distributed systems,” J. ACM,
+     vol. 43, no. 2, pp. 225–267, 1996.                    [14] X. Défago, P. Urbán, N. Hayashibara, and
+                                                                T. Katayama, “Definition and specification of ac-
+[10] W. Chen, S. Toueg, and M. K. Aguilera, “On the             crual failure detectors,” in Proc. Int’l Conf. on De-
+     quality of service of failure detectors,” IEEE Trans.      pendable Systems and Networks (DSN’05) (to ap-
+     Comput., vol. 51, no. 5, pp. 561–580, May 2002.            pear), Yokohama, Japan, June 2005.
+[11] M. Bertier, O. Marin, and P. Sens, “Implementation
+     and performance evaluation of an adaptable failure
+
+                                                                                          4
+

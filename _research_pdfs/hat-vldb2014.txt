@@ -1,0 +1,1080 @@
+      Highly Available Transactions: Virtues and Limitations
+     Peter Bailis, Aaron Davidson, Alan Fekete† , Ali Ghodsi, Joseph M. Hellerstein, Ion Stoica
+                                                     UC Berkeley and † University of Sydney
+
+
+ ABSTRACT                                                                             (Section 3). While weak isolation levels do not provide serializ-
+To minimize network latency and remain online during server fail-                     ability for general-purpose transactions, they are apparently strong
+ures and network partitions, many modern distributed data storage                     enough to deliver acceptable behavior to many application pro-
+systems eschew transactional functionality, which provides strong                     grammers and are substantially stronger than the semantics pro-
+semantic guarantees for groups of multiple operations over multi-                     vided by current highly available systems. This raises a natural
+ple data items. In this work, we consider the problem of providing                    question: which semantics can be provided with high availability?
+Highly Available Transactions (HATs): transactional guarantees                           To date, the relationship between ACID semantics and high avail-
+that do not suffer unavailability during system partitions or incur                   ability has not been well explored. We have a strong understanding
+high network latency. We introduce a taxonomy of highly avail-                        of weak isolation in the single-server context from which it origi-
+able systems and analyze existing ACID isolation and distributed                      nated [2, 12, 38] and many papers offer techniques for providing
+data consistency guarantees to identify which can and cannot be                       distributed serializability [14, 25, 27, 42, 61] or snapshot isola-
+achieved in HAT systems. This unifies the literature on weak trans-                   tion [43, 59]. Additionally, the distributed computing and parallel
+actional isolation, replica consistency, and highly available sys-                    hardware literature contains many consistency models for single
+tems. We analytically and experimentally quantify the availability                    operations on replicated objects [23, 41, 48, 49, 60]. However,
+and performance benefits of HATs—often two to three orders of                         the literature lends few clues for providing semantic guarantees for
+magnitude over wide-area networks—and discuss their necessary                         multiple operations operating on multiple data items in a highly
+semantic compromises.                                                                 available distributed environment.
+ 1     Introduction                                                                      Our main contributions in this paper are as follows. We relate
+                                                                                      the many previously proposed database isolation and data consis-
+   The last decade has seen a shift in the design of popular large-
+                                                                                      tency models to the goal of high availability, which guarantees
+scale database systems, from the use of transactional RDBMSs [14,
+                                                                                      a response from each non-failing server in the presence of arbi-
+38, 37] to the widespread adoption of loosely consistent distributed
+                                                                                      trary network partitions between them. We classify which among
+key-value stores [21, 23, 30]. Core to this shift was the 2000 in-
+                                                                                      the wide array of models are achievable with high availability, de-
+troduction of Brewer’s CAP Theorem, which stated that a highly
+                                                                                      noting them as Highly Available Transactions (HATs). In doing
+available system cannot provide “strong” consistency guarantees in
+                                                                                      so, we demonstrate that although many implementations of HAT
+the presence of network partitions [16]. As formally proven [35],
+                                                                                      semantics are not highly available, this is an artifact of the im-
+the CAP Theorem pertains to a data consistency model called lin-
+                                                                                      plementations rather than an inherent property of the semantics.
+earizability, or the ability to read the most recent write to a data item
+                                                                                      Our investigation shows that, besides serializability, Snapshot Iso-
+that is replicated across servers [41]. However, despite its narrow
+                                                                                      lation and Repeatable Read isolation are not HAT-compliant, while
+scope, the CAP Theorem is often misconstrued as a broad result re-
+                                                                                      most other isolation levels are achievable with high availability.
+garding the ability to provide ACID database properties with high
+                                                                                      We also demonstrate that many weak replica consistency models
+availability [9, 16, 22]; this misunderstanding has led to substan-
+                                                                                      from distributed systems are both HAT-compliant and simultane-
+tial confusion regarding replica consistency, transactional isolation,
+                                                                                      ously achievable with several ACID properties.
+and high availability. The recent resurgence of transactional sys-
+tems suggests that programmers value transactional semantics, but                        Our investigation is based on both impossibility results and sev-
+most existing transactional data stores do not provide availability                   eral constructive, proof-of-concept algorithms. For example, Snap-
+in the presence of partitions [19, 22, 42, 25, 48, 59, 61].                           shot Isolation and Repeatable Read isolation are not HAT-compliant
+                                                                                      because they require detecting conflicts between concurrent up-
+   Indeed, serializable transactions—the gold standard of traditional
+                                                                                      dates (as needed for preventing Lost Updates or Write Skew phe-
+ACID databases—are not achievable with high availability in the
+                                                                                      nomena), which we show is unavailable. However, Read Com-
+presence of network partitions [28]. However, database systems
+                                                                                      mitted isolation, transactional atomicity (Section 5.1.2), and many
+have a long tradition of providing weaker isolation and consis-
+                                                                                      other consistency models from database and distributed systems are
+tency guarantees [2, 12, 37, 38, 43]. Today’s ACID and NewSQL
+                                                                                      achievable via algorithms that rely on multi-versioning and limited
+databases often employ weak isolation models due to concurrency
+                                                                                      client-side caching. For several guarantees, such as causal con-
+and performance benefits; weak isolation is overwhelmingly the
+                                                                                      sistency with phantom prevention and ANSI Repeatable Read, we
+default setting in these stores and is often the only option offered
+                                                                                      consider a modified form of high availability in which clients “stick
+                                                                                      to” (i.e., have affinity with) at least one server—a property which is
+                                                                                      often implicit in the distributed systems literature [41, 48, 49] but
+This work is licensed under the Creative Commons Attribution-
+NonCommercial-NoDerivs 3.0 Unported License. To view a copy of this li-               which requires explicit consideration in a client-server replicated
+cense, visit http://creativecommons.org/licenses/by-nc-nd/3.0/. Obtain per-           database context. This sticky availability is widely employed [48,
+mission prior to any use beyond those covered by the license. Contact                 64] but is a less restrictive model (and therefore more easily achiev-
+copyright holder by emailing info@vldb.org. Articles from this volume                 able) than traditional high availability.
+were invited to present their results at the 40th International Conference on            At a high level, the virtues of HATs are guaranteed responses
+Very Large Data Bases, September 1st - 5th 2014, Hangzhou, China.
+Proceedings of the VLDB Endowment, Vol. 7, No. 3                                      from any replica, low latency, and a range of semantic guaran-
+Copyright 2013 VLDB Endowment 2150-8097/13/11.                                        tees including several whose usefulness is widely accepted such
+
+
+
+                                                                                181
+ as Read Committed. However, highly available systems are funda-                      1.0
+ mentally unable to prevent concurrent updates to shared data items                   0.8                                            east-b:east-b
+                                                                                      0.6
+
+
+
+
+                                                                                CDF
+ and cannot provide recency guarantees for reads. To understand                                                                      east-c:east-d
+ when these virtues and limitations are relevant in practice, we sur-                 0.4                                            CA:OR
+                                                                                      0.2                                            SI:SP
+ vey both practitioner accounts and academic literature, perform ex-
+ perimental analysis on modern cloud infrastructure, and analyze                      0.0
+ representative applications for their semantic requirements. Our                      10-1          100           101            102            103
+ experiences with a HAT prototype running across multiple geo-                                                   RTT (ms)
+ replicated datacenters indicate that HATs offer a one to three order           Figure 1: CDF of round-trip times for slowest inter- and intra-
+ of magnitude latency decrease compared to traditional distributed              availability zone links compared to cross-region links.
+ serializability protocols, and they can provide acceptable seman-
+ tics for a wide range of programs, especially those with monotonic
+                                                                                   Many of our discussions with practitioners—especially those op-
+ logic and commutative updates [4, 58]. HAT systems can also en-
+                                                                                erating on public cloud infrastructure—as well as reports from large-
+ force arbitrary foreign key constraints for multi-item updates and,
+                                                                                scale operators like Google [29] confirm that partition management
+ in some cases, provide limited uniqueness guarantees. However,
+                                                                                is an important consideration for service operators today. System
+ HATs can fall short for applications with concurrency-sensitive op-
+                                                                                designs that do not account for partition behavior may prove diffi-
+ erations, requiring unavailable, synchronous coordination.
+                                                                                cult to operate at scale: for example, less than one year after its an-
+    Finally, we recognize that the large variety of ACID isolation
+                                                                                nouncement, Yahoo!’s PNUTS developers explicitly added support
+ levels and distributed consistency models (and therefore those in
+                                                                                for weaker, highly available operation. The engineers explained
+ our taxonomy) can be confusing; the subtle distinctions between
+                                                                                that “strict adherence [to strong consistency] leads to difficult sit-
+ models may appear to be of academic concern. Accordingly, we
+                                                                                uations under network partitioning or server failures...in many cir-
+ offer the following pragmatic takeaways:
+                                                                                cumstances, applications need a relaxed approach” [53].
+1. The default (and sometimes strongest) configurations of most                    Several recent studies rigorously quantify partition behavior. A
+   widely deployed database systems expose a range of anomalies                 2011 study of several Microsoft datacenters observed over 13,300
+   that can compromise application-level consistency.                           network failures with end-user impact, with an estimated median
+2. Many of these “weak isolation” models are achievable without                 59,000 packets lost per failure. The study found a mean of 40.8
+   sacrificing high availability if implemented correctly. However,             network link failures per day (95th percentile: 136), with a median
+   none of the achievable models prevents concurrent modifications.             time to repair of around five minutes (and up to one week). Perhaps
+3. In addition to providing a guaranteed response and horizontal                surprisingly, provisioning redundant networks only reduces impact
+   scale-out, these highly available HAT models allow one to three              of failures by up to 40%, meaning network providers cannot easily
+   order of magnitude lower latencies on current infrastructure.                curtail partition behavior [36]. A 2010 study of over 200 wide-area
+                                                                                routers found an average of 16.2–302.0 failures per link per year
+4. For correct behavior, applications may require a combination of
+                                                                                with an average annual downtime of 24–497 minutes per link per
+   HAT and (ideally sparing use of) non-HAT isolation levels; fu-
+                                                                                year (95th percentile at least 34 hours) [63]. In HP’s managed en-
+   ture database designers should plan accordingly.
+                                                                                terprise networks, WAN, LAN, and connectivity problems account
+  2     Why High Availability?                                                  for 28.1% of all customer support tickets while 39% of tickets re-
+                                                                                late to network hardware. The median incident duration for highest
+    Why does high availability matter? Peter Deutsch starts his clas-
+                                                                                priority tickets ranges from 114–188 minutes and up to a full day
+ sic list of “Fallacies of Distributed Computing” with two concerns
+                                                                                for all tickets [62]. Other studies confirm these results, showing
+ fundamental to distributed database systems: “1.) The network is
+                                                                                median time between connectivity failures over a WAN network of
+ reliable. 2.) Latency is zero” [32]. In a distributed setting, network
+                                                                                approximately 3000 seconds with a median time to repair between
+ failures may prevent database servers from communicating, and, in
+                                                                                2 and 1000 seconds [50] as well as frequent path routing failures on
+ the absence of failures, communication is slowed by factors like
+                                                                                the Internet [45]. A recent, informal report by Kingsbury and Bailis
+ physical distance, network congestion, and routing. As we will see
+                                                                                catalogs a host of additional practitioner reports [44]. Not surpris-
+ (Section 4), highly available system designs mitigate the effects of
+                                                                                ingly, isolating, quantifying, and accounting for these network fail-
+ network partitions and latency. In this section, we draw on a range
+                                                                                ures is an area of active research in networking community [47].
+ of evidence that indicates that partitions occur with frequency in
+ real-world deployments and latencies between datacenters are sub-                 These studies indicate that network partitions do occur within
+ stantial, often on the order of several hundreds of milliseconds.              and across modern datacenters. We observe that these partitions
+                                                                                must be met with either unavailability at some servers or, as we
+  2.1   Network Partitions at Scale                                             will discuss, relaxed semantic guarantees.
+    According to James Hamilton, Vice President and Distinguished
+ Engineer on the Amazon Web Services team, “network partitions                   2.2        Latency and Planet Earth
+ should be rare but net gear continues to cause more issues than it                Even with fault-free networks, distributed systems face the chal-
+ should” [39]. Anecdotal evidence confirms Hamilton’s assertion.                lenge of network communication latency, Deutsch’s second “Fal-
+ In April 2011, a network misconfiguration led to a twelve-hour se-             lacy.” In this section, we quantify round-trip latencies, which are
+ ries of outages across the Amazon EC2 and RDS services [7]. Sub-               often large—hundreds of milliseconds in a geo-replicated, multi-
+ sequent misconfigurations and partial failures such as another EC2             datacenter context. Fundamentally, the speed at which two servers
+ outage in October 2012 have led to full site disruptions for popular           can communicate is (according to modern physics) bounded by the
+ web services like Reddit, Foursquare, and Heroku [33]. At global               speed of light. In the best case, two servers on opposite sides of the
+ scale, hardware failures—like the 2011 outages in Internet back-               Earth—communicating via a hypothetical link through the planet’s
+ bones in North America and Europe due a router bug [57]—and                    core—require a minimum 85.1ms round-trip time (RTT; 133.7ms
+ misconfigurations like the BGP faults in 2008 [51] and 2010 [52]               if sent at surface level). As services are replicated to multiple, geo-
+ can cause widespread partitioning behavior.                                    graphically distinct sites, this cost of communication increases.
+
+
+
+                                                                          182
+                                                                                       Database                       Default            Maximum
+                                                                                       Actian Ingres 10.0/10S            S                   S
+              H2      H3                       C         D                             Aerospike                       RC                   RC
+       H1    0.55    0.56               B     1.08      3.12                           Akiban Persistit                 SI                   SI
+       H2            0.50               C               3.57                           Clustrix CLX 4100               RR                   RR
+                                                                                       Greenplum 4.1                   RC                    S
+     (a) Within us-east-b AZ           (b) Across us-east AZs                          IBM DB2 10 for z/OS              CS                   S
+                                                                                       IBM Informix 11.50            Depends                 S
+            OR      VA       TO      IR       SY       SP        SI                    MySQL 5.6                       RR                    S
+                                                                                       MemSQL 1b                       RC                   RC
+  CA        22.5    84.5    143.7   169.8    179.1    185.9     186.9                  MS SQL Server 2012              RC                    S
+  OR                82.9    135.1   170.6    200.6    207.8     234.4                  NuoDB                           CR                   CR
+  VA                        202.4   107.9    265.6    163.4     253.5                  Oracle 11g                      RC                    SI
+  TO                                278.3    144.2    301.4     90.6                   Oracle Berkeley DB                S                   S
+  IR                                         346.2    239.8     234.1                  Oracle Berkeley DB JE           RR                    S
+                                                                                       Postgres 9.2.2                  RC                    S
+  SY                                                  333.6     243.1                  SAP HANA                        RC                    SI
+  SP                                                            362.8                  ScaleDB 1.02                    RC                   RC
+(c) Cross-region (CA: California, OR: Oregon, VA: Virginia, TO: Tokyo,                 VoltDB                            S                   S
+IR: Ireland, SY: Sydney, SP: São Paulo, SI: Singapore)                                RC: read committed, RR: repeatable read, SI: snapshot isola-
+                                                                                       tion, S: serializability, CS: cursor stability, CR: consistent read
+  Table 1: Mean RTT times on EC2 (min and max highlighted)
+                                                                                  Table 2: Default and maximum isolation levels for ACID and
+                                                                                  NewSQL databases as of January 2013 (from [9]).
+   In real deployments, messages travel slower than the speed of
+light due to routing, congestion, and server-side overheads. To
+                                                                                  ten considered to outweigh costs of possible consistency anomalies
+illustrate the difference between intra-datacenter, inter-datacenter,
+                                                                                  that might arise from their use.
+and inter-planetary networks, we performed a measurement study
+                                                                                     To understand the prevalence of weak isolation, we recently sur-
+of network behavior on Amazon’s EC2, a widely used public com-
+                                                                                  veyed the default and maximum isolation guarantees provided by
+pute cloud. We measured one week of ping times (i.e., round-
+                                                                                  18 databases, often claiming to provide “ACID” or “NewSQL” func-
+trip times, or RTTs) between all seven EC2 geographic “regions,”
+                                                                                  tionality [9]. As shown in Table 2, only three out of 18 databases
+across three “availability zones” (closely co-located datacenters),
+                                                                                  provided serializability by default, and eight did not provide serial-
+and within a single “availability zone” (datacenter), at a granular-
+                                                                                  izability as an option at all. This is particularly surprising when
+ity of 1s1 . We summarize the results of our network measurement
+                                                                                  we consider the widespread deployment of many of these non-
+study in Table 1. On average, intra-datacenter communication (Ta-
+                                                                                  serializable databases, like Oracle 11g, which are known to power
+ble 1a) is between 1.82 and 6.38 times faster than across geograph-
+                                                                                  major businesses and product functionality. Given that these weak
+ically co-located datacenters (Table 1b) and between 40 and 647
+                                                                                  transactional models are frequently used, our inability to provide
+times faster than across geographically distributed datacenters (Ta-
+                                                                                  serializability in arbitrary HATs appears non-fatal for practical ap-
+ble 1c). The cost of wide-area communication exceeds the speed of
+                                                                                  plications. If application writers and database vendors have already
+light: for example, while a speed-of-light RTT from São Paulo to
+                                                                                  decided that the benefits of weak isolation outweigh potential ap-
+Singapore RTT is 106.7ms, ping packets incur an average 362.8ms
+                                                                                  plication inconsistencies, then, in a highly available environment
+RTT (95th percentile: 649ms). As shown in Figure 1, the distribu-
+                                                                                  that prohibits serializability, similar decisions may be tenable.
+tion of latencies varies between links, but the trend is clear: remote
+                                                                                     It has been unknown which of these guarantees can be provided
+communication has a substantial cost. Quantifying and minimiz-
+                                                                                  with high availability, or are HAT-compliant. Existing algorithms
+ing communication delays is also an active area of research in the
+                                                                                  for providing weak isolation are often designed for a single-node
+networking community [66].
+                                                                                  context and are, to the best of our knowledge, unavailable due to re-
+ 3      ACID in the Wild                                                          liance on concurrency control mechanisms like locking that are not
+                                                                                  resilient to partial failure (Section 6.1). Moreover, we are not aware
+   The previous section demonstrated that distributed systems must
+                                                                                  of any prior literature that provides guidance as to the relationship
+address partitions and latency: what does this mean for distributed
+                                                                                  between weak isolation and high availability: prior work has ex-
+databases? Database researchers and designers have long realized
+                                                                                  amined the relationship between serializability and high availabil-
+that serializability is not achievable in a highly available system [28],
+                                                                                  ity [28] and weak isolation in general [2, 12, 38] but not weak isola-
+meaning that, in environments like those in Section 2, database
+                                                                                  tion and high availability together. A primary goal in the remainder
+designs face a choice between availability and strong semantics.
+                                                                                  of this paper is to understand which models are HAT-compliant.
+However, even in a single-node database, the coordination penal-
+ties associated with serializability can be severe and are manifested              4    High Availability
+in the form of decreased concurrency (and, subsequently, perfor-                     To understand which guarantees can be provided with high avail-
+mance degradation, scalability limitations, and, often, aborts due                ability, we must first define what high availability means. In this
+to deadlock or contention) [38]. Accordingly, to increase concur-                 section, we will formulate a model that captures a range of avail-
+rency, database systems offer a range of ACID properties weaker                   ability models, including high availability, availability with sticki-
+than serializability: the host of so-called weak isolation models de-             ness, and transactional availability.
+scribe varying restrictions on the space of schedules that are allow-                Informally, highly available algorithms ensure “always on” op-
+able by the system [2, 5, 12]. None of these weak isolation models                eration and, as a side effect, guarantee low latency. If users of a
+guarantees serializability, but, as we see below, their benefits are of-          highly available system are able to contact a (set of) server(s) in
+                                                                                  a system, they are guaranteed a response; this means servers will
+1 Data available at http://bailis.org/blog/communication-costs-in-real-           not need to synchronously communicate with others. If servers are
+world-networks/, https://github.com/pbailis/aws-ping-traces                       partitioned from one another, they do not need to stall in order to
+
+
+
+                                                                            183
+provide clients a “safe” response to operations. This lack of fast-                     result in “lower availability” than a non-transactional availability
+path coordination also means that a highly available system also                        requirement (e.g., single-item availability). Additionally, given the
+provides low latency [1]; in a wide-area setting, clients of a highly                   possibility of system-initiated aborts, we need to ensure useful for-
+available system need not wait for cross-datacenter communica-                          ward progress: a system can trivially guarantee clients a response
+tion. To properly describe whether a transactional system is highly                     by always aborting all transactions. However, this is an unsatisfac-
+available, we need to describe what servers a client must contact                       tory system because nothing good (transaction commit) ever hap-
+as well as what kinds of responses a server can provide, especially                     pens; we should require a liveness property [54].
+given the possibility of aborts.                                                           A system cannot guarantee that every transaction will commit—
+   Traditionally, a system provides high availability if every user                     transactions may choose to abort themselves—but we need to make
+that can contact a correct (non-failing) server eventually receives a                   sure that the system will not indefinitely abort transactions on its
+response from that server, even in the presence of arbitrary, indefi-                   own volition. We call a transaction abort due to a transaction’s own
+nitely long network partitions between servers [35].2 As in a stan-                     choosing (e.g., as an operation of the transaction itself or due to
+dard distributed database, designated servers might perform opera-                      a would-be violation of a declared integrity constraint) an internal
+tions for different data items. A server that can handle an operation                   abort and an abort due to system implementation or operation an
+for a given data item is called a replica for that item.3                               external abort. We say that a system provides transactional avail-
+ 4.1    Sticky Availability                                                             ability if, given replica availability for every data item in a trans-
+   In addition to high availability, which allows operations on any                     action, the transaction eventually commits (possibly after multiple
+replica, distributed algorithms often assume a model in which clients                   client retries) or internally aborts [9]. A system provides sticky
+always contact the same logical replica(s) across subsequent oper-                      transactional availability if, given sticky availability, a transac-
+ations, whereby each of the client’s prior operations (but not nec-                     tion eventually commits or internally aborts.
+essarily other clients’ operations) are reflected in the database state
+that they observe. As we will discuss in Section 5, clients can en-                      5     Highly Available Transactions
+sure continuity between operations (e.g., reading their prior updates                      HAT systems provide transactions with transactional availability
+to a data item) by maintaining affinity or “stickiness” with a server                   or sticky transactional availability. They offer latency and avail-
+or set of servers [64]. In a fully replicated system, where all servers                 ability benefits over traditional distributed databases, yet they can-
+are replicas for all data items, stickiness is simple: a client can                     not achieve all possible semantics. In this section, we describe
+maintain stickiness by contacting the same server for each of its re-                   ACID, distributed replica consistency, and session consistency lev-
+quests. However, to stay “sticky” in a partially-replicated system,                     els which can be achieved with high availability (Read Committed
+where servers are replicas for subsets of the set of data items (which                  isolation, variants of Repeatable Read, atomic reads, and many ses-
+we consider in this paper), a client must maintain stickiness with a                    sion guarantees), those with sticky availability (read your writes,
+single logical copy of the database, which may consist of multiple                      PRAM and causal consistency). We also discuss properties that
+physical servers. We say that a system provides sticky availabil-                       cannot be provided in a HAT system (those preventing Lost Up-
+ity if, whenever a client’s transactions is executed against a copy                     date and Write Skew or guaranteeing recency). We present a full
+of database state that reflects all of the client’s prior operations, it                summary of these results in Section 5.3.
+eventually receives a response, even in the presence of indefinitely
+                                                                                           As Brewer states, “systems and database communities are sep-
+long partitions (where “reflects” is dependent on semantics). A
+                                                                                        arate but overlapping (with distinct vocabulary)” [16]. With this
+client may choose to become sticky available by acting as a server
+                                                                                        challenge in mind, we build on existing properties and definitions
+itself; for example, a client might cache its reads and writes [11,
+                                                                                        from the database and distributed systems literature, providing a
+60, 67]. Any guarantee achievable in a highly available system is
+                                                                                        brief, informal explanation and example for each guarantee. The
+achievable in a sticky high availability system but not vice-versa.
+                                                                                        database isolation guarantees require particular care, since differ-
+ 4.2    Transactional Availability                                                      ent DBMSs often use the same terminology for different mech-
+   Until now, we have considered single-object, single-operation                        anisms and may provide additional guarantees in addition to our
+availability. This is standard in the distributed systems literature                    implementation-agnostic definitions. We draw largely on Adya’s
+(e.g., distributed register models such as linearizability all concern                  dissertation [2] and somewhat on its predecessor work: the ANSI
+single objects [41]), yet the database literature largely focuses on                    SQL specification [5] and Berenson et al.’s subsequent critique [12].
+transactions: groups of multiple operations over multiple objects.
+                                                                                           For brevity, we provide an informal presentation of each guar-
+Accordingly, by itself, traditional definitions of high availability
+                                                                                        antee here (accompanied by appropriate references) but give a full
+are insufficient to describe availability guarantees for transactions.
+                                                                                        set of formal definitions in our extended Technical Report [8]. In
+Additionally, given the choice of commit and abort responses—
+                                                                                        our examples, we exclusively consider read and write operations,
+which signal transaction success or failure to a client—we must
+                                                                                        denoting a write of value v to data item d as wd (v) and a read
+take care in defining transactional availability.
+                                                                                        from data item d returning v as rd (v). We assume that all data
+   We say that a transaction has replica availability if it can contact                 items have the null value, , at database initialization, and, unless
+at least one replica for every item it attempts to access; this may                     otherwise specified, all transactions in the examples commit.
+2 Under this definition from the distributed systems literature, systems that
+                                                                                         5.1   Achievable HAT Semantics
+require a majority of servers to be online are not available. Similarly, a sys-
+tem which guarantees that servers provide a response with high probability                 To begin, we present well-known semantics that can be achieved
+is not available. This admittedly stringent requirement matches the assump-             in HAT systems. In this section, our primary goal is feasibility, not
+tions made in the CAP Theorem [35] and guarantees low latency [1].                      performance. As a result, we offer proof-of-concept highly avail-
+3 There is a further distinction between a fully replicated system, in which
+all servers are replicas for all data items and a partially replicated system,
+                                                                                        able algorithms that are not necessarily optimal or even efficient:
+in which at least one server acts as a replica for a proper subset of all data          the challenge is to prove the existence of algorithms that provide
+items. For generality, and, given the prevalence of these “sharded” or “par-            high availability. However, we briefly study a subset of their per-
+titioned” systems [21, 23, 25, 30, 42], we consider partial replication here.           formance implications in Section 6.
+
+
+
+                                                                                  184
+ 5.1.1    ACID Isolation Guarantees                                             from discrete data items, we call it Item Cut Isolation, and, if we
+                                                                                also expect a cut over predicate-based reads (e.g., SELECT WHERE;
+   To begin, Adya captures Read Uncommitted isolation as PL-1.
+                                                                                preventing Phantoms [38], or Berenson et al.’s P 3/A3), we have
+In this model, writes to each object are totally ordered, correspond-
+                                                                                the stronger property of Predicate Cut-Isolation. In the example
+ing to the order in which they are installed in the database. In a
+                                                                                below, under both levels of cut isolation, T3 must read a = 1:
+distributed database, different replicas may receive writes to their
+local copies of data at different times but should handle concur-                                          T1 ∶ wx (1)
+rent updates (i.e., overwrites) in accordance with the total order for                                     T2 ∶ wx (2)
+each item. PL-1 requires that writes to different objects be ordered
+                                                                                                           T3 ∶ rx (1) rx (a)
+consistently across transactions, prohibiting Adya’s phenomenon
+G0 (also called “Dirty Writes” [12]). If we build a graph of trans-             It is possible to satisfy Item Cut Isolation with high availability by
+actions with edges from one transaction to another and, when the                having transactions store a copy of any read data at the client such
+former overwrites the latter’s write to the same object, then, under            that the values that they read for each item never changes unless
+Read Uncommitted, the graph should not contain cycles [2]. Con-                 they overwrite it themselves. These stored values can be discarded
+sider the following example:                                                    at the end of each transaction and can alternatively be accomplished
+                                                                                on (sticky) replicas via multi-versioning. Predicate Cut Isolation is
+                         T1 ∶ wx (1) wy (1)
+                                                                                also achievable in HAT systems via similar caching middleware
+                         T2 ∶ wx (2) wy (2)                                     or multi-versioning that track entire logical ranges of predicates in
+In this example, under Read Uncommitted, it is impossible for the               addition to item based reads.
+database to order T1 ’s wx (1) before T2 ’s wx (2) but order T2 ’s               5.1.2    ACID Atomicity Guarantees
+wy (2) before T1 ’s wy (1). Read Uncommitted is easily achieved
+                                                                                   Atomicity, informally guaranteeing that either all or none of trans-
+by marking each of a transaction’s writes with the same timestamp
+                                                                                actions’ effects should succeed, is core to ACID guarantees. Al-
+(unique across transactions; e.g., combining a client’s ID with a
+                                                                                though, at least by the ACID acronym, atomicity is not an “isola-
+sequence number) and applying a “last writer wins” conflict rec-
+                                                                                tion” property, atomicity properties also restrict the updates visible
+onciliation policy at each replica. Later properties will strengthen
+                                                                                to other transactions. Accordingly, here, we consider the isola-
+Read Uncommitted.
+                                                                                tion effects of atomicity, which we call Monotonic Atomic View
+   Read Committed isolation is particularly important in practice               (MAV) isolation. Under MAV, once some of the effects of a trans-
+as it is the default isolation level of many DBMSs (Section 3). Cen-            action Ti are observed by another transaction Tj , thereafter, all ef-
+tralized implementations differ, with some based on long-duration               fects of Ti are observed by Tj . That is, if a transaction Tj reads
+exclusive locks and short-duration read locks [38] and others based             a version of an object that transaction Ti wrote, then a later read
+on multiple versions. These implementations often provide recency               by Tj cannot return a value whose later version is installed by Ti .
+and monotonicity properties beyond what is implied by the name                  Together with item cut isolation, MAV prevents Read Skew anoma-
+“Read Committed” and what is captured by the implementation-                    lies (Berenson et al.’s A5A) and is useful in several contexts such
+agnostic definition: under Read Committed, transactions should                  as maintaining foreign key constraints, consistent global secondary
+not access uncommitted or intermediate versions of data items.                  indexing, and maintenance of derived data. In the example below,
+This prohibits both “Dirty Writes”, as above, and also “Dirty Reads”            under MAV, because T2 has read T1 ’s write to y, T2 must observe
+phenomena. This isolation is Adya’s PL-2 and is formalized by                   b = c = 1 (or later versions for each key):
+prohibiting Adya’s G1{a-c} (or ANSI’s P 1, or “broad” P 1 [2.2]
+from Berenson et al.). For instance, in the example below, T3                                      T1 ∶ wx (1) wy (1) wz (1)
+should never see a = 1, and, if T2 aborts, T3 should not read a = 3:                               T2 ∶ rx (a) ry (1) rx (b) rz (c)
+                         T1 ∶ wx (1) wx (2)                                     T2 can also observe a = , a = 1, or a later version of x. In
+                         T2 ∶ wx (3)                                            the hierarchy of existing isolation properties, we place MAV below
+                                                                                Adya’s PL-2L (as it does not necessarily enforce transitive read-
+                         T3 ∶ rx (a)                                            write dependencies) but above Read Committed (P L−2). Notably,
+It is fairly easy for a HAT system to prevent “Dirty Reads”: if each            MAV requires disallows reading intermediate writes (Adya’s G1b):
+client never writes uncommitted data to shared copies of data, then             observing all effects of a transaction implicitly requires observing
+transactions will never read each others’ dirty data. As a simple               the final (committed) effects of the transaction as well.
+solution, clients can buffer their writes until they commit, or, al-               Perplexingly, discussions of MAV are absent from existing treat-
+ternatively, can send them to servers, who will not deliver their               ments of weak isolation. This is perhaps again due to the single-
+value to other readers until notified that the writes have been com-            node context in which prior work was developed: on a single server
+mitted. Unlike a lock-based implementation, this implementation                 (or a fully replicated database), MAV is achievable via lightweight
+does not provide recency or monotonicity guarantees but it satisfies            locking and/or local concurrency control over data items [26, 43].
+the implementation-agnostic definition.                                         In contrast, in a distributed environment, MAV over arbitrary groups
+   Several different properties have been labeled Repeatable Read               of non-co-located items is considerably more difficult to achieve
+isolation. As we will show in Section 5.2.1, some of these are                  with high availability.
+not achievable in a HAT system. However, the ANSI standard-                        As a straw man, replicas can store all versions ever written to
+ized implementation-agnostic definition [5] is achievable and di-               each data item. Replicas can gossip information about versions
+rectly captures the spirit of the term: if a transaction reads the same         they have observed and construct a lower bound on the versions that
+data more than once, it sees the same value each time (preventing               can be found on every replica (which can be represented by either a
+“Fuzzy Read,” or P 2). In this paper, to disambiguate between other             list of versions, or, more realistically, a vector clock). At the start of
+definitions of “Repeatable Read,” we will call this property “cut               each transaction, clients can choose a read timestamp that is lower
+isolation,” since each transaction reads from a non-changing cut,               than or equal to the this global lower bound, and, during transaction
+or snapshot, over the data items. If this property holds over reads             execution, replicas return the latest version of each item that is not
+
+
+
+                                                                          185
+greater than the client’s chosen timestamp. If this lower bound is                 A solution to this conundrum is to forgo high availability and
+advanced along transactional boundaries, clients will observe MAV.              settle for sticky availability. Sticky availability permits three ad-
+This algorithm has several variants in the literature [20, 67], and             ditional guarantees, which we first define and then prove are un-
+older versions can be asynchronously garbage collected.                         achievable in a generic highly available system:
+   We have developed a more efficient MAV algorithm, which we                   Read your writes requires that whenever a client reads a given data
+sketch here and provide greater detail in our extended Technical                item after updating it, the read returns the updated value (or a value
+Report [8]. We begin with our Read Committed algorithm, but                     that overwrote the previously written value).
+replicas wait to reveal new writes to readers until all of the replicas
+for the final writes in the transaction have received their respective          PRAM (Pipelined Random Access Memory) provides the illusion
+writes (are pending stable). Clients include additional metadata                of serializing each of the operations (both reads and writes) within
+with each write: a single timestamp for all writes in the transaction           each session and is the combination of monotonic reads, monotonic
+(e.g., as in Read Uncommitted) and a list of items written to in                writes, and read your writes [41].
+the transaction. When a client reads, the return value’s timestamp              Causal consistency [3] is the combination of all of the session
+and list of items form a lower bound on the versions that the client            guarantees [17] (alternatively, PRAM with writes-follow-reads) and
+should read for the other items. When a client reads, it attaches               is also referred to by Adya as PL-2L isolation [2]).
+a timestamp to its request representing the current lower bound for
+that item. Replicas use this timestamp to respond with either a write             Read your writes is not achievable in a highly available system.
+matching the timestamp or a pending stable write with a higher                  Consider a client that executes the following two transactions:
+timestamp. Servers keep two sets of writes for each data item: the                                           T1 ∶ wx (1)
+write with the highest timestamp that is pending stable and a set of                                         T2 ∶ rx (a)
+writes that are not yet pending stable. This is entirely master-less
+and operations never block due to replica coordination.                         If the client executes T1 against a server that is partitioned from
+                                                                                the rest of the other servers, then, for transactional availability, the
+ 5.1.3    Session Guarantees                                                    server must allow T1 to commit. If the same client subsequently
+   A useful class of safety guarantees refer to real-time or client-            executes T2 against the same (partitioned) server in the same ses-
+centric ordering within a session, “an abstraction for the sequence             sion, then it will be able to read its writes. However, if the network
+of...operations performed during the execution of an application” [60].         topology changes and the client can only execute T2 on a different
+These “session guarantees” have been explored in the distributed                replica that is partitioned from the replica that executed T1 , then
+systems literature [60, 64] and sometimes in the database litera-               the system will have to either stall indefinitely to allow the client
+ture [27]. For us, a session describes a context that should persist            to read her writes (violating transactional availability) or will have
+between transactions: for example, on a social networking site, all             to sacrifice read your writes guarantees. However, if the client re-
+of a user’s transactions submitted between “log in” and “log out”               mains sticky with the server that executed T1 , then we can disal-
+operations might form a session.                                                low this scenario. Accordingly, read your writes, and, by proxy,
+   Several session guarantees can be made with high availability:               causal consistency and PRAM require stickiness. Read your writes
+                                                                                is provided by default in a sticky system. Causality and PRAM
+Monotonic reads requires that, within a session, subsequent reads               guarantees can be accomplished with well-known variants [3, 11,
+to a given object “never return any previous values”; reads from                48, 60, 67] of the prior session guarantee algorithms we presented
+each item progress according to a total order (e.g., the order from             earlier: only reveal new writes to clients when their (respective,
+Read Uncommitted).                                                              model-specific) dependencies have been revealed.
+Monotonic writes requires that each session’s writes become visi-                5.1.4    Additional HAT Guarantees
+ble in the order they were submitted. Any order on transactions (as               In this section, we briefly discuss two additional kinds of guar-
+in Read Uncommitted isolation) should also be consistent with any               antees that are achievable in HAT systems.
+precedence that a global observer would see.                                    Consistency A HAT system can make limited application-level
+Writes Follow Reads requires that, if a session observes an effect              consistency guarantees. It can often execute commutative and log-
+of transaction T1 and subsequently commits transaction T2 , then                ically monotonic [4] operations without the risk of invalidating
+another session can only observe effects of T2 if it can also observe           application-level integrity constraints and can maintain limited cri-
+T1 ’s effects (or later values that supersede T1 ’s); this corresponds          teria like foreign key constraints (via MAV). We do not describe
+to Lamport’s “happens-before” relation [46]. Any order on trans-                the entire space of application-level consistency properties that are
+actions should respect this transitive order.                                   achievable (see Section 7) but we specifically evaluate TPC-C trans-
+                                                                                action semantics with HAT guarantees in Section 6.
+   The above guarantees can be achieved by forcing servers to wait
+to reveal new writes (say, by buffering them in separate local stor-            Convergence Under arbitrary (but not infinite delays), HAT sys-
+age) until each write’s respective dependencies are visible on all              tems can ensure convergence, or eventual consistency: in the ab-
+replicas. This mechanism effectively ensures that all clients read              sence of new mutations to a data item, all servers should eventu-
+from a globally agreed upon lower bound on the versions written.                ally agree on the value for each item [49, 64]. This is typically
+This is highly available because a client will never block due to               accomplished by any number of anti-entropy protocols, which pe-
+inability to find a server with a sufficiently up-to-date version of a          riodically update neighboring servers with the latest value for each
+data item. However, it does not imply that transactions will read               data item [31]. Establishing a final convergent value is related to
+their own writes or, in the presence of partitions, make forward                determining a total order on transaction updates to each item, as in
+progress through the version history. The problem is that under                 Read Uncommitted.
+non-sticky availability, a system must handle the possibility that,              5.2     Unachievable HAT Semantics
+under a partition, an unfortunate client will be forced to issue its              While there are infinitely many HAT models (Section 7), at this
+next requests against a partitioned, out-of-date server.                        point, we have largely exhausted the range of achievable, previ-
+
+
+
+                                                                          186
+ously defined (and useful) semantics that are available to HAT sys-                      5.2.2    Unachievable Recency Guarantees
+tems. Before summarizing our possibility results, we will present                          Distributed data storage systems often make various recency guar-
+impossibility results for HATs, also defined in terms of previously                     antees on reads of data items. Unfortunately, an indefinitely long
+identified isolation and consistency anomalies. Most notably, it is                     partition can force an available system to violate any recency bound,
+impossible to prevent Lost Update or Write Skew in a HAT system.                        so recency bounds are not enforceable by HAT systems [35]. One
+ 5.2.1     Unachievable ACID Isolation                                                  of the most famous of these guarantees is linearizability [41], which
+                                                                                        states that reads will return the last completed write to a data item,
+   In this section, we demonstrate that preventing Lost Update and
+                                                                                        and there are several other (weaker) variants such as safe and regu-
+Write Skew—and therefore providing Snapshot Isolation, Repeat-
+                                                                                        lar register semantics. When applied to transactional semantics, the
+able Read, and one-copy serializability—inherently requires fore-
+                                                                                        combination of one-copy serializability and linearizability is called
+going high availability guarantees.
+                                                                                        strong (or strict) one-copy serializability [2] (e.g., Spanner [25]).
+   Berenson et al. define Lost Update as when one transaction T 1                       It is also common, particularly in systems that allow reading from
+reads a given data item, a second transaction T 2 updates the same                      masters and slaves, to provide a guarantee such as “read a version
+data item, then T 1 modifies the data item based on its original read                   that is no more than five seconds out of date” or similar. None of
+of the data item, “missing” or “losing” T 2’s newer update. Con-                        these guarantees are HAT-compliant.
+sider a database containing only the following transactions:
+                                                                                         5.2.3    Durability
+                          T1 ∶ rx (a) wx (a + 2)                                           A client requiring that its transactions’ effects survive F server
+                          T2 ∶ wx (2)                                                   faults requires that the client be able to contact at least F + 1 non-
+If T1 reads a = 1 but T2 ’s write to x precedes T1 ’s write operation,                  failing replicas before committing. This affects availability and,
+then the database will end up with a = 3, a state that could not have                   according to the Gilbert and Lynch definition we have adopted, F >
+resulted in a serial execution due to T2 ’s “Lost Update.”                              1 fault tolerance is not achievable with high availability.
+   It is impossible to prevent Lost Update in a highly available en-                     5.3     Summary
+vironment. Consider two clients who submit the following T1 and                            As we summarize in Table 3, a wide range of isolation levels are
+T2 on opposite sides of a network partition:                                            achievable in HAT systems. With sticky availability, a system can
+                  T1 ∶ rx (100) wx (100 + 20 = 120)                                     achieve read your writes guarantees and PRAM and causal consis-
+                                                                                        tency. However, many other prominent semantics, such as Snap-
+                  T2 ∶ rx (100) wx (100 + 30 = 130)                                     shot Isolation, One-Copy Serializability, and Strong Serializability
+Regardless of whether x = 120 or x = 130 is chosen by a replica,                        cannot be achieved due to the inability to prevent Lost Update and
+the database state could not have arisen from a serial execution of                     Write Skew phenomena.
+T1 and T2 .4 To prevent this, either T1 or T2 should not have com-                         We illustrate the hierarchy of available, sticky available, and un-
+mitted. Each client’s respective server might try to detect that an-                    available consistency models we have discussed in Figure 2. Many
+other write occurred, but this requires knowing the version of the                      models are simultaneously achievable, but we find several particu-
+latest write to x. In our example, this reduces to a requirement for                    larly compelling. If we combine all HAT and sticky guarantees, we
+linearizability, which is, via Gilbert and Lynch’s proof of the CAP                     have transactional, causally consistent snapshot reads (i.e., Causal
+Theorem, provably at odds with high availability [35].                                  Transactional Predicate Cut Isolation). If we combine MAV and
+   Write Skew is a generalization of Lost Update to multiple keys.                      P-CI, we have transactional snapshot reads. We can achieve RC,
+It occurs when one transaction T 1 reads a given data item x, a                         MR, and RYW by simply sticking clients to servers. We can also
+second transaction T 2 reads a different data item y, then T 1 writes                   combine unavailable models—for example, an unavailable system
+to y and commits and T 2 writes to x and commits. As an example                         might provide PRAM and One-Copy Serializability [27].
+of Write Skew, consider the following two transactions:                                    To the best of our knowledge, this is the first unification of trans-
+                            T1 ∶ ry (0) wx (1)                                          actional isolation, distributed consistency, and session guarantee
+                                                                                        models. Interestingly, strong one-copy serializability entails all
+                            T2 ∶ rx (0) wy (1)                                          other models, while considering the (large) power set of all com-
+As Berenson et al. describe, if there was an integrity constraint                       patible models (e.g., the diagram depicts 144 possible HAT com-
+between x and y such that only one of x or y should have value                          binations) hints at the vast expanse of consistency models found
+1 at any given time, then this write skew would violate the con-                        in the literature. This taxonomy is not exhaustive (Section 8), but
+straint (which is preserved in serializable executions). Write skew                     we believe it lends substantial clarity to the relationships between
+is a somewhat esoteric anomaly—for example, it does not appear                          a large subset of the prominent ACID and distributed consistency
+in TPC-C [34]—but, as a generalization of Lost Update, it is also                       models. Additional read/write transaction semantics that we have
+unavailable to HAT systems.                                                             omitted should be classifiable based on the available primitives and
+   Consistent Read, Snapshot Isolation (including Parallel Snap-                        HAT-incompatible anomaly prevention we have already discussed.
+shot Isolation [59]), and Cursor Stability guarantees are all un-                          In light the of current practice of deploying weak isolation levels
+available because they require preventing Lost Update phenomena.                        (Section 3), it is perhaps surprising that so many weak isolation lev-
+Repeatable Read (defined by Gray [38], Berenson et al. [12], and                        els are achievable as HATs. Indeed, isolation levels such as Read
+Adya [2]) and One-Copy Serializability [6] need to prevent both                         Committed expose and are defined in terms of end-user anomalies
+Lost Update and Write Skew. Their prevention requirements mean                          that could not arise during serializable execution. However, the
+that these guarantees are inherently unachievable in a HAT system.                      prevalence of these models suggests that, in many cases, applica-
+                                                                                        tions can tolerate these their associated anomalies. Given our HAT-
+4 In this example, we assume that, as is standard in modern databases, repli-           compliance results, this in turn hints that–despite idiosyncrasies
+cas accept values as they are written (i.e., register semantics). This particu-         relating to concurrent updates and data recency–highly available
+lar example could be made serializable via the use of commutative updates               database systems can provide sufficiently strong semantics for many
+(Section 6) but the problem persists in the general case.                               applications. Indeed, HAT databases may expose more anomalies
+
+
+
+                                                                                  187
+        HA        Read Uncommitted (RU), Read Committed                         isolation levels. Existing mechanisms often presume (or are adapted
+                  (RC), Monotonic Atomic View (MAV), Item                       from) single-server non-partitioned deployments or otherwise fo-
+                  Cut Isolation (I-CI), Predicate Cut Isolation (P-             cus on serializability as a primary use case. In this section, we
+                  CI), Writes Follow Reads (WFR), Monotonic                     briefly discuss design decisions and algorithmic details that pre-
+                  Reads (MR), Monotonic Writes (MW)                             clude high availability.
+    Sticky        Read Your Writes (RYW), PRAM, Causal
+                                                                                Serializability To establish a serial order on transactions, algo-
+  Unavailable     Cursor Stability (CS)† , Snapshot Isolation (SI)† ,
+                                                                                rithms for achieving serializability of general-purpose read-write
+                  Repeatable Read (RR)†‡ , One-Copy Serializ-
+                                                                                transactions in a distributed setting [14, 28] require at least one RTT
+                  ability (1SR)†‡ , Recency⊕ , Safe⊕ , Regular⊕ ,
+                                                                                before committing. As an example, traditional two-phase locking
+                  Linearizability⊕ , Strong 1SR†‡⊕
+                                                                                for a transaction of length T may require T lock operations and
+                                                                                will require at least one lock and one unlock operation. In a dis-
+ Table 3: Summary of highly available, sticky available, and un-
+                                                                                tributed environment, each of these lock operations requires coor-
+ available models considered in this paper. Unavailable models are
+                                                                                dination, either with other database servers or with a lock service.
+ labeled by cause of unavailability: preventing lost update† , prevent-
+                                                                                If this coordination mechanism is unavailable, transactions cannot
+ ing write skew‡ , and requiring recency guarantees⊕ .
+                                                                                safely commit. Similarly, optimistic concurrency control requires
+                                                                                coordinating via a validation step, while deterministic transaction
+                                    Strong-1SR
+                     1SR
+                                                                                scheduling [56] requires contacting a scheduler. Serializability un-
+                                                           linearizable         der multi-version concurrency control requires checking for update
+             RR
+                                                                                conflicts. All told, the reliance on a globally agreed total order ne-
+  CS                     SI                 causal           regular            cessitates a minimum of one round-trip to a designated master or
+        MAV                                                                     coordination service for each of these classic algorithms. As we
+  RC                 P-CI                  PRAM               safe              saw in Section 2, is will be determined by the deployment environ-
+                                                                                ment; we will further demonstrate this in Section 6.3.
+  RU              I-CI        WFR    MR     MW       RYW     recency            Non-serializability Most existing distributed implementations of
+                                                                                weak isolation are not highly available. Lock-based mechanisms
+ Figure 2: Partial ordering of HAT, sticky available (in boxes, blue),          such as those in Gray’s original proposal [38] do not degrade grace-
+ and unavailable models (circled, red) from Table 3. Directed edges             fully in the presence of partial failures. (Note, however, that lock-
+ represent ordering by model strength. Incomparable models can be               based protocols do offer the benefit of recency guarantees.) While
+ simultaneously achieved, and the availability of a combination of              multi-versioned storage systems allow for a variety of transactional
+ models has the availability of the least available individual model.           guarantees, few offer traditional weak isolation (e.g., non-“tentative
+                                                                                update” schemes) in this context. Chan and Gray’s read-only trans-
+ than a single-site database operating under weak isolation (par-               actions have item-cut isolation with causal consistency and MAV
+ ticularly during network partitions). However, for a fixed isola-              (session PL-2L [2]) but are unavailable in the presence of coordina-
+ tion level (which, in practice, can vary across databases and may              tor failure and assume serializable update transactions [20]; this is
+ differ from implementation-agnostic definitions in the literature),            similar to read-only and write-only transactions more recently pro-
+ users of single-site database are subject to the same (worst-case)             posed by Eiger [48]. Brantner’s S3 database [15] and Bayou [60]
+ application-level anomalies as a HAT implementation. The nec-                  can all provide variants of session PL-2L with high availability, but
+ essary (indefinite) visibility penalties (i.e., the right side of Fig-         none provide this HAT functionality without substantial modifica-
+ ure 2) and lack of support for preventing concurrent updates (via              tion. Accordingly, it is possible to implement many guarantees
+ the upper left half of Figure 2) mean HATs are not well-suited for             weaker than serializability—including HAT semantics—and still
+ all applications (see Section 6): these limitations are fundamental.           not achieve high availability. We view high availability as a core
+ However, common practices such as ad-hoc, user-level compen-                   design consideration in future concurrency control designs.
+ sation and per-statement isolation “upgrades” (e.g., SELECT FOR
+ UPDATE under weak isolation)—commonly used to augment weak
+                                                                                 6.2   Application Requirements
+ isolation—are also applicable in HAT systems (although they may                   Thus far, we have largely ignored the question of when HAT se-
+ in turn compromise availability).                                              mantics are useful (or otherwise are too weak). As we showed in
+                                                                                Section 5, the main cost of high availability and low latency comes
+  6     HAT Implications                                                        in the inability to prevent Lost Update, Write Skew, and provide re-
+    With an understanding of which semantics are HAT-compliant,                 cency bounds. To better understand the impact of HAT-compliance
+ in this section, we analyze the implications of these results for ex-          in an application context, we consider a concrete application: the
+ isting systems and briefly study HAT systems on public cloud in-               TPC-C benchmark. In brief, we find that four of five transactions
+ frastructure. Specifically:                                                    can be executed via HATs, while the fifth requires unavailability.
+1. We revisit traditional database concurrency control with a focus                TPC-C consists of five transactions, capturing the operation of
+    on coordination costs and on high availability.                             a wholesale warehouse, including sales, payments, and deliver-
+2. We examine the properties required by an OLTP application based              ies. Two transactions—Order-Status and Stock-Level—are read-
+    on the TPC-C benchmark.                                                     only and can be executed safely with HATs. Clients may read stale
+                                                                                data, but this does not violate TPC-C requirements and clients will
+3. We perform a brief experimental evaluation of HAT versus non-
+                                                                                read their writes if they are sticky-available. Another transaction
+    HAT properties on public cloud infrastructure.
+                                                                                type, Payment, updates running balances for warehouses, districts,
+  6.1   HA and Existing Algorithms                                              and customer records and provides an audit trail. The transaction is
+   While we have shown that many database isolation levels are                  monotonic—increment- and append-only—so all balance increase
+ achievable as HATs, many traditional concurrency control mech-                 operations commute, and MAV allows the maintenance of foreign-
+ anisms do not provide high availability—even for HAT-compliant                 key integrity constraints (e.g., via UPDATE/DELETE CASCADE).
+
+
+
+                                                                          188
+New-Order and Delivery. While three out of five transactions are                  6.3   Experimental Costs
+easily achievable with HATs, the remaining two transactions are                     To demonstrate the performance implications of HAT guarantees
+not as simple. The New-Order transaction places an order for a                   in a real-world environment, we implemented a HAT database pro-
+variable quantity of data items, updating warehouse stock as needed.             totype. We verify that, as Section 2.2’s measurements suggested,
+It selects a sales district, assigns the order an ID number, adjusts the         “strongly consistent” algorithms incur substantial latency penalties
+remaining warehouse stock, and writes a placeholder entry for the                (over WAN, 10 to 100 times higher than their HAT counterparts)
+pending order. The Delivery transaction represents the fulfillment               compared to HAT-compliant algorithms, which scale linearly. Our
+of a New-Order: it deletes the order from the pending list, updates              goal is not a complete performance analysis of HAT semantics but
+the customer’s balance, updates the order’s carrier ID and delivery              instead a proof-of-concept demonstration of a small subset of the
+time, and updates the customer balance.                                          HAT space on real-world infrastructure.
+                                                                                 Implementation. Our prototype database is a partially replicated
+IDs and decrements. The New-Order transaction presents two chal-
+                                                                                 (hash-based partitioned) key-value backed by LevelDB and imple-
+lenges: ID assignment and stock maintenance. First, each New-
+                                                                                 mented in Java using Apache Thrift. It currently supports eventual
+Order transaction requires a unique ID number for the order. We
+                                                                                 consistency (hereafter, eventual; last-writer-wins RU with stan-
+can create a unique number by, say, concatenating the client ID
+                                                                                 dard all-to-all anti-entropy between replicas) and the efficient HAT
+and a timestamp. However, the TPC-C specification requires or-
+                                                                                 MAV algorithm as sketched in Section 5.1.2. (hereafter, MAV). We
+der numbers to be sequentially assigned within a district, which
+                                                                                 support non-HAT operation whereby all operations for a given key
+requires preventing Lost Update. Accordingly, HATs cannot pro-
+                                                                                 are routed to a (randomly) designated master replica for each key
+vide compliant TPC-C execution but can maintain uniqueness con-
+                                                                                 (guaranteeing single-key linearizability, as in Gilbert and Lynch’s
+straints. Second, the New-Order transaction decrements inventory
+                                                                                 CAP Theorem proof [35] and in PNUTS [23]’s “read latest” oper-
+counts: what if the count becomes negative? Fortunately, New-
+                                                                                 ation; hereafter, master) as well as distributed two-phase locking.
+Order restocks each item’s inventory count (increments by 91) if
+                                                                                 Servers are durable: they synchronously write to LevelDB before
+it would become negative as the result of placing an order. This
+                                                                                 responding to client requests, while new writes in MAV are syn-
+means that, even in the presence of concurrent New-Orders, an
+                                                                                 chronously flushed to a disk-resident write-ahead log.
+item’s stock will never fall below zero. This is TPC-C compli-
+ant, but a HAT system might end up with more stock than in an                    Configuration. We deploy the database in clusters—disjoint sets of
+unavailable implementation with synchronous coordination.                        database servers that each contain a single, fully replicated copy of
+                                                                                 the data—typically across datacenters and stick all clients within a
+TPC-C Non-monotonicity. The Delivery transaction is challenging                  datacenter to their respective cluster (trivially providing read-your-
+due to non-monotonicity. Each Delivery deletes a pending order                   writes and monotonic reads guarantees). By default, we deploy
+from the New-Order table and should be idempotent in order to                    5 Amazon EC2 m1.xlarge instances as servers in each cluster.
+avoid billing a customer twice; this implies a need to prevent Lost              For our workload, we link our client library to the YCSB bench-
+Update. This issue can be avoided by moving the non-monotonicity                 mark [24], which is well suited to LevelDB’s key-value schema,
+to the real world—the carrier that picks up the package for an or-               grouping every eight YCSB operations from the default workload
+der can ensure that no other carrier will do so—but cannot provide               (50% reads, 50% writes) to form a transaction. We increase the
+a correct execution with HATs alone. However, according to dis-                  number of keys in the workload from the default 1,000 to 100,000
+tributed transaction architects [40], these compensatory actions are             with uniform random key access, keeping the default value size of
+relatively common in real-world business processes.                              1KB, and running YCSB for 180 seconds per configuration.
+                                                                                 Geo-replication. We first deploy the database prototype across an
+Integrity Constraints. Throughout execution, TPC-C also requires                 increasing number of datacenters. Figure 3A shows that, when op-
+the maintenance of several integrity constraints. For example, Con-              erating two clusters within a single datacenter, mastering each data
+sistency Condition 1 (3.3.2.1) requires that each warehouse’s sales              item results in approximately half the throughput and double the la-
+count must reflect the sum of its subordinate sales districts. This              tency of eventual. This is because HAT models are able to utilize
+integrity constraint spans two tables but, given the ability to update           replicas in both clusters instead of always contacting the (single)
+rows in both tables atomically via MAV, can be easily maintained.                master. RC—essentially eventual with buffering—is almost iden-
+Consistency Conditions 4 through 12 (3.3.2.4-12) can similarly be                tical to eventual, while MAV—which incurs two writes for every
+satisfied by applying updates atomically across tables. Consistency              client-side write (i.e., new writes are sent to the WAL then subse-
+Conditions 2 and 3 (3.3.2.2-3) concern order ID assignment and                   quently moved into LevelDB once stable)—achieves 75% of the
+are problematic. Finally, while TPC-C is not subject to multi-key                throughput. Latency increases linearly with the number of YCSB
+anomalies, we note that many TPC-E isolation tests (i.e., simulta-               clients due to contention within LevelDB.
+neously modifying a product description and its thumbnail) are also                 In contrast, when the two clusters are deployed across the conti-
+achievable using HATs.                                                           nental United States (Figure 3B), the average latency of master in-
+                                                                                 creases to 300ms (a 278–4257% latency increase; average 37ms la-
+Summary. Many—but not all—TPC-C transactions are well served                     tency per operation). For the same number of YCSB client threads,
+by HATs. The two problematic transactions, New-Order and Pay-                    master has substantially lower throughput than the HAT config-
+ment, rely on non-monotonic state update. The former can be mod-                 urations. Increasing the number of YCSB clients does increase
+ified to ensure ID uniqueness but not sequential ID ordering, while              the throughput of master, but our Thrift-based server-side connec-
+the latter is inherently non-monotonic, requiring external compen-               tion processing did not gracefully handle more than several thou-
+sation or stronger consistency protocols. Based on these experi-                 sand concurrent connections. In contrast, across two datacenters,
+ences and discussions with practitioners, we believe that HAT guar-              the performance of eventual, RC, and MAV are near identical to a
+antees can provide useful semantics for a large class of application             single-datacenter deployment.
+functionality, while a (possibly small) subset of operations will re-               When five clusters (as opposed to two, as before) are deployed
+quire stronger, unavailable properties.                                          across the five EC2 datacenters with lowest communication cost
+
+
+
+                                                                           189
+                                     Eventual         RC         MAV            Master                                          Eventual                RC         MAV          Master
+                                                                                                                      120
+
+
+
+
+                                                                                                   Total Throughput
+                                              A.) Within us-east (VA)
+
+
+
+
+                                                                                                     (1000 Ops/s)
+                     120                                                                                              100
+ Avg. Latency (ms)
+
+
+
+                     100                                                                                               80
+                      80                                                                                               60
+                      60                                                                                               40
+                      40                                                                                               20
+                      20                                                                                                0
+                                                                                                                            1      2              4       8       16     32         64    128
+                       0                                                                                                                              Transaction Length
+                              0         200         400        600        800        1000
+                       18                                                                                               Figure 4: Transaction length versus throughput.
+ Total Throughput
+
+
+
+
+                       16
+  (1000 Txns/s)
+
+
+
+
+                       14                                                                                             30
+
+
+
+
+                                                                                                   Total Throughput
+                       12
+
+
+
+
+                                                                                                    (1000 Txns/s)
+                       10                                                                                             25
+                        8                                                                                             20
+                        6                                                                                             15
+                        4
+                        2                                                                                             10
+                        0                                                                                              5
+                              0          200        400       600         800        1000
+                                                 Number of YCSB Clients                                                0
+                                                                                                                       0.0             0.2            0.4         0.6         0.8         1.0
+                                  B.) Between us-east (CA) and us-west-2 (OR)                                                                         Write Proportion
+                     103
+ Avg. Latency (ms)
+
+
+
+
+                                                                                                           Figure 5: Proportion of reads and writes versus throughput.
+                          2
+                     10                                                                                               70
+
+
+
+
+                                                                                                   Total Throughput
+                                                                                                    (1000 Txns/s)
+                                                                                                                      60
+                     101                                                                                              50
+                                                                                                                      40
+                                                                                                                      30
+                     100 0              200          400       600        800        1000
+                                                                                                                      20
+                                                                                                                      10
+                       18                                                                                              0
+ Total Throughput
+
+
+
+
+                       16                                                                                               10      15           20      25     30     35     40         45   50
+  (1000 Txns/s)
+
+
+
+
+                       14                                                                                                                         Total Number of Servers
+                       12
+                       10                                                                                               Figure 6: Scale-out of MAV, Eventual, and RC.
+                        8
+                        6
+                        4                                                                         sulted in four put operations on remote replicas and, accordingly,
+                        2
+                        0                                                                         the cost of anti-entropy increased (e.g., each server processed four
+                              0          200        400       600         800        1000
+                                                 Number of YCSB Clients
+                                                                                                  replicas’ anti-entropy as opposed to one before, reducing the oppor-
+                                                                                                  tunity for batching and decreasing available resources for incoming
+                                 C.) Between us-east (VA), us-west-1 (CA),                        client requests). This in turn increased garbage collection activity
+                              us-west-2 (OR), eu-west (IR), ap-northeast (SI)
+                     103                                                                          and, more importantly, IOPS when compared to eventual and RC,
+ Avg. Latency (ms)
+
+
+
+
+                                                                                                  causing MAV throughput to peak at around half of eventual. With
+                     102                                                                          in-memory persistence (i.e., no LevelDB or WAL), MAV throughput
+                                                                                                  was within 20% of eventual.
+                     101                                                                             We have intentionally omitted performance data for two-phase
+                                                                                                  locking. master performed far better than our textbook implemen-
+                     100 0              500         1000       1500       2000       2500         tation, which, in addition to requiring a WAN round-trip per oper-
+                                                                                                  ation, also incurred substantial overheads due to mutual exclusion
+                       40                                                                         via locking. We expect that, while techniques like those recently
+ Total Throughput
+
+
+
+
+                       35
+  (1000 Txns/s)
+
+
+
+
+                                                                                                  proposed in Calvin [61] can reduce the overhead of serializable
+                       30
+                       25                                                                         transactions by avoiding locking, our mastered implementation and
+                       20                                                                         the data from Section 2.2 are reasonable lower bounds on latency.
+                       15
+                       10                                                                         Transaction length. As shown in Figure 4 (clusters in Virginia and
+                        5
+                        0                                                                         Oregon), throughput of eventual, RC, and master operation are
+                              0          500        1000      1500      2000         2500
+                                                 Number of YCSB Clients
+                                                                                                  unaffected by transaction length. In contrast, MAV throughput de-
+                                                                                                  creases linearly with increased transaction length: with 1 opera-
+                                                                                                  tion per transaction, MAV throughput is within 18% of eventual
+Figure 3: YCSB performance for two clusters of five servers each
+                                                                                                  (34 bytes overhead), and with 128 operations per transaction, MAV
+deployed within a single datacenter and cross-datacenters.
+                                                                                                  throughput is within 60% (1898 bytes overhead). This reflects our
+                                                                                                  MAV algorithm’s metadata requirements, which are proportional to
+(Figure 3C), the trend continues: master latency increases to nearly
+                                                                                                  transaction length and consume IOPS and network bandwidth. We
+800ms per transaction. As an attempt at reducing this overhead, we
+                                                                                                  are currently investigating alternative HAT algorithms that do not
+implemented and benchmarked a variant of quorum-based replica-
+                                                                                                  incur this overhead.
+tion as in Dynamo [30], where clients sent requests to all replicas,
+which completed as soon as a majority of servers responded (guar-                                 Read proportion. Our default (equal) proportion of reads and writes
+anteeing regular semantics [41]); this strategy (not pictured) did not                            is fairly pessimistic: for example, Facebook reports 99.8% reads
+substantially improve performance due to the network topology and                                 for their workload [48]. As shown in Figure 5 (clusters in Virginia
+because worst-case server load was unaffected. With five clusters,                                and Oregon), with all reads, MAV is within 4.8% of eventual; with
+MAV’s relative throughput decreased: every YCSB put operation re-                                 all writes, MAV is within 33%, and the throughput of eventual de-
+
+
+
+                                                                                            190
+creases by 288.8% compared to all reads. At 99.8% reads, MAV                     have discussed, the penalties associated with this design are fun-
+incurs a 7% overhead (5.8% for in-memory storage).                               damental to serializability. For users willing to tolerate unavail-
+                                                                                 ability and increased latency, Spanner, or similar “strongly consis-
+Scale-out. One of the key benefits of our HAT algorithms is that                 tent” systems [65]—including Calvin [61], G-Store [26], HBase,
+they are shared-nothing, meaning they should not compromise scal-                HStore [42], Orleans [19], Postgres-R [43], Walter [59], and a
+ability. Figure 6 shows that varying the number of servers across                range of snapshot isolation techniques [27]—reasonable choices.
+two clusters in Virginia and Oregon (with 15 YCSB clients per
+                                                                                    With HATs, we seek an alternative set of transactional semantics
+server) results in linear scale-out for eventual, RC, and MAV. RC and
+                                                                                 that are still useful but do not violate requirements for high avail-
+eventual scale linearly: increasing the number of servers per clus-
+                                                                                 ability or low latency. Recent systems proposals such as Swift [67],
+ter from 5 to 25 yields an approximately 5x throughput increase.
+                                                                                 Eiger [48], and Bolt-on Causal Consistency [11] provide transac-
+For the same configurations, MAV scales by 3.8x, achieving over
+                                                                                 tional causal consistency guarantees with varying availability and
+260, 000 operations per second. MAV suffers from contention in
+                                                                                 represent a new class of sticky HAT systems. There are infinitely
+LevelDB—with a memory-backed database, MAV scales by 4.25x
+                                                                                 many HAT models (i.e., always reading value 1 is incomparable
+(not shown)—and MAV-related performance heterogeneity across
+                                                                                 with always returning value 2), but a recent report from UT Austin
+servers (Calvin’s authors report similar heterogeneity on EC2 [61]).
+                                                                                 shows that no model stronger than causal consistency is achievable
+Initial experiments with a newer prototype including more efficient
+                                                                                 in a sticky highly available, one-way convergent system [49]. This
+(non-Thrift) RPC and connection pooling suggest that this scalabil-
+                                                                                 result is promising and complementary to our results for general-
+ity can be substantially improved.
+                                                                                 purpose convergent data stores. Finally, Burkhardt et al. have con-
+Summary. Our experimental prototype confirms our earlier analyt-                 currently developed an axiomatic specification for eventual consis-
+ical intuitions. HAT systems can provide useful semantics with-                  tency; their work-in-progress report contains alternate formalism
+out substantial performance penalties. In particular, our MAV al-                for several HAT guarantees [18].
+gorithm can achieve throughput competitive with eventual consis-
+tency at the expense of increased disk and network utilization. Per-
+                                                                                  8    Conclusions and Future Work
+haps more importantly, all HAT algorithms circumvent high WAN                       The current state of database software offers uncomfortable and
+latencies inevitable with non-HAT implementations. Our results                   unnecessary choices between availability and transactional seman-
+highlight Deutsch’s observation that ignoring factors such as la-                tics. Through our analysis and experiments, we have demonstrated
+tency can “cause big trouble and painful learning experiences” [32]—             how goals of high availability will remain a critical aspect of many
+in a single-site context, paying the cost of coordination may be ten-            future data storage systems. We expose a broad design space of
+able, but, especially as services are geo-replicated, costs increase.            Highly Available Transactions (HATs), which can offer the key
+                                                                                 benefits of highly available distributed systems—“always on” op-
+ 7    Related Work                                                               eration during partitions and low-latency operations (often orders
+                                                                                 of magnitude lower than non-compliant)—while also providing a
+   We have discussed traditional mechanisms for distributed coor-
+                                                                                 family of transactional isolation levels and replica semantics that
+dination and several related systems in Section 6.1, but, in this sec-
+                                                                                 have been adopted in practice. We also identify many semantic
+tion, we further discuss related work. In particular, we discuss re-
+                                                                                 guarantees that are unachievable with high availability, including
+lated work on highly available semantics, mechanisms for concur-
+                                                                                 Lost Update and Write Skew anomaly prevention, concurrent up-
+rency control, and techniques for scalable distributed operations.
+                                                                                 date prevention, and bounds on data recency. Despite these limita-
+   Weak consistency and high availability have been well studied.                tions, and somewhat surprisingly, many of the default (and some-
+Serializability has long been known to be unachievable [28] and                  times strongest) semantics provided by today’s traditional database
+Brewer’s CAP Theorem has attracted considerable attention [35].                  systems are achievable as HATs, hinting that distributed databases
+Recent work on PACELC expands CAP by considering connec-                         need not compromise availability, low latency, or scalability in or-
+tions between “weak consistency” and low latency [1], while sev-                 der to serve many existing applications.
+eral studies examine weak isolation guarantees [2, 12]. There are a                 In this paper, we have largely focused on previously defined iso-
+wide range of coordination-avoiding “optimistic replication” strate-             lation and data consistency models from the consistency from the
+gies [55] and several recent efforts at further understanding these              database and distributed systems communities. Their previous defi-
+strategies in light of current practice and the proliferation of “even-          nitions and, in many cases, widespread adoption hints at their utility
+tually consistent” stores [10, 13]. Notably, Bernstein and Das [13]              to end-users. However, we believe there is considerable work to be
+specifically highlight the importance of stickiness [60, 64]—which               done to improve the programmability of highly available systems.
+we formalize in Section 4.1. Aside from our earlier workshop                     Isolation and data consistency are means by which application-
+paper discussing transactional availability, real-world ACID, and                level consistency is achieved but are typically not end goals for
+HAT RC and I-CI [9]—which this work expands with additional                      end-user applications. Our results hint that a mix of HAT and non-
+semantics, algorithms, and analysis—we believe this paper is the                 HAT semantics (the latter used sparingly) is required for practical
+first to explore the connections between transactional semantics,                applications, but the decision to employ each and the system ar-
+data consistency, and (Gilbert and Lynch [35]) availability.                     chitectures for a hybrid approach remain open problems. While
+    There has been a recent resurgence of interest in distributed multi-         we have studied the analytical and experiment behavior of several
+object semantics, both in academia [15, 26, 48, 59, 61, 67] and in-              HAT models, there is substantial work in further understanding the
+dustry [19, 25]. As discussed in Section 3, classic ACID databases               performance and design of systems within the large set of HAT
+provide strong semantics but their lock-based and traditional multi-             models. Weakened failure assumptions as in escrow or in the form
+versioned implementations are unavailable in the presence of par-                of bounded network asynchrony could enable richer HAT seman-
+titions [14, 38]. Notably, Google’s Spanner provides strong one-                 tics at the cost of general-purpose availability. Alternatively, there
+copy serializable transactions. While Spanner is highly special-                 is a range of possible solutions providing strong semantics during
+ized for Google’s read-heavy workload, it relies on two-phase com-               partition-free periods and weakened semantics during partitions.
+mit and two-phase locking for read/write transactions [25]. As we                Based on our understanding of what is desired in the field and new-
+
+
+
+                                                                           191
+found knowledge of what is possible to achieve, we believe HATs                                  [29] J. Dean. Designs, lessons and advice from building large distributed systems.
+represent a large and useful design space for exploration.                                            Keynote at LADIS 2009.
+                                                                                                 [30] G. DeCandia, D. Hastorun, M. Jampani, G. Kakulapati, A. Lakshman, et al.
+                                                                                                      Dynamo: Amazon’s highly available key-value store. In SOSP 2007.
+Acknowledgments We would like to thank Peter Alvaro, Neil Con-
+                                                                                                 [31] A. Demers et al. Epidemic algorithms for replicated database maintenance. In
+way, Evan Jones, Adam Oliner, Aurojit Panda, Shivaram Venkatara-                                      PODC, 1987.
+man, and the HotOS and VLDB reviewers for their helpful feed-                                    [32] P. Deutsch. The eight fallacies of distributed computing.
+back on this work. This research was supported in part by the Air                                     http://tinyurl.com/c6vvtzg, 1994.
+Force Office of Scientic Research (grant FA95500810352), DARPA                                   [33] R. Dillet. Update: Amazon Web Services down in North Virginia Reddit,
+                                                                                                      Pinterest, Airbnb, Foursquare, Minecraft and others affected. TechCrunch
+XData Award FA8750-12-2-0331, the National Science Foundation                                         http://tinyurl.com/9r43dwt, October 2012.
+(grants CNS-0722077, IIS-0713661, and IIS-0803690), NSF CISE                                     [34] A. Fekete, D. Liarokapis, E. O’Neil, P. O’Neil, and D. Shasha. Making
+Expeditions award CCF-1139158, the National Science Founda-                                           snapshot isolation serializable. ACM TODS, 30(2):492–528, June 2005.
+tion Graduate Research Fellowship (grant DGE-1106400), and by                                    [35] S. Gilbert and N. Lynch. Brewer’s conjecture and the feasibility of consistent,
+                                                                                                      available, partition-tolerant web services. SIGACT News, 33(2):51–59, 2002.
+gifts from Amazon Web Services, Google, SAP, Cisco, Clearstory                                   [36] P. Gill, N. Jain, and N. Nagappan. Understanding network failures in data
+Data, Cloudera, Ericsson, Facebook, FitWave, General Electric,                                        centers: measurement, analysis, and implications. In SIGCOMM 2011.
+Hortonworks, Huawei, Intel, Microsoft, NetApp, Oracle, Samsung,                                  [37] J. Gray. The transaction concept: Virtues and limitations. In VLDB 1981.
+Splunk, VMware, WANdisco, and Yahoo!.                                                            [38] J. Gray, R. Lorie, G. Putzolu, and I. Traiger. Granularity of locks and degrees of
+                                                                                                      consistency in a shared data base. Technical report, IBM, 1976.
+                                                                                                 [39] J. Hamilton. Stonebraker on CAP Theorem and Databases.
+ 9     References                                                                                     http://tinyurl.com/d3gtfq9, April 2010.
+                                                                                                 [40] P. Helland. Life beyond distributed transactions: an apostate’s opinion. In CIDR
+ [1] D. J. Abadi. Consistency tradeoffs in modern distributed database system                         2007.
+     design: CAP is only part of the story. IEEE Computer, 45(2), 2012.                          [41] M. Herlihy and N. Shavit. The art of multiprocessor programming. 2008.
+ [2] A. Adya. Weak consistency: a generalized theory and optimistic                              [42] R. Kallman et al. H-store: a high-performance, distributed main memory
+     implementations for distributed transactions. PhD thesis, MIT, 1999.                             transaction processing system. In VLDB 2008.
+ [3] M. Ahamad, G. Neiger, J. E. Burns, P. Kohli, and P. Hutto. Causal memory:                   [43] B. Kemme. Database replication for clusters of workstations. PhD thesis,
+     Definitions, implementation and programming. Dist. Comp., 9(1), 1995.                            EPFL, 2000.
+ [4] P. Alvaro, N. Conway, J. M. Hellerstein, and W. R. Marczak. Consistency                     [44] K. Kingsbury and P. Bailis. The network is reliable. June 2013.
+     analysis in Bloom: a CALM and collected approach. In CIDR 2011.                                  http://aphyr.com/posts/288-the-network-is-reliable.
+ [5] ISO/IEC 9075-2:2011 Information technology – Database languages – SQL –                     [45] C. Labovitz, A. Ahuja, and F. Jahanian. Experimental study of internet stability
+     Part 2: Foundation (SQL/Foundation).                                                             and backbone failures. In FTCS 1999.
+ [6] R. Attar, P. A. Bernstein, and N. Goodman. Site initialization, recovery, and               [46] L. Lamport. Time, clocks, and the ordering of events in a distributed system.
+     backup in a distributed database system. IEEE Trans. Softw. Eng.,                                Commun. ACM, 21(7):558–565, July 1978.
+     10(6):645–650, Nov. 1984.                                                                   [47] V. Liu, D. Halperin, A. Krishnamurthy, and T. Anderson. F10: Fault tolerant
+ [7] AWS. Summary of the Amazon EC2 and Amazon RDS Service Disruption in                              engineered networks. In NSDI 2013.
+     the US East Region. http://tinyurl.com/6ab6el6, April 2011.                                 [48] W. Lloyd, M. J. Freedman, M. Kaminsky, and D. G. Andersen. Stronger
+ [8] P. Bailis, A. Davidson, A. Fekete, A. Ghodsi, J. M. Hellerstein, and I. Stoica.                  semantics for low-latency geo-replicated storage. In NSDI 2013.
+     Highly Available Transactions: Virtues and Limitations (Extended).                          [49] P. Mahajan, L. Alvisi, and M. Dahlin. Consistency, availability, convergence.
+     arXiv:1302.0309.                                                                                 Technical Report TR-11-22, CS Department, UT Austin, May 2011.
+ [9] P. Bailis, A. Fekete, A. Ghodsi, J. M. Hellerstein, and I. Stoica. HAT, not CAP:            [50] A. Markopoulou et al. Characterization of failures in an operational IP
+     Introducing Highly Available Transactions. In HotOS 2013.                                        backbone network. IEEE/ACM TON, 16(4).
+[10] P. Bailis and A. Ghodsi. Eventual Consistency today: Limitations, extensions,               [51] D. McCullagh. How Pakistan knocked YouTube offline (and how to make sure
+     and beyond. ACM Queue, 11(3), March 2013.                                                        it never happens again). CNET, http://tinyurl.com/c4pffd, February 2008.
+[11] P. Bailis, A. Ghodsi, J. M. Hellerstein, and I. Stoica. Bolt-on causal consistency.         [52] R. McMillan. Research experiment disrupts internet, for some. Computerworld,
+     In SIGMOD 2013.                                                                                  http://tinyurl.com/23sqpek, August 2010.
+[12] H. Berenson, P. Bernstein, J. Gray, J. Melton, E. O’Neil, and P. O’Neil. A                  [53] P. P. S. Narayan. Sherpa update. YDN Blog, http://tinyurl.com/c3ljuce,
+     critique of ANSI SQL isolation levels. In SIGMOD 1995.                                           June 2010.
+[13] P. Bernstein and S. Das. Rethinking eventual consistency. In SIGMOD, 2013.                  [54] F. Pedone and R. Guerraoui. On transaction liveness in replicated databases. In
+[14] P. Bernstein, V. Hadzilacos, and N. Goodman. Concurrency control and                             Pacific Rim International Symposium on Fault-Tolerant Systems, 1997.
+     recovery in database systems, volume 370. Addison-wesley New York, 1987.                    [55] Y. Saito and M. Shapiro. Optimistic replication. ACM Comput. Surv., 37(1),
+[15] M. Brantner, D. Florescu, D. Graf, D. Kossmann, and T. Kraska. Building a                        Mar. 2005.
+     database on S3. In SIGMOD 2008.                                                             [56] A. Schiper and M. Raynal. From group communication to transactions in
+[16] E. Brewer. Towards robust distributed systems. Keynote at PODC 2000.                             distributed systems. CACM, 39(4), 1996.
+[17] J. Brzezinski, C. Sobaniec, and D. Wawrzyniak. From session causality to                    [57] L. Segall. Internet routing glitch kicks millions offline. CNNMoney,
+     causal consistency. In PDP 2004.                                                                 http://tinyurl.com/cmqqac3, November 2011.
+[18] S. Burckhardt, A. Gotsman, and H. Yang. Understanding eventual consistency.                 [58] M. Shapiro, N. Preguiça, C. Baquero, and M. Zawirski. A comprehensive study
+     Technical Report MSR-TR-2013-39. http://tinyurl.com/bqty9yz.                                     of convergent and commutative replicated data types. INRIA TR 7506, 2011.
+[19] S. Bykov, A. Geller, G. Kliot, J. R. Larus, R. Pandya, and J. Thelin. Orleans:              [59] Y. Sovran, R. Power, M. K. Aguilera, and J. Li. Transactional storage for
+     cloud computing for everyone. In SOCC 2011.                                                      geo-replicated systems. In SOSP, pages 385–400, 2011.
+[20] A. Chan and R. Gray. Implementing distributed read-only transactions. IEEE                  [60] D. B. Terry, A. J. Demers, K. Petersen, M. J. Spreitzer, M. M. Theimer, et al.
+     Transactions on Software Engineering, (2):205–212, 1985.                                         Session guarantees for weakly consistent replicated data. In PDIS 1994.
+[21] F. Chang, J. Dean, S. Ghemawat, et al. Bigtable: A distributed storage system               [61] A. Thomson, T. Diamond, S. Weng, K. Ren, P. Shao, and D. Abadi. Calvin: Fast
+     for structured data. In OSDI 2006.                                                               distributed transactions for partitioned database systems. In SIGMOD 2012.
+[22] G. Clarke. The Register: NoSQL’s CAP theorem busters: We don’t drop ACID.                   [62] D. Turner, K. Levchenko, J. C. Mogul, S. Savage, and A. C. Snoeren. On failure
+     http://tinyurl.com/bpsug4b, November 2012.                                                       in managed enterprise networks. HP Labs HPL-2012-101, 2012.
+[23] B. Cooper et al. PNUTS: Yahoo!’s hosted data serving platform. In VLDB 2008.                [63] D. Turner, K. Levchenko, A. C. Snoeren, and S. Savage. California fault lines:
+[24] B. F. Cooper, A. Silberstein, E. Tam, R. Ramakrishnan, and R. Sears.                             understanding the causes and impact of network failures. SIGCOMM 2011.
+     Benchmarking cloud serving systems with YCSB. In ACM SOCC 2010.                             [64] W. Vogels. Eventually consistent. CACM, 52(1):40–44, Jan. 2009.
+[25] J. C. Corbett, J. Dean, M. Epstein, A. Fikes, C. Frost, J. J. Furman, et al.                [65] M. Wiesmann, F. Pedone, A. Schiper, B. Kemme, and G. Alonso. Database
+     Spanner: Google’s globally-distributed database. In OSDI 2012.                                   replication techniques: A three parameter classification. In SRDS 2000.
+[26] S. Das, D. Agrawal, and A. El Abbadi. G-store: a scalable data store for                    [66] Y. Xu, Z. Musgrave, B. Noble, and M. Bailey. Bobtail: avoiding long tails in the
+     transactional multi key access in the cloud. In SOCC 2010, pages 163–174.                        cloud. In NSDI, 2013.
+[27] K. Daudjee and K. Salem. Lazy database replication with ordering guarantees.                [67] M. Zawirski, A. Bieniusa, V. Balegas, N. Preguica, S. Duarte, M. Shapiro, and
+     In ICDE 2004, pages 424–435.                                                                     C. Baquero. Geo-replication all the way to the edge. Personal communication
+[28] S. Davidson, H. Garcia-Molina, and D. Skeen. Consistency in partitioned                          and draft under submission. http://tinyurl.com/cp68svy.
+     networks. ACM CSUR, 17(3):341–370, 1985.
+
+
+
+
+                                                                                           192
+

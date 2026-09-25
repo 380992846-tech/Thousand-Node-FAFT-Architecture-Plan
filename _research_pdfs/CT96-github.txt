@@ -1,0 +1,2306 @@
+Unreliable              Failure Detectors               for Reliable
+Distributed              Systems
+
+
+TUSHAR             DEEPAK     CHANDRA
+1.11..tf.Thomas J. Warson Research     Center, Hawthorne,    New York
+
+AND
+
+SAM TOUEG
+Cornell University, Ithaca, New York
+
+
+We introduce the concept of unreliable failure detectors and study how they can be used to solve
+Consensus in asynchronous systems with crash failures. We characterise unreliable failure detectors
+in terms of two properties—completeness    and accuracy. We show that Consensus can be solved even
+with unreliable failure detectors that make an infinite number of mistakes, and determine which ones
+can be used to solve Consensus despite any number of crashes, and which ones require a majority of
+correct processes. We prove that Consensus and Atomic Broadcast are redueible to each other in
+asynchronous systems with crash failures; thus, the above results also apply to Atomic Broadcast. A
+companion paper shows that one of the failure detectors introduced here is the weakest failure
+detector for solving Consensus [Chandra et al, 1992].
+Categories and Subject Descriptors: C.2.4 [Computer-Communication           Networks]: Distributed Sys-
+tems—disoifsured    applications; distributed databases; network operating ~s(ems; C,4 [Performance of
+Systems]: reliability, availability, and serviceability; D.1,3 [Programming Techniques]: Concurrent
+programming—disrrik. utedprogrammirr& D.4.5 [Operating Systems]: Reliability+auft-f olerance; F.1.l
+[Computation     by Abstract Devices]: Models of Computation—automata;          rekzrions among models;
+F. 1.2 [Computation by Abstract Devices]: Modes of Computation—purallefism and concurrency; H.2,4
+IDatabase Management]: Systems—concurrency; distributed systems; transaction processing
+
+General Terms: Algorithms, Reliability, Theory
+Additional Key Words and Phrases: Agreement problem, asynchronous systems, atomic broadcast,
+Byzantine   Generals’  problem, commit problem, consensus problem, crash failures, failure detection,
+fault-tolerance,   message passing, partial synchrony, processor failures
+
+
+
+
+A preliminary version of this paper appeared in Proceedings of (he IOth ACM Symposium on Principles
+of DistributedComputing (ACM, New York, pp. 325-340).
+Research supported by an IBM graduate fellowship, NSF grants CCR-8901780, CCR-9102231, and
+CCR-940286, and DARPMNASA           Ames Grant NAG-2-593.
+Authors’ present addresses: Tushar Deepak Chandra, 1.B.M. T.J, WatsonResearchCenter, 30 Saw
+Mill Road, Hawthorne,NY 10532;Sam Toueg, Department of Computer Science, Upson Hall,
+Cornell University, Ithaca, NY 148S3.
+Permission to make digital/hard copy of part or all of this work for personal or classroom use is
+granted without fee provided that the copies are not made or distributed for profit or commercial
+advantage, the copyright notice, the title of the publication, and its date appear, and notice is given
+that copying is by permission of the Association for Computing Machinery (ACM), Inc. To copy
+otherwise, to republish, to post on servers, or to redistribute to lists, requires prior specific permission
+and/or a fee.
+0 1996 ACM 0004-54 11/96/0300-0225 $03.50
+
+
+                                                            Journal                             pp 225-267
+                                                                 oftheACM, V,,l43.No 2,March{996,
+226                                                        T. D. CHANDRA       AND S. TOUEG
+
+
+1. Introduction
+
+The design and verification of fault-tolerant distributed applications is widely
+viewed as a complex endeavor. In recent years, several paradigms have been
+identified which simplify this task. Key among these are Consensus and Atomic
+Broadcast. Roughly speaking, Consensus allows processes to reach a common
+decision, which depends on their initial inputs, despite failures. Consensus
+algorithms can be used to solve many problems that arise in practice, such as
+electing a leader or agreeing on the value of a replicated sensor. Atomic
+Broadcast allows processes to reliably broadcast messages, so that they agree on
+the set of messages they deliver and the order of message deliveries. Applications
+based on these paradigms include SIFT [Wensley et al. 1978], State Machines
+[Lamport 1978; Schneider 1990], Isis [Birman and Joseph 1987; Birman et al.
+1990], Psync [Peterson et al. 1989], Amoeba [Mullender 1987], Delta-4 [Powell
+1991], Transis [Amir et al. 1991], HAS [Cristian 1987], FAA [Cristian et al.
+1990], and Atomic Commitment.
+   Given their wide applicability, Consensus and Atomic Broadcast have been
+extensively studied by both theoretical and experimental researchers for over a
+decade. In this paper, we focus on solutions to Consensus and Atomic Broadcast
+in the asynchronous model of distributed computing. Informally, a distributed
+system is asynchronous if there is no bound on message delay, clock drift, or the
+time necessary to execute a step. Thus, to say that a system is asynchronous is to
+make no timing assumptions whatsoever. This model is attractive and has
+recently gained much currency for several reasons: It has simple semantics;
+applications programmed on the basis of this model are easier to port than those
+incorporating specific timing assumptions; and in practice, variable or unex-
+pected workloads are sources of asynchrony—thus, synchrony assumptions are, at
+best, probabilistic.
+   Although the asynchronous model of computation is attractive for the reasons
+outlined above, it is well known that Consensus and Atomic Broadcast cannot be
+solved deterministically in an asynchronous system that is subject to even a single
+crash failure [Fischer et al. 1985; Dolev et al. 1987].1 Essentially, the impossibility
+results for Consensus and Atomic Broadcast stem from the inherent difficulty of
+determining whether a process has actually crashed or is only “very slow.”
+   To circumvent these impossibility results, previous research focused on the use
+of randomisation techniques [Chor and Dwork 1989], the definition of some
+weaker problems and their solutions [Dolev et al. 1986; Attiya et al. 1987;
+Bridgland and Watro 1987; Biran et al. 1988], or the study of several models of
+partial synchrony [Dolev et al. 1987; Dwork et al. 1988]. Nevertheless,             the
+impossibility of deterministic solutions to many agreement problems (such as
+Consensus and Atomic Broadcast) remains a major obstacle to the use of the
+asynchronous model of computation for fault-tolerant distributed computing.
+   In this paper, we propose an alternative approach to circumvent such impossi-
+bility results, and to broaden the applicability of the asynchronous model of
+computation. Since impossibility results for asynchronous systems stem from the
+inherent difficulty of determining whether a process has actually crashed or is
+
+
+1Roughly speaking, a crash failure occurs when a process that has been executing correctly, stops
+prematurely. Once a process crashes, it does not reeover.
+Unreliable Failure Detectors for Reliable Distributed           Systems                          227
+
+
+ only “very slow,” we propose to augment the asynchronous model of computa-
+ tion with a model of an external failure detection mechanism that can make
+ mistakes. In particular, we model the concept of unreliable failure detectors for
+ systems with crash failures.      In the rest of this introduction, we informally
+ describe this concept and summarise our results.
+    We consider distributed failure detectors: each process has access to a local
+failure detector modufe. Each local module monitors a subset of the processes in
+the system, and maintains a list of those that it currently suspects to have
+crashed. We assume that each failure detector module can make mistakes by
+ erroneously adding processes to its list of suspects: that is, it can suspect that a
+process p has crashed even though p is still running. If this module later believes
+ that suspecting    was a mistake, it can remove p from its list. Thus, each module
+ may repeatedly add and remove processes from its list of suspects. Furthermore,
+at any given time the failure detector modules at two different processes may
+ have different lists of suspects.
+    It is important to note that the mistakes made by an unreliable failure detector
+should not prevent any correct process from behaving according to specification
+even if that process is (erroneously) suspected to have crashed by all the other
+processes. For example, consider an algorithm that uses a failure detector to
+solve Atomic Broadcast in an asynchronous system. Suppose all the failure
+detector modules wrongly (and permanently) suspect that correct process p has
+crashed. The Atomic Broadcast algorithm must still ensure that p delivers the
+same set of messages, in the same order, as all the other correct processes.
+Furthermore, ifp broadcasts a message m, all correct processes must deliver m .Z
+    We define failure detectors in terms of abstract properties as opposed to giving
+specific implementations; the hardware or software implementation of failure detec-
+ tors is not the concern of this paper, This approach allows us to design applications
+and prove their correctness relying solely on these properties, without referring to
+low-level network parameters (such as the exact duration of time-outs that are used
+to implement failure detectors). This makes the presentation of applications and
+their proof of correctness more modular. Our approach is well suited to model many
+existing systems that decouple the design of fault-tolerant applications from the
+underlying failure detection mechanisms, such as the Isis Toolkit [Birman et al. 1990]
+for asynchronous fault-tolerant distributed computing.
+    We characterize a class of failure detectors by specifying the completeness and
+accuracy properties that failure detectors in this class must satisfy. Roughly
+ speaking, completeness requires that a failure detector eventually suspects every
+process that actually crashes,3 while accuracy restricts the mistakes that a failure
+detector can make. We define two completeness and four accuracy properties,
+which gives rise to eight classes of failure detectors, and consider the problem of
+solving Consensus using failure detectors from each class.4
+
+z A different approach was taken by the Isis system [Ricciardi and Birman 1991]: a correct process
+that is wrongly suspected to have crashed, is forced to crash itself. In other words, the Isis failure
+detector forces the system to conform to its view. To applications such a failure detector makes no
+mistakes. For a more detailed discussion on this, see Section 9.3.
+‘ In this introduction, we say that the failure detector suspects that a process p has crashed if any
+local failure detector module suspects that p has crashed.
+‘ We later show that Consensus and Atomic Broadcast are equivalent in asynchronous systems: any
+Consensus algorithm can bc transformed into an Atomic Broadcast algorithm and vice versa. Thus,
+228                                                           T. D. CHANDRAAND S. TOUEG
+
+
+   To do so, we introduce the concept of “reducibility” among failure detectors.
+Informally, a failure detector ‘3’ is reducible to ~ailure detector QI if there is a
+distributed algorithm that can transform S3 into 9’. We also say that Q‘ is weaker
+than $3: Given this reduction algorithm, anything that can be done using failure
+detector $3’, can be done using 9 instead. Two failure detectors are equivalent if
+they are reducible to each other. Using the concept of reducibility (extended to
+classes of failure detectors), we show how to reduce our eight classes of failure
+detectors to four, and consider how to solve Consensus for each class.
+   We show that certain failure detectors can be used to solve Consensus in
+systems with any number of process failures, while others require a majority of
+correct processes. In order to better understand where the majority requirement
+becomes necessary, we study an infinite hierarchy of failure detector classes and
+determine exactly where in this hierarchy the majority requirement becomes
+necessary.
+   Of special interest is OW, the weakest class of failure detectors considered in
+this paper. Informally, a failure detector is in OW if it satisfies the following two
+properties:
+  Completeness.      There is a time after which every process                   that crashes      is
+permanently     suspected by some correct process.
+  Accuracy.   There is a time after which some correct process is never suspected
+by any correct process.
+   Such a failure detector can make an infinite number of mistakes: Each local
+failure detector module can repeatedly add and then remove correct processes
+from its list of suspects (this reflects the inherent difficulty of determining
+whether a process is just slow or whether it has crashed). Moreover, some correct
+processes may be erroneously suspected to have crashed by all the other
+processes throughout the entire execution.
+   The two properties of OW state that eventually some conditions must hold
+forever; of course this cannot be achieved in a real system. However, in practice,
+it is not really required that these conditions hold forever. When solving a
+problem that “terminates”, such as Consensus, it is enough that they hold for a
+“sufficiently long” period of time: This period should be long enough for the
+algorithm to achieve its goal (e.g., for correct processes to decide). When solving
+a problem that does not terminate, such as Atomic Broadcast, it is enough that
+these properties hold for “sufficiently long” periods of time: Each period should
+be long enough for some progress to occur (e.g., for correct processes to deliver
+some messages). However, in an asynchronous system it is not possible to
+quantify “sufficiently long”, since even a single process step is allowed to take an
+arbitrarily long amount of time, Thus, it is convenient to state the properties of
+OW in the stronger form given above.s
+   Another desirable feature of OW is the following. If an application assumes a
+failure detector with the properties of OW, but the failure detector that it actually
+uses “malfunctions” and continuously fails to meet these properties-for     example,
+
+we can focus on solving Consensus since all our results will automatically apply to Atomic Broadcast
+as well.
+5 Solving a problem with the assumption that certain properties hold for sufficiently long has been
+done previously, see Dwork et al. [1988].
+Unreliable Faiiure Detectors for Reliable Distributed          Systems                         229
+
+
+there is a crash that no process ever detects, and all correct processes are repeatedly
+(and forever) falsely suspected—the application may lose liveness but not safe(y. For
+example, if a Consensus algorithm assumes the properties of OW, but the failure
+detector that it actually uses misbehaves continuously, processes may be prevented
+from deciding, but they never decide different values (or a value that is not allowed).
+Similarly, with an Atomic Broadcast algorithm, processes may stop delivering
+messages, but they never deliver messages out-of-order.
+   The failure detector abstraction is a clean extension to the asynchronous
+model of computation that allows us to solve many problems that are otherwise
+unsolvable. Naturally, the question arises of how to support such an abstraction
+in an actual system. Since we specifi failure detectors in terms of abstract
+properties, we are not committed to a particular implementation. For instance,
+one could envision specialised hardware to support this abstraction. However,
+most implementations of failure detectors are based on time-out mechanisms.
+For the purpose of illustration, we now outline one such implementation based
+on an idea in [Dwork et al, 1988] (a more detailed description of this implemen-
+tation and of its properties is given in Section 9.1).
+   Every process q periodically sends a “q-is-alive” message to all. If a process p
+times-out on some process q, it adds q to its list of suspects. If p later receives a
+“q-is-alive” message, p recognizes that it made a mistake by prematurely timing
+out on q: p removes q from its list of suspects, and increases the length of its
+timeout period for q in an attempt to prevent a similar mistake in the future.
+   In an asynchronous system, this scheme does not implement a failure detector
+with the properties of OW:C an unbounded sequence of premature time-outs may
+cause every correct process to be repeatedly added and then removed from the
+list of suspects of every correct process, thereby violating the accuracy property
+of OW. Nevertheless, in many practical systems, increasing the timeout period
+after each mistake ensures that eventually there are no premature time-outs on
+at least one correct process p. This gives the accuracy property of 07$”: there is a
+time after which p is permanently removed from all the lists of suspects. Recall
+that, in practice, it is not necessary for this to hold permanently; it is sufficient
+that it holds for periods that are “long enough” for the application using the
+failure detector to make sufficient progress or to complete its task. Accordingly,
+it is not necessary for the premature time-outs on p to cease permanently: it is
+sufficient that they cease for “long enough” periods of time.
+   Having made the point that in practical systems one can use time-outs to
+implement a failure detector with the properties of 074”, we reiterate that all
+reasoning about failure detectors (and algorithms that use them) should be done in
+terms of their abstract properties and not in terms of any particular implementation.
+This is an important feature of this approach, and the reader should refrain from
+thinking of failure detectors in terms of specific time-out mechanisms.
+   Any failure detector that satisfies the completeness and accuracy properties of
+OW provides sufficient information about failures to solve Consensus. But is this
+information necessary? Indeed, what it is the “weakest” failure detector for
+solving Consensus?
+
+h Indeed, no algorithm can implement such a failure detector in an asynchronous system: as we show
+in Section 6.2, this implementation could be used to solve Consensus in such a system, contradicting
+the impossibility result of Fischeret al. [1985].
+230                                                           T. D. CHANDRAAND S. TOUEG
+
+
+   Chandra et al. [1992] answer this question by considering OWO, the weakest
+failure detector in OW. Roughly speaking, OWO satisfies the properties of
+OW, and no other properties.        Chandra et al. [1992] show that OWO is the
+weakest failure detector that can be used to solve Consensus in asynchronous
+systems (with a majority of correct processes). More precisely, Chandra et al.
+[1992] show that if a failure detector Q can be used to solve Consensus, then
+there is a distributed     algorithm that transforms Q into O’WO. Thus, in a
+precise sense, O’WO is necessary and sufficient for solving Consensus in
+asynchronous systems (with a majority of correct processes). This result is
+further evidence to the importance          of O’W for fault-tolerant  distributed
+computing in asynchronous systems.
+   In our discussion so far, we focused on the Consensus problem. In Section 7,
+we show that Consensus is equivalent to Atomic Broadcast in asynchronous
+systems with crash failures. This is shown by reducing each problem to the
+other.’ In other words, a solution for one automatically yields a solution for the
+other. Thus, Atomic Broadcast can be solved using the unreliable failure
+detectors described in this paper. Furthermore,       OWO is the weakest failure
+detector that can be used to solve Atomic Broadcast.
+   A different tack on circumventing the unsolvability of Consensus is pursued in
+Dolev et al. [1987] and Dwork et al. [1988]. The approach of those papers is
+based on the observation that between the completely synchronous and com-
+pletely asynchronous models of distributed systems there lie a variety of interme-
+diate partiah!y synchronous models. In particular, those two papers consider at
+least 34 different models of partial synchrony and for each model determine
+whether or not Consensus can be solved. In this paper, we argue that partial
+synchrony assumptions can be encapsulated in the unreliability of failure detec-
+tors. For example, in the models of partial synchrony considered in Dwork et al.
+[1988] it is easy to implement a failure detector that satisfies the properties of
+OW. This immediately implies that Consensus and Atomic Broadcast can be
+solved in these models. Thus, our approach can be used to uni@ several
+seemingly unrelated models of partial synchrony.8
+   As we argued earlier, using the asynchronous model of computation is highly
+desirable in many applications: it results in code that is simple, portable and
+robust. However, the fact that fundamental problems such as Consensus and
+Atomic Broadcast have no (deterministic) solutions in this model is a major
+obstacle to its use in fault-tolerant distributed computing. Our model of unreli-
+able failure detectors provides a natural and simple extension of the asynchro-
+nous model of computation, in which Consensus and Atomic Broadcast can be
+solved deterministically. Thus, this extended model retains the advantages of
+asynchrony without inheriting its disadvantages.
+   Finally, even though this paper is concerned with solvability rather than
+efficiency, one of our algorithms (the one assuming a failure detector with the
+properties of OW) appears to be quite efficient: We have recently implemented a
+slightly modified version that achieves Consensus within two “asynchronous
+rounds” in most runs. Thus, we believe that unreliable failure detectors can be
+
+7 They are actually equivalent even in asynchronous systems with arbitrary, that is, “Byzantine”,
+failures. However, that reduction is more complex and is omitted from this paper.
+8 The relation between our approach and partial synchrony is discussed in more detail in Section 9.1.
+UnreIiabie Failure Detectors for Reliable Distn”buted Systems                             231
+
+
+used to bridge the gap between known impossibility results and the need for
+practical solutions for fault-tolerant asynchronous systems.
+   The remainder of this paper is organised as follows: In Section 2, we describe
+our model and introduce eight classes of failure detectors defined in terms of
+properties. In Section 3, we use the concept of reduction to show that we can
+focus on four classes of failure detectors rather than eight. In Section 4, we
+present Reliable Broadcast, a communication primitive for asynchronous systems
+used by several of our algorithms. In Section 5, we define the Consensus
+problem. In Section 6, we show how to solve Consensus for each one of the four
+equivalence classes of failure detectors. In Section 7, we show that Consensus
+and Atomic Broadcast are equivalent to each other in asynchronous systems. In
+Section 8, we complete our comparison of the failure detector classes defined in
+this paper. In Section 9, we discuss related work, and in particular, we describe
+an implementation of a failure detector with the properties of OW in several
+models of partial synchrony. Finally, in the Appendix we define an infinite
+hierarchy of failure detector classes, and determine exactly where in this
+hierarchy a majority of correct processes is required to solve Consensus.
+
+2. The Model
+We consider asynchronous distributed systems in which there is no bound on
+message delay, clock drift, or the time necessary to execute a step. Our model of
+asynchronous computation with failure detection is patterned after the one
+in Fischer et al. [1985]. The system consists of a set of n processes, II =
+{Pi,  P27 . . . . p.}. Every pair of processes is connected by a reliable communi-
+cation channel.
+   To simplify the presentation of our model, we assume the existence of a
+discrete global clock. This is merely a fictional device: the processes do not have
+access to it. We take the range 3 of the clock’s ticks to be the set of natural
+numbers.
+   2.1. FAILURESAND FAILURE PATTERNS. Processes can fail by crashing, that is,
+by prematurely halting. A failure pattern F is a function from 9 to 2“, where F(t)
+denotes the set of processes that have crashed through time t. Once
+a process crashes, it does not “recover”, that is, Vt: F(t) C F(t + 1). We define
+crashed(F) = U,= T F(r) and correct,       = II – crashed(F). If p E crashed(F), we
+say p crashes in F and if p E correct(F), we say p is correct in F. We consider only
+failure patterns F such that at least one process is correct, that is, correct(F) # 0.
+   2.2. FAILURE DETECTORS. Each failure detector module outputs the set of
+processes that it currently suspects to have crashed.g A failure detector history His
+a function from H X 7 to 2n. H(p, t) is the value of the failure detector module
+of process p at time f. If q G Ff(p, t), we say that p suspects q at time t in H. We
+omit references to H when it is obvious from the context. Note that the
+failure detector modules of two different processes need not agree on
+the list of processes that are suspected to have crashed, that is, if p # q, then
+H(p, t) # H(g, t) ispossible.
+
+
+
+9 In Chandra et al. [1992], failure detectors can output values from an arbirrary range
+232                                                              T. D. CHANDRAAND S. TOUEG
+
+
+    Informally, a failure detector ~ provides (possibly incorrect) information
+about the failure pattern F that occurs in an execution. Formally, fiiihue detector
+$3 is a function that maps each failure pattern F to a set of failure detector
+histories !3 (F). This is the set of ail failure detector histories that could occur in
+executions with failure pattern F and failure detector 9.’0
+    In this paper, we do not define failure detectors in terms of specific implemen-
+tations. Such implementations would have to refer to low-level network parame-
+ters, such as the network topology, the message delays, and the accuracy of the
+local clocks. To avoid this problem, we specify a failure detector in terms of two
+abstract properties that it must satisfy completeness and accuracy. This allows us
+to design applications and prove their correctness relying solely on these
+properties.
+   2.3. FAILURE DETECTORPROPERTIES. We now state two completeness                                prop-
+erties and four accuracy properties that a failure detector $/l may satisfy.
+   COMPLETENESS. We consider two completeness                      properties:
+  Strong Completeness.    Eventually every process that crashes is permanently
+suspected by every correct process. Formally, !21satisfies strong completeness if
+
+                          VF, VH G Qb(F),3t         G 9, Vp E crashed(F),
+
+                            Vq G correct(F),       Vt’ a t :p G If(q,     t’).
+
+  Weak Completeness.    Eventually every process that crashes is permanently
+suspected by some correct process. Formaliy, 9 satisfies weak completeness if
+
+                         VF, VH E Q(F),          3 E 9, Vp ~ crashed(F),
+
+                            3q G correct(F),       Vf’ 2 t:p    C H(q,    t’).
+
+However, completeness by itself is not a useful property. To see this, consider a
+failure detector which causes every process to permanently suspect every other
+process in the system. Such a failure detector trivially satisfies strong complete-
+ness but is clearly useless since it provides no information about failures. To be
+useful, a failure detector must also satisfy some accuracy property that restricts
+the mistakes that it can make. We now consider such properties.
+  ACCURACY. Consider the following two accuracy properties:
+   Strong Accuracy.    No process             is suspected     before     it crashes.   Formally,    ‘3
+satisfies strong accuracy if
+
+
+
+Since it is difficult (if not impossible)               to achieve       strong accuraq      in many
+practical systems, we also define:
+
+
+
+10 In general,   there are ~anY executions   with the same failure pattern ~ (e-g., these executions maY
+differ by the pattern of their message exchange). For each such execution, ~ may have a different
+failure detector history.
+Unreliable Failure Detectors for Reliable Distributed         Systems                                 233
+
+
+   Weak Accuracy.   Some correct process is never suspected. Formally, ‘3 satis-
+fies weak accuracy if
+
+   VF, VH ~ $3(F), 3p E correct(F),           Vt E 3,      Vg G II – F(t):p       @ H(q,        t).
+
+Even weak accuracy guarantees that at least one correct process is never
+suspected. Since this type of accuracy may be difficult to achieve, we consider
+failure detectors that may suspect eve~ process at one time or another. Infor-
+mally, we only require that strong accuracy or weak accuracy are eventually
+satisfied. The resulting properties are called eventual strong accuracy and eventual
+weak accuracy, respectively.
+   For example, eventual strong accuracy requires that there is a time after which
+strong accuracy holds. Formally, 9 satisfies eventual strong accuracy if
+
+     VF, VHG$l(F),         =t=     $, Vt’ at, vp,qE~           –F(t’):p@H(q,             t’).
+
+An observation is now in order. Since all faulty processes will crash after some
+finite time, we have:
+
+                    VF, 3t G 3, Vt’ at:II        – F(t’)     = correct(F).
+
+Thus, an equivalent and simpler formulation           of eventual strong accuracy is:
+  Eventual    Strong Accuracy.      There is a time after which correct processes are
+not suspected     by any correct      process. Formally, 9 satisfies eventual strong
+accuracy if
+
+      VF,    VH E $3(F),   3     = 3,   Vt’ 2 t, Vp, q E correct(F)        :p $! I/(q,   1’).
+
+Similarly, we specify eventual weak accuracy as follows:
+  Eventual    Weak Accuracy.   There is a time after which some correct process is
+never suspected     by any correct process. Formally, 9 satisfies eventual weak
+accuracy if
+
+                     VF, VH E 9(F),         3t G 3,   3p E correct(F),
+
+                       Vr’ a t, Vq c correct(F)       :p @ H(q,     /’).
+
+  We will refer to eventual         strong accuracy and eventual weak accuracy as
+eventual accuracy properties,      and strong accuracy and weak accuracy as pe~etual
+accuracy properties.
+
+   2.4. FAILUREDETECTORCLASSES. A failure detector is said to be Pe~ect if it
+satisfies strong completeness and strong aecuraey. The set of all such failure
+detectors, called the class of Petfect failure detectors, is denoted by 9. Similar
+definitions arise for each pair of completeness and accuracy properties. There
+are eight such pairs, obtained by selecting one of the two completeness proper-
+ties and one of the four accuracy properties introduced in the previous section.
+The resulting definitions and corresponding notation are given in Figure 1.
+
+  2.5. ALGORITHMSAND RUNS. In this paper, we focus on algorithms that use
+unreliable failure detectors. To describe such algorithms, we only need informal
+234                                                               T. D. CHANDRAAND S. TOUEG
+
+
+                                                           Accuracy
+           Completeness         Strong    Weak        EventualStrong            EventuaIWeak
+                Strong         Perfect    Strung     Eventuoilp   Perfect   Eventuall~    Strvng
+                                  9         Y                09                      Oy’
+                 Weak                      Wenk                             EventuaU~      Weak
+                                  9         w                02                      Ow
+      FIG. 1.   Eight classes of failure detectors defined in terms of accuracy and completeness.
+
+definitions of algorithms          and   runs,     based    on the     formal     definitions      given   in
+Chandra et al. [19921.11
+   An algorithm A is a collection of n deterministic automata, one for each
+process in the system. Computation proceeds in steps of A. In each step, a
+process (1) may receive a message that was sent to it, (2) queries its failure
+detector module, (3) undergoes a state transition, and (4) may send a message to
+a single process. 12 Since we model asynchronous systems, messages may experi-
+ence arbitrary (but finite) delays. Furthermore, there is no bound on relative
+process speeds.
+   A run of algorithm A using a failure detector QJ is a tuple R = (F, Ha, I, S, T)
+where F is a failure pattern, HQ G ~(F) is a history of failure detector ~ for
+failure pattern F, 1 is an initial configuration of A, S is an infinite sequence of
+steps of A, and T is a list of increasing time values indicating when each step in
+S occurred. A run must satisfy certain well-formedness and fairness properties.
+In particular, (1) a process cannot take a step after it crashes, (2) when a process
+takes a step and queries its failure detector module, it gets the current value
+output by its local failure detector module, and (3) every process that is correct
+in F takes an infinite number of steps in S and eventually receives every message
+sent to it.
+   Informally, a problem P is defined by a set of properties that runs must satisfy.
+An algorithm A solves a problem P using a failure detector ~ if all the runs of A
+using $3 satisfy the properties required by P. Let % be a class of failure detectors.
+Algorithm A solves problem P using % if for all !2dE %, A solves P using !3.
+Finally, we say that problem P can be solved using% if for all failure detectors 9
+c & there is an algorithm A that solves P using Q.
+   We use the following notation. Let v be a variable in algorithm A. We denote
+by UPprocess p’s copy of v. The history of v in run R is denoted by ~, that is,
+#(p,    t) is the value of VPat time t in run R. We denote by 3P process p’s local
+failure detector module. Thus, the value of !21Pat time t in run R = (F, H%, 1, S, T)
+is HQ(p, t).
+   2.6. REDUCIBILITY. We now define what it means for an algorithm TQ -Q, to
+transform a failure detector Q into another failure detector $3’ (T9+Q, is called
+a reduction algotidtm). Algorithm Ta +9, uses ~ to maintain a variable outputp at
+every process p. This variable, which is part of the local state of p, emulates the
+output of Q‘ at p. Algorithm TQ -Q, transforms !23into Qil’ if and only if for every
+run R = (F, HQ, 1, S, T) of TQ+Q, using S3, outpu~ E $3’(F). Note that
+
+II Forma] definitions are necessag in Chandra et al. [1992] to Provea subtlelowerbound.
+12Chandraet al. [1992]assumethat eaclr step is atomic, that is, indivisible with reSpeCtto failures.
+Furthermore, each process can send a message to all processes during such a step. These assumptions
+were made to strengthen the lower bound result of Chandra et al, [1992].
+Unreliable    Failure Detectors for Re[iabIe Distributed   Systems                   235
+
+
+
+
+                                     3’ emulated
+
+
+                                                    FIG,2. Transforming 9 into 9‘,
+
+
+
+
+T%,+i, need not emulate all the failure detector histories of q‘; what we do
+require is that all the failure detector histories it emulates be histories of 23’.
+   Given a reduction algorithm Tg~9,, any problem that can be solved using
+failure detector Q‘, can be solved using !JI instead. To see this, suppose a given
+algorithm A requires failure detector Q‘, but only 9 is available. We can still
+execute A as follows. Concurrently with A, processes run Tg, +a, to transform ~
+into ~’. We modify algorithm A at process p as follows: whenever A requires
+that p queries its failure detector module, p reads the current value of outputP
+(which is concurrently maintained by Ta+q, ) instead. This is illustrated in
+Figure 2.
+   Intuitively, since TQ +9 is able to use !23to emulate !3’, 9 must provide at least
+as much information about process failures as ‘3’ does. Thus, if there is an
+algorithm Ty, +q, that transforms $3 into 9‘, we write $3 Z 93’ and say that Q‘ is
+reducible to ‘3; we also say that Qb’ is weaker than 9. Clearly, 5 is a transitive
+relation. If $2 Z !3’ and 9’ 5 $3, we write !’3 = 9‘ and say that $2 and $3’ are
+equivalent.
+   Similarly, given two classes of failure detectors % and %‘, if for each failure
+detector ’53G % there is a failure detector ‘3’ E %’ such that Q 553’, we write %
+> ‘%’and say that %’ is weaker than % (note that if Yi 5 %’, then if a problem is
+solvable using %‘, it is also solvable using %). From this definition, 2 is clearly
+transitive. If % > %’ and %‘ > %, we write % - %‘ and say that % and %’ are
+equivalent.
+  Consider the trivial reduction algorithm in which each process p periodically
+writes the current value output by its local failure detector module into outputP.
+From this trivial reduction the following relations between classes of failure
+detectors are immediate:
+
+
+
+
+3. From Weak Completeness         to Strong Completeness
+
+In Figure 3, we give a reduction algorithm T9 +9, that transforms any given
+failure detector $7 that satisfies weak completeness, into a failure detector !21’
+that satisfies strong completeness. Furthermore, if !2 satisfies one of the four
+236                                                                     T. D. CHANDRA AND S. TOUEG
+
+
+Every    process   p exwutes the following
+
+Outputp + 0
+
+cobegin
+II Task f: repeat          forever
+               {p queries its load jailure detector    module    S3,]
+               Suspectsp    6   3P
+               send (p, suspectsP) to all
+
+II Task 2: when       receive (g, Suspectsq) for some q
+               Outputp4- (Outputp u suspedsq)       - {9}                             {output,      emulates 91}
+coencf
+                    FIG.3.       Ta-g   ~: From Weak Completeness to Strong Completeness.
+
+
+
+accuracy properties that we defined in Section 2.3 then 9‘ also does so. In other
+words, Tq+q, strengthens completeness while preseming accuracy.
+   This result allows us to focus on the four classes of failure detectors defined in
+the first row of Figure 1, that is, those with strong completeness. This is because,
+T ~+a, (together with Observation 2.6.1) shows that every failure detector class
+in the second row of Figure 1 is actually equivalent to the class above it in that
+figure.
+   Informally, Tq+Q, works as follows: Every process p periodically sends
+(p, suspectsP)—where      suspectsP denotes the set of processes that p suspects
+according to its local failure detector module !31P-to every process. When p
+receives a message of the form (q, suspectsg), it adds suspectsq to outputP and
+removes q from outputP (recall that outputP is the variable emulating the output
+of the failure detector module !?il~).
+   In our algorithms, we use the notation “send m to all” as a short-hand for “for
+all q E II: send m to q.” If a process p crashes while executing this “for loop”, it
+is possible that some processes receive the message m while others do not.
+   Let R = (F, HQ, 1, S, T) be an arbitrary run of Ta+9, using failure detector
+‘3. In the following, the run R and its failure pattern F are fixed. Thus, when we
+say that a process crashes we mean that it crashes in F. Similarly, when we say
+that a process is correct, we mean that it is correct in F. We will show that
+outpu~ satisfies the following properties:
+
+   PI (Transforming weak completeness into strong completeness).     Let p be any
+process that crashes. If eventually some correct process permanently suspects p b
+H3, then eventually ail correct processes permanently suspect p in outpu~. More
+formally:
+
+Vp ~ crashed(F):
+
+                             3 E 9,      =q G correct(F),       Vt’ a t:p   G Hg(q,     t’)
+
+           3                 3t E 9, Vq ~ correct(F),           Vt’ a t:p   E outpu~(q,          t’).
+
+   P2 (Preserving pe~etual accuracy). Let p be any process. If no process
+suspects p in Ha before time t, then no process suspects p in outpu~ before
+time t.More formally:
+Unreliable Failure Detectors for Reliable Distributed          Systems                  237
+
+
+
+
+                        Vt’ <t,   Vq c n –F(t’):p@Hg(q,           t’)
+
+           +            Vt’ <t,   Vq E II – F(t’):p     $$outpu~(g,      t’).
+
+   P3 (Preserving eventual accuracy). Let p be any correct process. If there is a
+time after which no correct process suspects p in lfa, then there is a time after
+which no correct process suspects p in outpufi. More formally:
+
+Vp G correct(F):
+
+
+
+           +’        3t E 3, Vq G correct(F),         Vt’ a t :p @ outputR(q,   t‘ ).
+
+  LEMMA 3.1.         TW+J satisfies PI.
+   PROOF. Let p be any process that crashes. Suppose that there is a time t after
+which some correct process q permanently suspects p in Hz. We must show that
+there is a time after which every correct process suspects p in outpu~.
+   Since p crashes, there is a time t‘ after which no process receives a message
+from p. Consider the execution of Task 1 by process q after time tP = max(t, t‘).
+Process q sends a message of the type (q, suspectsq) with p E suspectsq to all
+processes. Eventually, every correct process receives (q, suspectsq) and adds p to
+output (in Task 2). Since no correct process receives any messages from p after
+time t‘ and rP z r‘, no correct process removes p from output after time lP. Thus,
+there is a time after which every correct process permanently suspects p in
+outputR.        •1
+
+  LEMMA 3.2.         T%+Q, satisfies P2.
+
+   PROOF. Let p be any process. Suppose there is a time t before which no
+process suspects p in Ha. No process sends a message of the type (–, suspects)
+with p E suspects  before time t.Thus, no process q adds p to outputq before
+time t. •l
+  LEMMA 3.3.         TQ,+% satisfies P3.
+
+   PROOF. Let p be any correct process. Suppose that there is a time t after
+which no correct process suspects p in 1-la, Thus, all processes that suspect p
+after time t eventually crash. Thus, there is a time t’ after which no correct
+process receives a message of the type (–, suspec[s) with p G suspects.
+   Let q be any correct process. We must show that there is a time after which q
+does not suspect p in outpu~. Consider the execution of Task 1 by process p
+after time t‘, Process p sends a message m = (p, suspectsP) to q. When q
+receives m, it removes p from outputq (see Task 2). Since q does not receive any
+messages of the type (–, suspects) with p G suspects after time t‘,q does not add
+p to outputq after time t‘.Thus, there is a time after which q does not suspect p
+in outpu~.    •l
+
+  THEOREM 3.4.           P ? Q, W ? 9, 02 ? 0’3, and OW ? 09.
+  PROOF. Let ‘3 be any failure detector in Q, W OQ, or OW. We show that
+                9! into a failure detector $3’ in 9, $’, 09, or 09’, respectively.
+T ,J,-(< , transforms
+238                                                             T. D. CHANDRA AND S. TOUEG
+
+
+                          Every process   p executes   the following
+
+                          To execute R-broadcast(m):
+                               send m to all (including p)
+
+                          R-deliver(m) occurs as fo]lows:
+                              when receive m for the first time
+                                   if sender(m) # p then send m to afl
+                                   R-deliver(m)
+                         FIG.4. Reliable Broadcast by message diffusion.
+
+Since Q satisfies weak completeness, by Lemma 3.1, 53’ satisfies strong complete-
+ness. We now show that ~ and $23’have the same accuracy property. If 9 is in Q
+or W, this follows from Lemma 3.2. If !3 is in 0S2 or OW, this follows from
+Lemma 3.3. •l
+By Theorem 3.4 and Observation             2.6.1, we have:
+  COROLLARY3.5.           9 = Q, Y’= W, OQ? = 03, and OY = OW.
+  The relations given in Corollary 3.5 are sufficient for the purposes of this
+paper. A complete enumeration       of the relations between the eight failure
+detectors classes defined in Figure 1 is given in Section 8.
+
+4. Reliable Broadcast
+We now define Reliable Broadcast, a communication primitive for asynchronous
+systems that we use in our algorithm.13 Informally, Reliable Broadcast guaran-
+tees that (1) all correct processes deliver the same set of messages, (2) all
+messages broadcast by correct processes are delivered, and (3) no spurious
+messages are ever delivered. Formally, Reliable Broadcast is defined in terms of
+two primitives, R-broadcasr(m ) and R-deliver(m)      where m is a message drawn
+from a set of possible messages. When a process executes R-broadcast(m),        we
+say that it R-broadcasts   m, and when a process executes R-deliver(m),     we say
+that it R-delivers m. We assume that every message m includes a field denoted
+sender(m)    that contains the identity of the sender, and a field with a sequence
+number; these two fields make every message unique. Reliable Broadcast
+satisfies the following properties [Hadzilacos and Toueg 1994]:
+  Validity. If a correct process R-broadcasts                 a message m, then it eventually
+R-delivers m.
+  Agreement.   If a correct process            R-delivers      a message m, then all correct
+processes eventually R-deliver m.
+  Uniform tnte~”ty.  For any message m, every process R-delivers m at most
+once, and only if m was previously R-broadcast by sender(m).
+   In Figure 4, we give a simple Reliable Broadcast algorithm for asynchronous
+systems. Informally, when a process receives a message for the first time, it relays
+the message to all processes and then R-delivers it, This algorithm satisfies
+
+1~This is a ~rash.failure version of the asynchronous broadcast primitive defined in Bracha and
+Toueg [1985] for “Byzantine” failures.
+Unreliable Failure Detectors for Reliab[e Distributed           Systems                       239
+
+
+validity,   agreement       and uniform     integrity   in asynchronous      systems   with up to
+n – 1 crash failures. The proof is obvious and therefore                  omitted.
+
+5. The Consensus          Problem
+
+In the Consensus problem, all correct processes propose a value and must reach
+a unanimous and irrevocable decision on some value that is related to the
+proposed values [Fischer 1983], We define the Consensus problem in terms of
+two primitives, propose(v) and decide(u), where u is a value drawn from a set of
+possible proposed values. When a process executes propose(v),      we say that it
+proposes v; similarly, when a process executes decide(u), we say that it decides u.
+The Consensus problem is specified as follows:
+   Termination.       Every correct process eventually decides some value.
+   Uniform inte~”~.          Every process decides at most once.
+  Agreement.       No two correct processes decide differently.
+
+   UniJorm     validi~.      If a process    decides     v, then    v was proposed       by some
+process .14
+   It is well-known that Consensus cannot be solved in asynchronous systems that
+are subject to even a single crash failure [Fischer et al, 1985; Dolev et al. 1987].
+
+6. Solving Consensus         using Unreliable   Failure Detectors
+
+We now show how to solve Consensus using each one of the eight classes of
+failure detectors defined in Figure 1. By Corollary 3.5, we only need to show how
+to solve Consensus using each one of the four classes of failure detectors that
+satisfy strong completeness, namely, 9, Y’,09, and OY.
+   In Section 6.1, we present an algorithm that solves Consensus using Y. Since W
+> Y, this algorithm also solves Consensus using 9. In Section 6.2, we give a
+Consensus algorithm that uses 09’. Since 09 5 0!3’, this algorithm also solves
+Consensus using 0$7. Our Consensus algorithms actually solve a stronger form of
+Consensus than the one specified in Section 5: They ensure that no two
+processes, whether correct or faulty, decide differently—a property called uniform
+agreement [Neiger and Toueg 1990].
+   The Consensus algorithm that uses 9 tolerates any number of failures. In
+contrast, the one that uses 09’ requires a majority of correct processes. We show
+that to solve Consensus this requirement is necessary even if one uses 09, a class
+of failure detectors that is stronger than OY’. Thus, our algorithm for solving
+Consensus using 0.9’ (or 09’) is optimal with respect to the number of failures
+that it tolerates.
+   6.1. SOLVINGCONSENSUS USING 9’. The algorithm inFigure 5 solves Consen-
+sus using any Strong failure detector $2 E !3’.In other words, it works with any
+failure detector Q that satisfies strong completeness and weak accuracy. This
+algorithm tolerates up to n – 1 faulty processes (in asynchronous systems with n
+processes).
+
+‘4The validitypropertycaptures the relation between the decision value and the proposed values.
+Changing this property results in other types of Consensus [Fischer 1983].
+240                                                                  T. D. CHANDRA AND S. TOUEG
+
+
+Every   procese   p executes the foliowin~
+
+procedure     propose
+   vp4-(L,l,...         ,l)                                          {p’s estimate of the pruposed values}
+   VP(P]4- IJp
+   AP t VP
+
+  Phase 1:        {astmchnmous rounds r~, 1< rP < n – 1}
+                  forrptltorb-l
+                     send (rP, AP, p) to all
+                     wait until ~q : received (rp, Aq, q) or ~ ~ 9P]              {que~ the ~ailum detector}
+                                     Aq,II)I r-+ed
+                     nwgsP(rP] t {(rp,                       (rp, AQ~ q)}
+                     Apt(L,        L,...,l)
+                     fork+        lton
+                         if Vp[k] = 1 and 3(rP, Aq, q) E msgsp[rP]          with A~[k] # 1 then
+                             Vp[k] t Aq[k]
+                               AP[k] + AQ[k]
+
+  Pheee 2: send VP to all
+           wait until ~q : received VQ or q 6 ‘3P]                                {que~   the faike   detector}
+           lastm9gsP t {Vq I received VQ}
+                  forktl   ton
+                     if WQ G hmtnasgsp with Vq[k] = 1 then Vp[k] t 1
+
+   Phase 3: decide( first non-l          component of Vp)
+                                  FIG.5. Solving Consensus using any Q c 9.
+
+
+   The algorithm runs through three phases. In Phase 1, processes execute n – 1
+asynchronous rounds (rP denotes the current round number of process p ) during
+which they broadcast and relay their proposed values. Each process p waits until
+it receives a round r message from every process that is not in 9P, before
+proceeding to round r + 1. Note that while p is waiting for a message from q in
+round r, it is possible that q is added to 9P. If this occurs, p stops waiting for q‘s
+message and proceeds to round r + 1.
+   By the end of Phase 2, correct processes agree on a vector based on the
+proposed values of all processes. The ith element of this vector either contains
+the proposed value of process pi or 1. We will show that this vector contains the
+proposed value of at least one process. In Phase 3, correct processes decide the
+first nontrivial component of this vector.
+   Let R = (F, H9, 1, S, T) be any run of the algorithm in Figure 5 using
+9 G Y in which all correct processes propose a value. We have to show that the
+termination, uniform validity, agreement and uniform integrity properties of
+Consensus hold.
+   Note that VP[q] is p‘s current estimate of q‘s proposed value. Furthermore,
+AP[q] = Uqat the end of round r if and only if p receives Vq, the value proposed
+by q, for the first time in round r.
+
+  LEMMA 6.1.1.                For all p and q, and in all phases,           VP[q] is either v~ or 1.
+
+  PROOF. Obvious from the algorithm.                        •l
+
+  LEMMA 6.1.2.                Eveiy correct process   eventual~     reaches Phase 3.
+Unreliable   Failure Detectors for Reliable Distributed   Systems                   241
+
+
+   PROOF (SKETCH). The only way a correct processp can be prevented from
+reaching Phase 3 is by blocking forever at one of the two wait statements (in
+Phase 1 and 2, respectively). This can happen only if p is waiting forever for a
+message from a process q and q never joins $lP. There are two cases to consider:
+(1) q crashes. Since S2 satisfies strong completeness, there is a time after which
+    q E !3P.
+(2) q does not crash. In this case, we can show (by an easy but tedious induction
+    on the round number) that q eventually sends the message p is waiting for.
+In both cases p is not blocked forever and reaches Phase 3.         ❑
+   Since ~ satisfies weak accuracy there is a correct process c that is never
+suspected by any process, that is, Vt E 5, Vp E II – F(t) :c @ H@(p, t). Let
+II,denote the set of processes that complete all n – 1 rounds of Phase 1, and Ilz
+denote the set of processes that complete Phase 2. We say VP s Vq if and only if
+for all k E ~, V,,[k] is either Vq[k] or 1-.
+   LEMMA 6.1.3. In every round r, 1 s r 5 n – 1, all processes          p E 111 receive
+(r, A{., c) from process c, that is, (r, Ac, c) is in msgsP[r].
+
+   PROOF. Since p E 111,p completes all n – 1 rounds of Phase 1. At each round r,
+since c @ 9P, p waits forand receives the message (r, AC,c) from c. ❑
+   LEMMA6.1.4.      For all p G 111, VC = VP at the end of Phase 1.
+
+   PROOF, Suppose for some process g, V=[q] # L at the end of Phase 1, From
+Lemma 6.1.1. VC[q] = I+. Consider any p E IIl. We must show that VP[q] = Vq at
+the end of Phase 1. This is obvious if p = c, thus we consider the case where p # c.
+   Let r be the first round in which c received Uq (if c = q, we define r to be O).
+From the algorithm, it is clear that A=[q] = Vq at the end of round r. There are
+two cases to consider:
+(l)rSn-         2. In round r + 1 s n – 1, c relays Vq by sending the mes-
+    sage (r + 1, AC, c) with AC[q] = Uq to all. From Lemma 6.1.3, p receives
+    (r + 1, A=, c) in round r + 1, From the algorithm, it is clear that p sets
+    VP[q] to 7Jq by the end of round r + 1.
+(2) r = n – 1. In this case, c received Vq for the first time in round n – 1.
+    Since each process relays Uq (in its vector A) at most once, it is easy to see
+    that ijq was relayed by all n – 1 processes in II – {c}, including p, before
+    being received by c. Since p sets VP[q] = Uq before relaying Vq, it follows
+    that VP[q] = II,, at the end of Phase 1. Cl
+   LEMMA6.1.5.      For all p E IIz, VC = VP al the end of Phase 2.
+
+  PROOF.  Consider   any p c IIz and q E II. We have to show                       that
+VP[q] = VC[q] at the end of Phase 2. There are two cases to consider:
+
+(1) V.[q] = Vq at the end of Phase 1. From Lemma 6.1.4, for all processes
+    p‘ E II, (including p and c), VP, [q] = Uq at the end of Phase 1. Thus, for all
+    the vectors V sent in Phase 2, V[q] = Vq. Hence, both VP[q] and V,[q]
+    remain equal to v~ throughout Phase 2.
+(2) Vr[q] = L at the end of Phase 1. Since c @ !3,, p waits for and receives V=
+    in Phase 2. Since V=[q] = ~, p sets VP[q] t J at the end of Phase 2. ❑
+242                                                             T. D. CHANDRAAND S. TOUEG
+
+  LEMMA 6.1.6 (UNIFORMAGREEMENT), No two processes                            decide diflerentfy.
+
+  PROOF. From Lemma 6.1.5, all processes that reach Phase 3 have the same
+vector V. Thus, all processes that decide, decide the same value. ❑
+  LEMMA      6.1.7.    For all p E IIz, J$[c] = v= at the end of Phase 2.
+   PROOF. From the algorithm, V=[c] = v= at the end of Phase 1. From Lemma
+6.1.4, for all q E II ~, Vq[c] = u= at the end of Phase 1. Thus, no process sends
+V with ~c] = 1 in Phase 2. From the algorithm, it is clear that for all p E IIz,
+VP[C] = v= at the end of Phase 2. •l
+
+  THEOREM 6,1.8.          The algorithm      in Figure 5 solves Consensus          using Y’ in asyn-
+chronous systems.
+
+   PROOF. From the algorithm in Figure 5, it is clear that no process decides
+more than once, and this satisfies the uniform integrity requirement of Consen-
+sus. By Lemma 6.1.6, the (uniform) agreement property of Consensus holds.
+From Lemma 6.1.2, every correct process eventually reaches Phase 3. From
+Lemma 6.1.7, the vector VP of every correct process has at least one non-l
+component in Phase 3 (namely, VP[C] = v=). From the algorithm, every process
+p that reaches Phase 3 decides on the first non-l component of VP. Thus, every
+correct process decides some non- L value in Phase 3—and this satisfies termina-
+tion of Consensus. From Lemma 6.1.1, this non-1 decision value is the proposed
+value of some process. Thus, uniform validity of Consensus is also satisfied. ❑
+  By Theorems 3.4 and 6.1.8, we have:
+  COROLLARY6.1.9.            Consensus     is solvable   using W in aqnchronous           systems.
+
+   6.2. SOLVINGCONSENSUSUSINGW’.            In the previous section, we showed how
+to solve Consensus using 9, a class of failure detectors that satisfy weak accuracy:
+at least one correct process is never suspected. That solution tolerates any
+number of process failures. If we assume that the maximum number of faulty
+processes is less than half then we can solve Consensus using 09, a class of
+failure detectors that satisfy only eventual weak accuracy. With such failure
+detectors, all processes may be erroneously added to the lists of suspects at one
+time or another. However, there is a correct process and a time after which that
+process is not suspected to have crashed. (Note that at any given time t,
+processes cannot determine whether any specific process is correct, or whether
+some correct process will never be suspected after time f.)
+   Let ~ denote the maximum number of processes that may crash.ls Consider
+asynchronous systems with ~ < [n/21, that is, where at least [(n + 1)/27 processes
+are correct. In such systems, the algorithm in Figure 6 solves Consensus using any
+Eventual Strong failure detector $3 E 0$3’.In other words, it works with any failure
+detector 9 that satisfies strong completeness and eventual weak accuracy.
+   This algorithm uses the rotating coordinator paradigm,lb and it proceeds in
+asynchronous “rounds”. We assume that all processes have a priori knowledge
+
+
+*5In the literature, t is often used instead of ~, the notation adopted here. In this paper, we reserve t
+to denote real-time.
+16See for example,Reischuk [1982], Chang and Maxemchuk [1984], Dwork et al. [1988], Berman et
+al. [19’89],and Chandra and Toueg [1990].
+Unreliable Failure Detectors for Reliable Distributed                         Systems                                   243
+
+
+Every process p executes       the following
+
+procedure    propose
+   estimateP + UP                                         {estimateP    is p‘s estimate      of the decision   uafue}
+   stateP + un&cided
+   ?-Pto                                                                 {rp is p‘s currentrmmd number}
+   tsp +- o                              {t., is the bt   ruund in which p updated  edirndeP, initiatly O}
+
+   {Rotate    thmtigh coordinator.       until decision is reuched}
+
+   while stateP = undeci&d
+     rPtrP+l
+     CP + (rP mod n) + 1                                                        {~ is the current coordinator}
+
+      Phase 1: {AU processes p send estimateP                to the current   coordinator}
+        send (p, rP, estimateP, tsP) to CP
+
+      Phase 2: { The current           coordinator gathers    [WI       estimates   and proposes     a new estimate}
+        if p = CP then
+              wait until [for [~                                                    ) from q]
+                                      1 processes g : reeeivad (9, rP, estimateq, taq
+              msgsp[rp] t {(q, rP, estirnate~, ts~) Ip received (~,rP,estimate~, ts~) from q)
+              t+ largest tsqsuch that (q, rP, estimateg, tsQ) 6 msgsP[rP]
+              estimateP + select one estimateq such that (q, rp, estimateq, t) E msgap[rp]
+              send (p, rp, estimatep) to atl
+
+      Phase S: {AH proasses       wait for the new estimate proposed by the current coordinator}
+        wait until [received (CP,rp, estimatecP ) from q or CP E 9P]{ Quety the jaihm detector}
+        if [received (CP,rp, estimateCP ) from CP]then             {p received estimate=, frum CP}
+            estimatep + e9timateCP
+            tsP + rP
+            send (p, rP, ack) to CP
+        else send (p, rP, nack) to CP                                  {p suspeets that CP crushed]
+
+
+                     The curmmt coordinator waits for [91         replies. lj they indicate that [ ~1
+      Phase 4:
+                     prvcesses adopted its estimate, the coordinator R-bmndcasta a decide meauage
+                 {                                                                                                        }
+         if p = CP then
+             wait   until   [for [*]        processes q : received (q, rp, ack) or (q, rP, nack)]
+              if [for [91     proceasea q : received (q, r~, ack)] then
+                  R-bmadcmt(p, rP, estimateP, deci&)
+
+{If p R-delivers    a decide message,      p decides acconfingl~}
+
+when R-delive<q, r~, estimateg,          decide)
+  if statep = un&cided then
+     deeide(estimateq )
+     WateP + dea”ded
+
+                                FIG.6.      Solving Consensus       using any Q ~ 0S?
+
+
+
+
+that during round r, the coordinator is process c = (r mod n) + 1. All messages
+are either to or from the “current” coordinator. Every time a process becomes a
+coordinator, it tries to determine a consistent decision value. If the current
+coordinator is correct and is not suspected by any surviving process, then it will
+succeed, and it will R-broadcast this decision value.
+  The algorithm in Figure 6 goes through three asynchronous epochs, each of
+which may span several asynchronous         rounds. In the first epoch, several
+decision values are possible. In the second epoch, a value gets focked: no
+244                                                          T. D. CHANDRA AND S. TOUEG
+
+
+other decision value is possible. In the third epoch, processes decide the
+locked value.1’
+   Each round of this Consensus algorithm is divided into four asynchronous
+phases. In Phase 1, every process sends its current estimate of the decision value
+timestamped with the round number in which it adopted this estimate, to the
+current coordinator, c. In Phase 2, c gathers r (n + 1)/21 such estimates, selects
+one with the largest timestamp, and sends it to all the processes as their new
+estimate, estirnateC. In Phase 3, for each process p, there are two possibilities:
+(1) p receives estimate= from c and sends an ack to c to indicate that it adopted
+    estimate= as its own estimate; or
+(2) upon consulting its failure detector module QIP, p suspects that c crashed,
+    and sends a nack to c.
+In Phase 4, c waits for [ (n + 1)/21 replies (acks or nacks). If all replies are acks,
+then c knows that a majority of processes changed their estimates to estirnateC,
+and thus estirnateC is locked. Consequently, c R-broadcasts a request to decide
+estimateC. At any time, if a process R-delivers such a request, it decides
+accordingly.
+   This algorithm relies on the assumption that ~ < Fn/21, that is, that at least
+F(fr + 1)/21 processes are correct. Note that processes do not have to know the
+value of ~. But they do need to have a priori knowledge of the list of (potential)
+coordinators. Let R be any run of the algorithm in Figure 6 using ~ G 09’ in
+which all correct processes propose a value. We have to show that the termina-
+tion, uniform validity, agreement and uniform integrity properties of Consensus
+hold.
+  LEMMA 6.2.1 (UNIFORM AGREEMENT).                   No two processes     decide diflerent~.
+
+   PROOF. If no process   ever decides,  the lemma   is trivially true. If any
+process decides, it must have previously R-delivered a message of the type
+(‘, ‘, –, decide). By the uniform integrity property of Reliable Broadcast and
+the algorithm, a coordinator previously R-broadcast this message. This coordina-
+tor must have received @ + 1)/21 messages of the type –, -, ack) in Phase 4.
+Let r be the smallest round number in which F(n + 1)/2 \ messages of the type
+(-, r, ack) are sent to a coordinator in Phase 3. Let c denote the coordinator of
+round r, that is, c = (r mod n ) + 1. Let estimate= denote c‘s estimate at the end
+of Phase 2 of round r. We claim that for all rounds r’ > r, if a coordinator c‘
+sends estimate=, in Phase 2 of round r’, then estimateC, = estimate=.
+   The proof is by induction on the round number. The claim trivially holds for
+r ‘ = r. Now assume that the claim holds for all r’, r s r’ < k. Let Ck be the
+coordinator of round k, that is, Ck = (k mod n) + 1. We will show that the
+claim holds for r’ = k, that is, if Ck sends estimateCk in Phase 2 of round k, then
+estimate=,   = estimate=.
+   From the algorithm it is clear that if Ck sends estimate=, in Phase 2 of round k
+then it must have received estimates from at least @ + 1)/21 processes. Thus,
+there is some process p such that (1) p sent a (p, r, ack) message to c in Phase
+3 of round r, and (2) (p, k, estimateP, tsP) is in msgsc,[k] in Phase 2 of round k.
+
+~TManY con~en~us algorithms in the literature have the property that a value gets locked before
+processes decide, see, for example, Reischuk [1982] and Dwork et al. [1988].
+Unreliable Failure Detectors for Reliable Distributed       Systems                        245
+
+
+Since p sent (p, r, ack) to c in Phase 3 of round r, tsP = r at the end of Phase
+3 of round r. Since tsP is nondecreasing, tsP a r in Phase 1 of round k. Thus, in
+Phase 2 of round k, (p, k, estimateP, tsP) is in rnsgsc,[k] with tsP > r. It is
+easy to see that there is no message (q, k, estimate~, ts~) in msgsc,[k] for which
+tsq 2 k. Let t be the largest ts~ such that (q, k, estimate~, tsq) is in msgsc, [k].
+Thus, r = t < k.
+   In Phase 2 of round k, c~ executes estimate,,              e   estimateq   where
+(q, k, estimateq, t) is in msgsC,[k].   From Figure 6, it is clear that q adopted
+estimuteq as its estimate in Phase 3 of round t.Thus, the coordinator of round t
+sent estimateq to q in Phase 2 of round t. Since r 5 t < k, by the induction
+hypothesis, estimateq = estimateC. Thus, Ck sets estimate=, - estimate= in Phase 2
+of round k. This concludes the proof of the claim.
+   We now show that if a process decides a value, then it decides estimateC.
+Suppose that some process p R-delivers (q, r~, estimate~, decide), and thus
+decides estimateq. By the uniform integrity property of Reliable Broadcast and
+the algorithm, process q must have R-broadcast (q, r~, estimate~, decide) in
+Phase 4 of round r~. From Figure 6, q must have received r (n + 1)/27 messages
+of the type (–, rq, ack) in Phase 4 of round rq. By the definition of r, r s rq.
+From the above claim, estimace~ = estimateC.     •!
+
+  LEMMA 6.2.2 (TERMINATION). Eve~                correct process   eventually   decides   some
+value.
+
+  PROOF.     There   are two possible   cases:
+
+(1) Some correct process decides. It must have R-delivered some message of the
+    type (–, –, –, decide). By the agreement property of Reliable Broadcast, all
+    correct processes eventually R-deliver this message and decide.
+(2) No correct process decides. We claim that no correct process remains
+    blocked forever at one of the wait statements. The proof is by contradiction.
+    Let r be the smallest round number in which some correct process blocks
+    forever at one of the wait statements. Thus, all correct processes reach
+    the end of Phase 1 of round r: they all send a message of the type
+    ( -, r, estimate, –) to the current coordinator c = (r mod n) + 1. Since a
+    majority of the processes are correct, at least r(n + 1)/21 such messages are
+    sent to c. There are two cases to consider:
+     (a) Eventually,     c   receives those messages and replies by sending
+         (c, r, estimate).    Thus, c does not block forever at the wait statement in
+         Phase 2.
+     (b) c crashes.
+     In the first case, every correct process eventually receives (c, r, estimalec ). In
+     the second case, since !21satisfies strong completeness, for every correct
+     process p there is a time after which c is permanently suspected by p, that is,
+     c G ‘3P. Thus in either case, no correct process blocks at the second wait
+     statement (Phase 3). So every correct process sends a message of the type
+       –, r, ack or (–, r, nack) to c in Phase 3. Since there are at least
+     / (n + 1)/2 \ correct processes, c cannot block at the wait statement of Phase
+     4. This shows that all correct processes complete round r—a contradiction
+     that completes the proof of our claim.
+246                                                    T. D. CHANDRAAND S. TOUEG
+
+
+         Since $3 satisfies eventual weak accuracy, there is a correct process q and a
+      time t such that no correct process suspects q after t.Let t‘ z t be a time
+      such that all faulty processes crash. Note that after time t‘ no process
+      suspects q. From this and the above claim, there must be a round r such that:
+
+      (a) All correct processes reach round r after time t’ (when no process
+          suspects q).
+      (b) q is the coordinator of round r (i.e., q = (r mod n) + 1).
+
+      In Phase 1 of round r, all correct processes send their estimates to q. In
+      Phase 2, q receives T(n + 1)/21 such estimates, and sends (q, r, estimateg)
+      to all processes. In Phase 3, since q is not suspected by any correct process
+      after time t, every correct process waits for q‘s estimate, eventually receives
+      it, and replies with an ack to q. Furthermore, no process sends a nack to q
+      (that can only happen when a process suspects q). Thus, in Phase 4, q
+      receives r(n + 1)/21 messages of the type (–, r, ack) (and no messages of
+      the type (–, r, nack)), and q R-broadcasts (q, r, estimateq, decide). By the
+      validity and agreement properties of Reliable Broadcast, eventually all
+      correct processes R-deliver q‘s message and decide—a contradiction. Thus,
+      case 2 is impossible, and this concludes the proof of the lemma. •l
+
+  THEOREM 6.2.3.          The algorithm in Figure   6 solves   Consensus   using   09’   in
+asynchronous    tystems    with f < rn/21.
+
+   PROOF. Lemma 6.2.1 and Lemma 6.2.2 show that the algorithm in Figure 6
+satisfies the (uniform) agreement and termination properties of Consensus,
+respectively. From the algorithm, it is clear that no process decides more than
+once, and hence the uniform integrity property holds. From the algorithm it is
+also clear that all the estimates that a coordinator receives in Phase 2 are
+proposed values. Therefore, the decision value that a coordinator selects from
+these estimates must be the value proposed by some process. Thus, uniform
+validity of Consensus is also satisfied. •l
+  By Theorems 3,4 and 6.2.3, we have:
+
+  COROLLARY6.2.4.           Consensus   is so fvable using OW in asynchronous      systems
+with f < Tn/21.
+
+  Thus, Consensus can be solved in asynchronous systems using any failure
+detector in OW, the weakest class of failure detectors considered in this paper.
+This leads to the following question: What is the weakest failure detector for
+solving Consensus? The answer to this question, given in a companion paper
+[Chandra et al. 1992], is summarised below.
+   Let OWO be the “weakest” failure detector in OW. Roughly speaking, OWO is
+the failure detector that exhibits all the failure detector behaviors allowed by
+the properties that define OW. More precisely, OWO consists of all the failure
+detector histories that satisfy weak completeness and eventual weak accuracy (for
+a formal definition see Chandra et al. [1992]). Chandra et al. [1992] show that
+O’WO is the weakest failure detector for solving Consensus in asynchronous
+systems with a majority of correct processes.
+Unreliable Failure Detectors for Reliable Distributed             Systems                     247
+
+
+  THEOREM         6.2.5        [CHANDRAET AL. 1992].          If a faihzre detector 9 can be used
+to solve Consensus         in an asynchronous       ~stem,   then 9 2 OWO in that system.
+
+By Corollary 6.2.4 and Theorem 6.2.5 we have:
+
+  COROLLARY6.2.6.                OWO is the weakest failure detector for solving Consensus      in
+asynchronous          ~stems    with f < [n/21.
+
+   6.3. A LOWERBOUNDON FAULT-TOLERANCE. In Section 6.1, we showed that
+failure detectors with pepetual accuracy (i.e., in 9, S2,Y, or W) can be used to
+solve Consensus in asynchronous systems with any number of failures. In
+contrast, with failure detectors with eventual accuracy (i.e., in 09, OQ, C&, or
+OW), our Consensus algorithms require a majority of the processes to be correct,
+It turns out that this requirement is necessary: Using 09 to solve Consensus
+requires a majority of correct processes. Since 09 5 0S’, the algorithm in Figure
+6 is optimal with respect to fault-tolerance.
+   The proof of this result (Theorem 6.3.1) uses standard “partitioning” tech-
+niques (e.g., Ben-Or [1983] and Bracha and Toueg [1985]). It is also a corollary
+of Theorem 4.3 in Dwork et al. [1988] together with Theorem 9 in Section 9.1.
+  THEOREM 6.3.1.               Consensus   cannot   be so!ved using 09      in asynchronous   sys-
+tems with f 2 rn/21.
+
+   PROOF. We give a failure detector QbE OW such that no algorithm can solve
+Consensus using $2 in asynchronous systems with f a [n/21. Informally, $3 is the
+weakest Eventually Perfect failure detector: it consists of all failure detector
+histories that satisfy strong completeness and eventual strong accuracy. More
+precisely, for every failure pattern F, 9(F)   consists of all failure detector
+histories H such that =t c 9, Vt’ = t, Vp G correct(F): q = crashed(F) =
+q E H(p,       t’).
+  The proof is by contradiction. Suppose algorithm A solves Consensus using ’21
+in asynchronous systems with f z [n/21. Partition the processes into two sets Ho
+and 111 such that II. contains [n/21 processes, and 111 contains the remaining
+Ln/ 2] processes. Consider the following two runs of A using $3:
+  Run RO = (Fo, HO, l., So, TO). All processes propose O. All processes
+in 110 are correct in FO, while those in 111 crash in FO at the beginning of the
+run, that is, Vt G 9: FO(t) = 111 (this is possible since f > Tn/2~). Every process
+in II. permanently suspects every process in II ~, that is, Vt E 9, Vp ~ II.:
+Ho(p, t) = IIl. Clearly, HO G Qb(FO) as required.
+
+   Run R, = (Fl, Hl, 11, SI, 7’1). All processes propose 1. All processes in 111
+are correct in F1, while those in 110crash in F’l at the beginning of the run, that
+is, Vt E 9: F, (t) = 11O. Every process in 111permanently suspects every process
+in 1’10,that is, Vr E 9, Vp G 111 :Hl(p,     t) = 11O. Clearly, HI G ‘2b(F1) as
+required.
+   Since RO and R, are runs of A using ~, these runs satisfy the specification of
+Consensus—in particular, all correct processes decide O in RO, and 1 in R,. Let
+q. E IIo,q ~ E 111, tO be the time at which qO decides O in Ro, and tl be the time
+at which q ~ decides 1 in R,. We now construct a run R~ = (F~, HA, IA, SA, TA)
+of algorithm A using !3 such that R~ violates the specification of Consensus—a
+contradiction.
+248                                                           T. D. CHANDRAAND S. TOUEG
+
+
+   In R~ all processes in 110 propose O and all processes in 111 propose 1. No
+process crashes in F~, that is, Vt E 9: F~ (t ) = 0. All messages from processes
+in 110to those in 111and vice-versa, are delayed until time max(ro, t ~). Until time
+max(to, t ~), every process in II. suspects every process in ill, and every process
+in 111 suspects every process in IIo. After time max(ro, t ~), no process suspects
+any other process. More precisely:
+
+                        Vt S   max(rO, t,):
+                                 Vp E rIo:HA(p,        t) = rI~
+
+                                 Vp G rI,:z-l~(p,      t) = 1-1o
+
+                        Vf > max(tO, tl), Vp G II: H~(p,           t) = 0.
+
+Note that HA E $?b(FA) as required.
+   Until time max(ro, tl), R~ is indistinguishable from I?. for processes in Ho, and R~
+is indistinguishable from R ~ for processes in 111.Thus, in R~, q. decides O at time to,
+while q, decides 1 at time t~.This violates the agreement property of Consensus. ❑
+   In the appendix, we refine the result of Theorem 6.3.1: We first define an
+infinite hierarchy of failure detector classes ordered by the maximum number of
+mistakes that failure detectors can make, and then we show exactly where in this
+hierarchy the majority requirement becomes necessary for solving Consensus
+(this hierarchy contains all the eight failure detector classes defined in Figure 1).
+
+7. On Atomic     Broadcast
+
+We now consider Atomic Broadcast, another fundamental problem in fault
+tolerant distributed computing, and show that our results on Consensus also
+apply to Atomic Broadcast. Informally, Atomic Broadcast requires that all
+correct processes deliver the same messages in the same order. Formally, Atomic
+Broadcast is a Reliable Broadcast that satisfies:
+
+   Total order. If two correct processes p and q deliver two messages m and m‘,
+then p delivers m before m‘ if and only if q delivers m before m‘.
+  The total order and agreement properties of Atomic Broadcast ensure that all
+correct processes deliver the same sequence of messages. Atomic Broadcast is a
+powerful communication paradigm for fault-tolerant distributed computing.18
+  We now show that Consensus and Atomic Broadcast are equivalent in asyn-
+chronous systems with crash failures. This is shown by reducing each to the
+other.19 In other words, a solution for one automatically yields a solution for the
+other. Both reductions apply to any asynchronous system (in particular, they do
+not require the assumption of a failure detector). This equivalence has important
+consequences regarding the solvability of Atomic Broadcast in asynchronous
+systems:
+
+
+M For ~xample, see Chang and Mmemchuk [1984], Cristian et al. [1985/1989], Birmmtand Joseph
+[1987], Pittelli and Garcia-Molina [1989], Budhiraja et al. [1990], Gopal et al. [1990], and Schneider
+[1990].
+19They are actually quiva]ent even in asynchronous systems with arbitrary failures. However, the
+reduction is more complex and is omitted here.
+Unreliable Failure Detectors for Reliable Distributed                     Systems                       249
+
+
+Every process p executes           the following
+
+Initialisation:
+
+     R-delivered + 0
+     A.delivered        G   0
+     ktO
+
+To execute A-broadmst(m):                                                                         { Task 1 }
+
+     R-broadcast(m)
+
+A-deliver(–)        occurs as follows:
+
+     when R-deliver(m)                                                                            { Task 2 }
+        Redelivered   t Rdeliuered               u {m)
+
+     when         Redelivered    – A-detivered     # 0                                            { Task 3 }
+           k+k+l
+            A-undelivered        + Redelivered     – Adelivered
+           propose(k, A.undelivered)
+           wait until decide(k, msgSetk )
+           Adeliverk   6 msgSetk     – A-delivered
+           atomically deliver at] messages in A_&liverk           in some deterministic   order
+           Adelivered   t Adelivered     U Adeliverk
+                                FtG.7. Using Consensus to solve Atomic Broadcast.
+
+(1) Atomic Broadcast cannot be solved with a deterministic algorithm in asyn-
+    chronous systems, even if we assume that at most one process may fail, and it
+    may only fail by crashing. This is because Consensus has no deterministic
+    solution in such systems [Fischer et al. 1985].
+(2) Atomic Broadcast can be solved using randomization       or unreliable failure
+    detectors in asynchronous systems. This is because Consensus is solvable
+    using these techniques in such systems (for a survey of randomised Consen-
+    sus algorithms, see [Chor and Dwork 1989]).
+Consensus can be easily reduced to Atomic Broadcast as follows [Dolev et al.
+1987], To propose a value, a process atomically broadcasts it. To decide a value,
+a process picks the value of the first message that it atomically delivers.20 By total
+order of Atomic Broadcast, all correct processes deliver the same first message.
+Hence, they choose the same value and agreement of Consensus is satisfied. The
+other properties of Consensus are also easy to verify. In the next section, we
+reduce Atomic Broadcast to Consensus.
+   7.1. REDUCING ATOMIC BROADCAST TO CONSENSUS. In Figure 7, we show
+how to transform any Consensus algorithm into an Atomic Broadcast algorithm
+in asynchronous systems. The resulting Atomic Broadcast algorithm tolerates as
+many faulty processes as the given Consensus algorithm.
+   Our Atomic Broadcast algorithm uses repeated (possibly concurrent, but
+completely independent) executions of Consensus. Intuitively, the kth execution
+of Consensus is used to decide on the kth batch of messages to be atomically
+
+  Note that thj~ reduction does nor require the assumption of a failure detector.
+1~1
+250                                                     T. D, CHANDRAAND S. TOUEG
+
+
+delivered. Processes disambiguate between these executions by tagging all the
+messages pertaining to the kth execution of Consensus with the counter k.
+Tagging each message with this counter constitutes a minor modification to any
+given Consensus algorithm. The propose and decide primitives corresponding to
+the kth execution of Consensus are denoted by propose(k, –) and decide(k, –).
+   Our Atomic Broadcast algorithm also uses the R-fvoadcast(m ) and R-deliv-
+er(m ) primitives of Reliable Broadcast. To avoid possible ambiguities between
+Atomic Broadcast and Reliable Broadcast, we say that a process A-broadcasts or
+A-delivers to refer to a broadcast or a delivery associated with Atomic Broadcast;
+and R-broadcasts or R-delivers to refer to a broadcast or delivery associated with
+Reliable Broadcast.
+   The Atomic Broadcast algorithm described in Figure 7 consists of three tasks,
+Task 1, Task 2, and Task 3, such that: (1) any task that is enabled is eventually
+executed, and (2) Task i can execute concurrently with Task j’ provided i # j.
+   When a process wishes to A-broadcast a message M, it R-broadcasts m
+(Task 1). When a process p R-delivers m, it adds m to the set R_deliveredP
+(Task 2). When p A-delivers a message m, it adds m to the set A_de/iveredP
+(Task 3). Thus, R_deliveredP – A _deliveredP, denoted A _undeliveredP, is the set
+of messages that p R-delivered but not yet A-delivered. Intuitively, these are the
+messages that were submitted for Atomic Broadcast but are not yet A-delivered,
+according top.
+   In Task 3, process p periodically checks whether A _unde/iveredP contains
+messages. If so, p enters its next execution of Consensus, say the kth one, by
+proposing A _undeliveredP as the next batch of messages to be A-delivered.
+Process p then waits for the kth Consensus decision, denoted nngSet ‘. Finally, p
+A-delivers all the messages in msgSetk except those it already A-delivered. More
+precisely, p A-delivers all the messages in the set A _deliver~ = msgSetk        –
+A _deliveredP, and it does so in some deterministic order that was agreed a priori
+by all processes, for example, in lexicographical order.
+  LEMMA 7.1.1.    For any two correct processes p and q, and any message             m, if
+m E R_deliveredP, then eventually m E R_delivered~.
+
+  PROOF. If m G R_deliveredP,       then p R-delivered m (in Task 2). Since p is
+correct, by the agreement property of Reliable Broadcast q eventually R-delivers
+m, and inserts m into R_delivered~.     •l
+
+  LEMMA 7.1.2.     For any two correct processes   p and q, and all k z 1:
+
+(1) Ifp executes propose(k,   –),   then q eventually   executes propose(k,   - ).
+(2) If p A-delivers messages in A _deliverP,k then q eventually A -delivers messages in
+    A _deliver$    and A _deliver~ = A _deliver~.
+
+   PROOF. The proof is by simultaneous induction on (1) and (2). Fork = 1, we
+first show that if p executes propose(l,         –), then q eventually executes
+propose(l,   –). When p executes propose(l,   -), R_de/iveredP must contain some
+message m. By Lemma 7.1.1, m is eventually in R_delivered~. Since A_de/iveredg
+is initially empty, eventually R_delivered~ - A _deliveredq # 0. Thus, q eventu-
+ally executes Task 3 and propose(l,    –).
+   We now show that if p A-delivers messages in A _deliver~, then q eventually
+A-delivers messages in A_deliver&        and A _deliver~ = A _deliver~. From the
+Unreliable Failure Detectors for Reliable Distributed   Systems                       251
+
+
+algorithm, if p A-delivers messages in A _de/iver~, it previously executed pro-
+pose( 1, –). From part (1) of the lemma, all correct processes eventually execute
+propose( 1, –). By termination and uniform integrity of Consensus, every correct
+process eventually executes decide(l,    -) and it does so exactly once. By
+agreement         of   Consensus,   all   correct    processes    eventually     execute
+decide( 1, msgSet  ] ) with the same msgSet 1. Since A _deiiveredP and A _delivered~
+are initially empty, and msgSet~ = msgSet~, we have A _deliver~ = A _de!iver~.
+   Now assume that the lemma holds for all k, 1 < k < /. We first show that if
+p executes propose(l,     - ), then q eventually executes propose(l,   - ). When p
+executes propose(l, – ), R_de/ivered    must contain some message m that is not in
+A _deliveredP. Thus, m is not in U~l]l A _deliver~. By the induction hypothesis,
+A _deliver~ = A _deliver$ for all 1 s k s 1 – 1. So m is not in U~j*l A _deliver~.
+Since m is in R_deliveredP,      by Lemma 7.1.1, m is eventually in R_deliveredq.
+Thus, there is a time after q A-delivers A _deliver&- ] such that there is a mes-
+sage in R _delivered~ – A _deliveredq. So q eventually executes Task 3 and
+propose(l,   –).
+   We now show that if p A-delivers messages in A _deliver~, then q A-delivers
+messages in A _deliver~, and A _deliver~ = A _deliver~. Since p A-delivers
+messages in A _deliver~, itmust have executed propose(l,      –). By part (1) of this
+lemma, all correct processes eventually execute propose(l,       –). By termination
+and uniform integrity of Consensus, every correct process eventually executes
+decide(l, – ) and it does so exactly once. By agreement of Consensus, all correct
+processes eventually execute decide(l, msgSet~) with the same msgSet’. Note
+that A _deliver~ = msgSet~ – U jL1l A _deliver~, and A _deliver~ = msgSet~ –
+U~~’l A _deliver~. By the induction hypothesis, A _deliver~ = A _deliver~ for all
+1 s k s i – 1. Since msgSet~ = msgSet~, A_deliver~ = A_deliver~.           ❑
+   LEMMA 7.1.3.     The algorithm   in Figure 7 satisfies the agreement   and total order
+properties of A-broadcast.
+
+  PROOF. Immediate from Lemma 7.1.2 and the fact that correct processes
+A-deliver messages in each batch in the same deterministic order. ❑
+     LEMMA 7.1.4 (VALIDITY). If a correct process A-broadcasts        m, then it eventu-
+ally A-delivers   m.
+
+  PROOF. The proof is by contradiction. Suppose a correct process p A-broad-
+casts m but never A-delivers m, By Lemma 7.1.3, no correct process A-delivers
+m.
+   By Task 1 of Figure 7, p R-broadcasts m. By the validity and agreement
+properties of Reliable Broadcast, every correct process q eventually R-delivers
+m, and inserts m in R_deliveredq        (Task 2). Since correct processes never
+A-deliver m, they never insert m in A _delivered. Thus, for every correct process
+q, there is a time after which m is permanently     in R_deliveredq-A _deiivered~.
+From Figure 7 and Lemma 7.1.2, there is a kl, such that for all 1> kl, all correct
+processes execute propose(l, –), and they do so with sets that always include m.
+   Since all faulty processes eventually crash, there is a k2 such that no faulty
+process executes propose(l,   – ) with 1 a kz. Let k = max(k ~, k2). Since all
+correct processes execute propose(k,      –), by termination     and agreement of
+Consensus, all correct processes execute decide(k,      msgSet~)     with the same
+msgSetk.    By uniform validity of Consensus, some process q executed
+252                                                               T. D. CHANDRAAND S. TOUEG
+
+
+propose(k,  msgSetk).   From our definition of k, q is correct and msgSetk
+contains m. Thus, all correct processes, including p, A-deliver m—a contradic-
+tion that concludes the proof. ❑
+
+   LEMMA 7.1.5 (UNIFORM INTEGRITY). For any nzessuge nz, each process A-
+delivers m at most once, and only if m was previously A-broadcast by sender(m).
+
+   PROOF. Suppose a process p A-delivers m. After p A-delivers m, itinserts m
+in A _deliveredP. From the algorithm, it is clear that p cannot A-deliver m again.
+   From the algorithm, p executed decide(k, msgSetk)        for some k and some
+msgSefk that contains m. By uniform validity of Consensus, some process q must
+have executed propose(k,     msgSetk). So q previously R-delivered all the mes-
+sages in msgSetk,    including m. By the uniform integrity property of Reliable
+Broadcast, process sender(m) R-broadcast m. So, sender(m) A-broadcast m. ❑
+
+   THEOREM 7.1.6. Consider any system (synchronous or asynchronous) subject to
+crash failures and where Reliable Broadcast can be implemented. The algorithm in
+Figure 7 transfomrs any algorithm for Consensus       into an Atomic Broadcast
+algorithm.
+
+   PROOF.       Immediate      from Lemmata 7.1.3, 7.1.4, and 7.1.5.               •!
+   Since Reliable Broadcast can be implemented in asynchronous systems with
+crash failures (Section 4), the above theorem shows that Atomic Broadcast is
+reducible to Consensus in such systems. As we showed earlier, the converse is
+also true. Thus:zl
+
+   COROLLARY7.1.7.             Consensus     and Atomic       Broadcast     are equivalent       in asyn-
+chronous     systems,
+  This equivalence immediately implies that our results regarding Consensus (in
+particular Corollaries 6.1.9 and 6.2.6, and Theorem 6.3.1) also hold for Atomic
+Broadcast:
+
+   COROLLARY7.1.8. Atomic Broadcast is solvable u.ring W in a~nchronous
+systems with f < n, and using OW in asynchronous systems with f < rn/21.
+
+   COROLLARY7.1.9.         OWO b the weakest failure                 detector    for solving Atomic
+Broadcast     in asynchronous systems with f < rn/21.
+
+  COROLLARY 7.1.10.     Atomic             Broadcast    cannot be solved using 09            in asynchro-
+nous systems with f z [n/21.
+
+   Furthermore,  Theorem 7.1.6 shows that by “plugging in” any randomued
+Consensus algorithm (such as the ones in Chor and Dwork [1989]) into the
+algorithm of Figure 7, we automatically get a randomized algorithm for Atomic
+Broadcast in asynchronous systems.
+
+   COROLLARY7.1.11.             Atomic Broadcast        can be solved by randomized            algorithms
+in asynchronous         systems with f < rn/21.
+
+
+
+21 ~]   ~h~ ~e~ult~ stated hencefofih in this section are for systems with crash failures.
+Unreliable Failure Detectors for Reliable Distributed           Systems                        253
+
+
+8. Comparing     Faiiure Detector     Classes
+
+We already saw some relations between the eight failure detector classes that we
+defined in this paper (Figure 1). In particular, in Section 3 (Corollary 3.5), we
+determined that @ = !2, Y’s W, 0!?? = 09, and 09 = OW, This result allowed
+us to focus on four classes of failure detectors, namely 9, 9’, O@, and 09, rather
+than all eight. It is natural to ask whether these four classes (which require
+Strong Completeness and span the four different types of accuracy) are really
+distinct or whether some pairs are actually equivalent. More generally, how are
+Q1’,9’, OQ, and 09’ related under the 5 relation? This section answers these
+questions.22
+   Clearly, Q > Y’, 0!2? ? 09’, 9’ 5 09, Y’ z 09’, and 9 > 09’. Are these
+relations “strict”? For example, it is conceivable that Y 5 !?. If this was true, !7
+would be equivalent to Y’(and the relation $9 5 Y’would not be strict). Also, how
+are Y and 0’2? related? Is Y 5 09 or 09 5 .9’?
+   To answer these questions, we begin with some simple definitions. Let % and
+%‘ be two classes of failure detectors. If % Z %‘, and % is not equivalent to %”,
+we say that ‘%’is strictly weaker than %, and write % > %‘. The following holds:
+  THEOREM 8.1. P>              Y,O$P>OY,            L??> 09,      9>   OY, and9>             09.
+Furthermore, 9 and 09         are incomparable,     that is, neither Y ? 09 nor 09          ? 9.
+
+   The above theorem and Corollary 3.5 completely characterize the relationship
+between the eight failure detector classes (defined in Figure 1) under the
+reducibility relation. Figure 8 illustrates these relations as follows: there is an
+undirected edge between equivalent failure detector classes, and there is a directed
+edge from failure detector class C to class C‘ if C‘ is strictly weaker than C.
+   Even though 0$ is strictly weaker than 9, Y, and 09, it is “strong enough” to
+solve Consensus and Atomic Broadcast, two powerful paradigms of fault-tolerant
+computing. This raises an interesting question: Are there any “natural” problems
+that require classes of failure detectors that are stronger than 09’?
+   To answer this question, consider the problem of Terminating Reliable Broad-
+cast, abbreviated here as TRB [Hadzilacos and Toueg 1994]. With TRB there is a
+distinguished process, the senders, that is supposed to broadcast a single message
+from a set 4 of possible messages. TRB is similar to Reliable Broadcast, except
+that it requires that every correct process always deliver a message—even if the
+sender s is faulty and, say, crashes before broadcasting. For this requirement to
+be satisfiable, processes must be allowed to deliver a message that was not
+actually broadcast. Thus, TRB allows the delivery of a special message F, @ W,
+which states that the senders is faulty (by convention, .render(F, ) = s).
+   With TRB for sender s, s can broadcast any message m E M, processes can
+deliver any message m E M U {F,}, and the following hold:
+  Termination.       Every correct process eventually delivers exactly one message.
+  Validi&.     If s is correct      and broadcasts         a message m, then it eventually
+delivers m.
+  Agreement.   If a correct process             delivers    a message     m,    then   all correct
+processes eventually deliver m.
+
+22The results presented here are not central to this paper, hence the proofs are omitted.
+254                                                               T. D. CHANDRAAND S. TOUEG
+
+
+
+
+      I               1             I             1
+      I               t                           I
+                                    I
+      #               I             1             I
+
+                                                                             eight failure detector
+
+
+
+
+                      9’                          09
+
+
+            C ---->           C’: C’ is strictly weaker than C’
+            c    —            C’: C is equivalent to C’
+
+
+
+  lnte~”~.   If a correct process delivers a message m then sender(m)                        = s.
+Furthermore, if m # F,, then m was previously broadcast bys.
+The reader should verify that the specification of TRB for senders implies that a
+correct process delivers the special message F. only ifs is indeed faulty.
+   TRB is a well-known and studied problem, usually known under the name of
+the Byzantine Generals’ Problem [Pease et al. 1980; Lamport et al. 1982].x It
+turns out that in order to solve TRB in asynchronous systems one needs to use
+the strongest class of failure detectors that we defined in this paper. Specifically:
+
+  THEOREM 8.2
+
+(1) TRB can be solved              using 9     in asynchronous     ~stems   with any number     of
+      crashes.
+(2) TR3 cannot be solved using either 9, 09,             or 09 in asynchronous systems. This
+      impossibility       result holds even under the assumption that at most one crash may
+      occur.
+
+   In fact, 9 is the weakest failure detector class that can be used to solve
+repeated instances of TRB (multiple instances for each process as the distin-
+guished sender).
+   TRB is not the only “natural” problem that can be solved using $!?’but cannot
+be solved using OW. Other examples include the non-blocking atomic conzmit-
+ment problem [Chandra and Larrea 1994; Guerraoui 19951, and a form of leader
+electi& [Sahel-and Marzullo 1995]. Figure 9 summarises t“hese results.
+
+
+
+
+23we ~efra~nfrom usingthis     name because it is often associated with @z@rtine~ai~ures,while we
+consider only crash failures here.
+Unreliable Failure Detectors for Reliable Distributed       Systems                           255
+
+
+
+
+                                                      Set   of problems      solvable   in:
+
+
+
+
+           non-blocking atomic commit                 Synchronous systems
+
+
+                                                      Asynchronous systems using 9
+
+
+                                                      Asynchronous systems using OW
+
+
+                                                      Asynchronous systems
+
+
+
+            FIG.9. Problem solvability in different distributed computing models.
+
+9. Related Work
+   9.1. PARTIAL SYNCHRONY. Fischer et al. [1985] showed that Consensus can-
+not be solved in an asynchronous system subject to crash failures. The fundamen-
+tal reason why Consensus cannot be solved in completely asynchronous systems is
+the fact that, in such systems, it is impossible to reliably distinguish a process that
+has crashed from one that is merely very slow. In other words, Consensus is
+unsolvable because accurate failure detection is impossible. On the other hand, it
+is well-known that Consensus is solvable (deterministically) in completely syn-
+chronous systems —that is, systems where clocks are perfectly synchronised, all
+processes take steps at the same rate and each message arrives at its destination
+a fixed and known amount of time after it is sent. In such a system we can use
+timeouts to implement a “perfect” failure detector—that is, one in which no
+process is ever wrongly suspected,      and every faulty process is eventually     sus-
+pected. Thus, the ability to solve Consensus         in a given system is intimately
+related to the failure detection capabilities of that system. This realisation led us
+to augment the asynchronous model of computation with unreliable failure
+detectors as described in this paper.
+   A different tack on circumventing the unsolvability of Consensus is pursued in
+Dolev et al. [1987] and Dwork et al. [1988]. The approach of those papers is
+based on the observation that between the completely synchronous and com-
+pletely asynchronous models of distributed systems there lie a variety of interme-
+diate “partially synchronous” models.
+   In particular, Dolev et al. [1987] define a space of 32 models by considering
+five key parameters, each of which admits a “favorable” and an “unfavorable”
+setting. For instance, one of the parameters is whether the maximum message
+delay is bounded and known (favorable setting) or unbounded (unfavorable
+setting), Each of the 32 models corresponds to a particular setting of the 5
+parameters. Dolev et al. [1987] identify four “minimal” models in which Consen-
+sus is solvable. These are minimal in the sense that the weakening of any
+parameter from favorable to unfavorable would yield a model of partial syn-
+chrony where Consensus is unsolvable. Thus within the space of the models
+256                                                              T. D, CHANDRAAND S. TOUEG
+
+
+Every process p executes      the foJJowing
+
+outputp t 0
+foratlq   EfI                         {AP(q) denotes the duration       of p‘s   time-out interuai for q}
+      AP(q) t default time-out interval
+
+cobegin
+II Task 1: repeat      periodically
+      aend “p-is-alive” to all
+
+II Task 2: repeat periodically
+     for all g C f’f
+          if q $! Outputp and
+               p did not receive “q-is-aJive” during the last AP(9) ticks of p’s clock
+               Outputp t Outputp u {q}             {p times-out on q: it now suspects q has cmshd}
+
+II Tad 3: when receive “q-is-alive”     for some q
+      if q E Outputp                          {p knows   that it prematurel~ timed-out on q}
+          ou~Pu~p- ou~Pu~p- {q}                          {1. p repents on q, and}
+          AP(q) t AP(g) + I                              {2. p incrwwes its time-out period for q)
+coend
+        FIG. 10.   A time-out based implementation of ‘2bE 09 in models of partial synchrony.
+
+
+considered, Dolev et al. [1987] delineate precisely the boundary between solv-
+ability and unsolvability of Consensus, and provides an answer to the question
+“What is the least amount of synchrony sufficient to solve Consensus?”.
+   Dwork et al. [1988] consider two models of partial synchrony. Roughly
+speaking, the first model (denoted .& here) stipulates that in every execution
+there are bounds on relative process speeds and on message transmission times,
+but these bounds are not known. In the second model (denoted .&) these bounds
+are known, but they hold only after some unknown time (called GST for Globs/
+Stabilization Time). In each one of these two models (with crash failures), it is
+easy to implement an Eventually Perfect failure detector ~ E Of??.In fact, we can
+implement such a failure detector in a weaker model of partial synchrony
+(denoted .M3): one in which bounds exist but they are not known and they hold
+only after some unknown time GST. 24 Since OQ?’> OW, by Corollaries 6,2.4 and
+7.1.8, this implementation immediately gives Consensus and Atomic Broadcast
+solutions for J4&and, a fortiori, for Ml and d.42.
+   The implementation of $3 ~ W for .M3,which uses an idea found in Dwork et
+al. [1988], works as follows (see Figure 10). To measure elapsed time, each
+process p maintains a local clock, say by counting the number of steps that it
+takes. Each process p periodically sends a “p-is-alive” message to all the
+processes. If p does not receive a “q-is-alive” message from some process q for
+AP(q) time units on its clock, p adds q to its list of suspects. If p receives
+“q-is-alive” from some process q that it currently suspects, p knows that its
+previous time-out on q was premature. In this case, p removes q from its list of
+suspects and increases its time-out period AP(q ).
+   THEOREM9.1. Consider a partially synchronous system S that conforms to M.3,
+that is, for every run of S there is a Global Stabilization Time (GST) after which
+
+
+24 Note that every system that   conforms to Ml or.% also conforms ‘0 ‘3.
+Unreliable    Failure Detectors for Reliable Distributed              Systems                         257
+
+
+some bounds on relative process speeds and message transmission times hold (the
+values of G.ST and these bounds are not known). The algorithm in Figure 10
+implements an Eventually Perjec~ failure detector !2 G 09? in S.
+
+   PROOF (SKETCH). We first show that strong completeness       holds, that is,
+eventually every process that crashes is permanently suspected by every correct
+process. Suppose a process q crashes. Clearly, q eventually stops sending
+“q-is-alive” messages, and there is a time after which no correct process receives
+such a message. Thus, there is a time t‘ after which: (1) all correct processes
+time-out on q (Task 2), and (2) they do not receive any message from q after this
+time-out. From the algorithm, it is clear that after time t‘, all correct processes
+will permanently suspect q. Thus, strong completeness is satisfied.
+   We now show that eventual strong accuracy is satisfied. That is, for any correct
+processes p and q, there is a time after which p will not suspect q. There are two
+possible cases:
+(1) Process p times-out on q finitely often (in Task 2). Since q is correct and
+    keeps sending “q-is-alive”   messages forever, eventually p receives one such
+    message after its last time-out on q. At this point, q is permanently removed
+    from p’s list of suspects (Task 3).
+(2) Process p times-out on q infinitely often (in Task 2). Note that p times-out
+    on q (and so p adds q to outputP) only if q is not already in outputP. Thus, q
+    is added to and removed from outputP infinitely often. Process q is removed
+    from outpu[,, only inTask 3,and every time this occurs p’s time-out period
+    A,}(q) is increased. Since this occurs infinitely often, AP(q) grows un-
+    bounded. Thus, eventually (1) the bounds on relative process speeds and
+    message transmission times hold, and (2) AP(q) is larger than the correct
+    time-out based on these bounds. After this point, p cannot time-out on q any
+    more—a contradiction to our assumption that p times-out on q infinitely
+    often. Thus, Case 2 cannot occur. •l
+   [n this paper, we have not considered communication failures. In the second
+model of partial synchrony of Dwork et al. [1988], where bounds are known but
+hold only after GST, messages sent before GST can be lost. We now re-define
+.4tz and Ats analogously—messages that are sent before GST can be lost—and
+examine how this affects our results so far. 25 The failure detector algorithm in
+Figure 10 still implements an Eventually Perfect failure detector Qt E O@ in .tlJ,
+despite initial message losses now allowed by this model. On the other hand,
+these initial message losses invalidate the Consensus algorithm in Figure 6. It is
+easy to modify this algorithm, however, so that it does work in -MS: One can
+adopt the techniques used in Dwork et al. [1988] to mask the loss of messages
+that are sent before GST.
+   Failure detectors can be viewed as a more abstract and modular way of
+incorporating partial synchrony assumptions into the model of computation.
+Instead of focusing on the operational features of partial synchrony (such as the
+parameters that define .ttl, Mz, and m~, or the five parameters considered in
+Dolev et al. [1987]). we can consider the axiomatic properties that failure
+
+
+‘5 Note that model .44, is now so-icrly weaker   than   models M, and AZ: there exist systems thai conform
+to .tl ~but not to .44, or .442.
+258                                                        T. D. CHANDRA AND S. TOUEG
+
+
+detectors must have in order to solve Consensus. The problem of implementing a
+certain type of failure detector in a specific model of partial synchrony becomes
+a separate issue; this separation affords greater modularity.
+   Studying failure detectors rather than various models of partial synchrony has
+other advantages as well. By showing that Consensus is solvable using a certain
+type of failure detector we show that Consensus is solvable in all systems in which
+this type of failure detector can be implemented. An algorithm that relies on the
+axiomatic properties of a failure detector is more general, more modular, and
+simpler to understand than one that relies directly on specific operational
+features of partial synchrony (that can be used to implement this failure
+detector).
+   From this more abstract point of view, the question “What is the least amount
+of synchrony sufficient to solve Consensus?” translates to “What is the weakest
+failure detector sufficient to solve Consensus?”. In contrast to Dolev et al.
+[1987], which identified a set of minimal models of partial synchrony in which
+Consensus is solvable, Chandra et al. [1992] exhibit a single minimum failure
+detector, OWO, that can be used to solve Consensus. The technical device that
+makes this possible is the notion of reduction between failure detectors.
+   9.2. UNRELIABLE FAILURE DETECTION IN SHARED MEMORY SYSTEMS. Loui
+and Abu-Amara      [1987] showed that in asynchronous           shared memory systems
+with atomic read/write    registers, Consensus cannot be solved even if at most one
+process may crash.26 This raises the following question:          Can we use unreliable
+failure detectors to circumvent      this impossibility result?
+   Lo and Hadzilacos     [1994J showed that this is indeed possible: They gave an
+algorithm that solves Consensus using OW (in shared memory systems with
+registers). This algorithm tolerates any number of faulty processes-in    contrast to
+our result showing that in message-passing systems OW can be used to solve
+Consensus only if there is a majority of correct processes. Recently, Neiger [1995]
+extended the work of Lo and Hadzilacos by studying the conditions under which
+unreliable failure detectors boost the Consensus power of shared objects.
+   9.3. THE 1s[s TOOLKIT. With our approach, even if a correct process p is
+repeatedly suspected to have crashed by the other processes, it is still required to
+behave like every other correct process in the system. For example, with Atomic
+Broadcast, p is still required to A-deliver the same messages, in the same order,
+as all the other correct processes. Furthermore,      p is not prevented from
+A-broadcasting messages, and these messages must eventually be A-delivered by
+all correct processes (including those processes whose local failure detector
+modules permanently suspect p to have crashed). In summary, application
+programs that use unreliable failure detection are aware that the information
+they get from the failure detector may be incorrect: they only take this
+information as an imperfect “hint” about which processes have really crashed.
+Furthermore,   processes are never “discriminated against” if they are falsely
+suspected to have crashed.
+
+
+26me proof in ~ui and Abrs.Arnara [1987] is similar to the proof that COnSenW5 Is impossiblein
+message-passing systems when send and receive are not part of the same atomic step [Dolev et al,
+1987],
+Unreliable Failure Detectors for Reliable Distributed                 Systems                        259
+
+
+   Isis takes an alternative approach based on the assumption that failure
+detectors rarely make mistakes [Ricciardi and Birman 1991]. In those cases in
+which a correct process p is falsely suspected by the failure detector, p is
+effectively forced “to crash” (via a group membership protocol that removes p
+from all the groups that it belongs to). An application using such a failure
+detector cannot distinguish between a faulty process that really crashed, and a
+correct one that was forced to do so. Essentially, the Isis failure detector forces
+the system to conform to its view. From the application’s point of view, this
+failure detector looks “perfect”: it never makes visible mistakes.
+   For the Isis approach to work, the low-level time-outs used to detect crashes
+must be set ve~ conservatively: Premature time-outs are costly (each results in
+the removal of a process), and too many of them can lead to system shutdown.27
+In contrast, with our approach, premature time-outs (e.g., failure detector
+mistakes) are not so deleterious: they can only delay an application. In other
+words, premature time-outs can affect the iiveness but not the safety of an
+application. For example, consider the Atomic Broadcast algorithm that uses
+OW. If the given failure detector “malfunctions”, some messages maybe delayed,
+but no message is ever delivered out of order, and no correct process is forced to
+crash. If the failure detector stops malfunctioning, outstanding messages are
+eventually delivered. Thus, we can set time-out periods more aggressively than a
+system like Isis: in practice, we would set our failure detector time-out periods
+closer to the average case, while systems like Isis must set time-outs closer to the
+worst-case.
+   9.4, OTHER WORK. Several works in fault-tolerant computing used time-outs
+primarily or exclusively for the purpose of failure detection. An example of this
+approach is given by an algorithm in Attiya et al. [1991], which, as pointed out by
+the authors, “can be viewed as an asynchronous algorithm that uses a fault
+detection (e.g., timeout) mechanism.”
+   Recent work shows that the Group Membership problem cannot be solved in
+asynchronous systems with crash failures, even if one adopts the Isis approach of
+crashing processes that are suspected to be faulty but are actually correct
+[Chandra et al. 1995]. As with Consensus and Atomic Broadcast, this impossibil-
+ity result can be circumvented by the addition of unreliable failure detectors.
+  Appendix A.         A Hierarchy         of Failure       Detector       Classes    and    Bounds   on
+Fault- Tolerance
+
+In the preceding sections, we introduced the concept of unreliable failure
+detectors that could make mistakes, and showed how to use them to solve
+Consensus despite such mistakes. Informally, a mistake occurs when a correct
+process is erroneously added to the list of processes that are suspected to have
+crashed. In this appendix, we formalize this concept and study a related property
+that we call repentance. Informally, if a process p learns that its failure detector
+module QIP made a mistake, repentance requires $3P to take corrective action.
+Based on mistakes and repentance, we define a hierarchy of failure detector
+classes that will be used to unify some of our results, and to refine the lower
+bound on fault-tolerance given in Section 6.3. This infinite hierarchy consists of a
+
+m For ~xamplc,   the timeout   period in the current   version   of 1S1Sis greater than lo seconds
+260                                                         T. D. CIMNDRA AND S, TOUEG
+
+
+continuum of repentant failure detectors          ordered    by the maximum number of
+mistakes that each one can make.
+Al, Mistakes and Repentance
+We now define a mistake. Let R = (F, H, I, S, T) be any run using a
+failure detector $3.$3 makes a mistake in Rat time tat process p about process q if
+at time r, p begins to suspect that q has crashed even though q @ F(t). Formally:
+
+                   [q@     ~(~), q E ff(p, t)] and [q @ II(P,      t -   l)].
+Such a mistake is denoted by the tuple (R, p, q, t). The set of mistakes made
+by ’23in R is denoted by M(R).
+   Note that only the erroneous addition of q into $3P is counted as a mistake at
+p. The continuous retentwn of q into QilPdoes not count as additional mistakes.
+Thus, a failure detector can make multiple mistakes at a processp about another
+process q onIy by repeatedly adding and then removing q from the set 9P. In
+practice, mistakes are caused by premature time-outs.
+   We define the following four types of accuracy properties for a failure detector
+!3 based on the mistakes made by $3:
+  Strongly   k-mistaken.      Q makes    at most k mistakes.       Formally,     $3 is strongly
+k-mistaken   ifi
+
+                                 VR using Q: IM(R)I s k.
+
+  Weakly k-mistaken.  There is a correct process p such that 9 makes at most k
+mistakes about p. Formally, ~ is weakly k-mistaken it
+
+                   VR = (F, H, I, S, T) using ~, 3p G correct(F):
+
+                           I{(R, f?>P, 1):(R,   q, p, t) C M(R)}    Is k
+
+  Strongly finitely mistaken.     Qllmakes a finite number of mistakes. Formally, !3 is
+strongly finitely mistaken ifi
+
+                                VR using 9: M(R)     is finite.
+
+In this case, it is clear that there is a time t after which $3 stops making mistakes
+(it may, however, continue to give incorrect information).
+   Weakly finitely mistaken. There is a correct process p such that 9 makes a
+finite number of mistakes about p. Formally, Qilis weakly finitely mistaken if
+
+                   VR = (F, H, 1, S, T) using Q, 3p G correct(F):
+
+                           {(R, q, p, t): (R, q, p, t) G M(R)}      is finite.
+
+In this case, there is a time t after which ~ stops making mistakes about p (it
+may, however, continue to give incorrect information even about p).
+   For most values of k, the properties mentioned above are not powerful enough
+to be useful. For example, suppose every process permanently suspects every
+other process. In this case, the failure detector makes at most n (n – 1)
+mistakes, but it is clearly useless since it does not provide any information.
+Unreliable Failure Detectors for Reliable Distributed         Systems                      261
+
+
+   The core of this problem is that such failure detectors are not forced to reverse
+a mistake, even when a mistake becomes “obvious” (say, after a process q replies
+to an inquiry that was sent to q after q was suspected to have crashed). However,
+we can impose a natural requirement to circumvent this problem. Consider the
+following scenario. The failure detector module at process p erroneously adds q
+to $3P at time t.Subsequently, p sends a message to q and receives a reply. This
+reply is a proof that q had not crashed at time t.Thus, p knows that its failure
+detector module made a mistake about q. It is reasonable to require that, given
+such irrefutable evidence of a mistake, the failure detector module at p takes the
+corrective action of removing q from 9P. In general, we can require the
+following property:
+
+
+  Repentance,   If a correct process p eventually knows that q @ F(t),                  then at
+some time after t,q @ QbP. Formally, 9 is repentant if
+
+    VR = (F, H, I, S, T) using~,        Vt, Vp, q G II:
+
+            [3’ :(R, t’) != K,(q   @ F(t))]     ~     [Y=      [ :q @ H(p,      d’)].
+
+The knowledge theoretic operator KP can be defined formally [Halpern and
+Moses 1990]. Informally, (R, t) + I#Jiff in run R at time t, predicate @holds. We
+say (R, t) -P (R’, r’) iff the run R at time t and the run R’ at time t’ are
+indistinguishable top. Finally,
+
+                (R,t)kKP(@)@       [V (R’,r’)       -P(R,t)    :( R’,t’)i=@].
+
+
+For a detailed treatment of Knowledge Theory as applied to distributed systems,
+the reader should refer to the seminal work done in Moses et al. [1986] and
+Halpern and Moses [1990].
+   Recall that in Section 2.2 we defined a failure detector to be a function that
+maps each failure pattern to a set of failure detector histories. Thus, the
+specification of a failure detector depends solely on the failure pattern actually
+encountered. In contrast, the definition of repentance depends on the knowledge
+(about mistakes) at each process. This in turn depends on the algorithm being
+executed, and the communication pattern actually encountered. Thus, repentant
+failure detectors cannot be specified solely in terms of the failure pattern actually
+encountered. Nevertheless, repentance is an important property that we would
+like many failure detectors to satis@.
+   We now informally define a hierarchy of repentant failure detectors that differ
+by the maximum number of mistakes they can make. As we just noted, such
+failure detectors cannot be specified solely in terms of the failure pattern actually
+encountered, and thus they do not fit the formal definition of failure detectors
+given in Section 2.2.
+
+A2. A Hierarchy of Repentant    Failure Detectors
+
+Consider the failure detectors that satisfy weak completeness, one of the four
+types of accuracy that we defined in the previous section, and repentance. These
+262                                                   T. D. CHANDRAAND S. TOUEG
+
+failure detectors can be grouped       into four classes according           to the actual
+accuracy property that they satisfy:
+
+  $fW(k): the class of Strong@ lc-Mists/cen failure detectors,
+
+  Y’S: the class of Strongly Finitely Mistaken failure detectors,
+
+  W g(k):   the class of WeaMy k-MMaken       failure detectors,   and
+
+  W%:   the class of Weakly Finite~ Mistaken failure detectors.
+
+   Clearly, 9’9(0) > 9W(1) > “. .2 !Y~(k) > Y%(k + 1) >. .-2 9’9. A
+similar order holds for the W%. Consider a system of n processes of which at
+most f may crash. In this system, there are at least n – f correct processes. Since
+any failure detector !3 E 9’%( (n – f ) – 1) makes fewer mistakes than
+the number of correct processes, there is at least one correct process that
+$3 never suspects. Thus, $3 is also weakly O-mistaken, and we conclude that
+Y%((n     – f) – 1) > WW(0). Furthermore,         it is clear that $% > W~.
+   These classes of repentant failure detectors can be ordered by reducibility into
+an infinite hierarchy, which is illustrated in Figure Al (an edge - represents the
+5 relation). Each failure detector class defined in Section 2.4 is equivalent to
+some class in this hierarchy. In particular, it is easy to show that:
+
+
+
+
+For example, it is easy to see that the algorithm in Figure 3 transforms any
+failure detector in W9 into one in OW. Other conversions are similar or
+straightforward and are therefore omitted. Note that V and OW are the strongest
+and weakest failure detector classes in this hierarchy, respectively. From Corol-
+laries 6.1.9 and 7.1.8, and Observation A2.1, we have:
+
+   COROLLARY A2.2.     Consensus and Atomic      Broadcast    are solvable using %%(0)
+in asynchronous systems with f < n.
+
+  Similarly, from Corollaries   6.2.4 and 7.1.8, and Observation         A2. 1, we have:
+
+   COROLLARY A2.3.    Consensus and Atomic       Broadcast    are solvable using W% in
+asynchronous systems with f < (n/21.
+
+  A3. Tight Bouna3 on Fault-Tolerance
+Since Consensus and Atomic Broadcast are equivalent in asynchronous systems
+with any number of faulty processes (Corollary 7.1.7), we can focus on establish-
+ing fault-tolerance bounds for Consensus. In Section 6, we showed that failure
+detectors with perpetual accuracy (i.e., in 9, $2.,Y’, or W) can be used to solve
+Consensus in asynchronous systems with any number of failures. In contrast, with
+failure detectors with eventual accuracy (i.e., in 0!7’, 09, OY, or OW), Consensus
+can be solved if and only if a majority of the processes are correct. We now refine
+this result by considering each failure detector class % in our infinite hierarchy,
+and determining how many correct processes are necessary to solve Consensus
+using %. The results are illustrated in Figure Al.
+Unreliable   Failure Detectors for Reliable Distributed                                     Systems                         263
+
+
+                                                   (atron.srnt)
+                                     .YW(0)~ ~ E $??           Con*nsuasolvable
+                                                           .....                                           for all J < n
+
+                                        f#~(l)    .. . .. Consensus   solvable ifT f < n
+
+                                 \            Yq(2).....Conaensus          solvable      ifl ~ < n - I
+                                             ‘,
+
+
+
+                                                     WWltJ        -   1)-c0n*n8us             ~l=ble     ifl f <   ~~1+‘2
+              Consensus
+                      snlvable
+                                                          SW(LLjJ)...-c0n=n8us               ~lvable     iff f < ~~1 + 1
+              forall~<n
+
+
+
+
+              Consensus   solvable
+                                                                      ‘,           yge       09s? 0%
+                  iffj<   [4jl
+                                                                       J     ~$z          O!j= Ow(weale)
+                                       r’”
+
+
+FIG. Al. Classes of repentant failure detectors ordered by reducibility. For each class %, the
+maximum number of faulty processes for which Consensus can be solved using % is given.
+
+
+  There are two cases depending on whether we assume that the system has a
+majority of correct processes or not. If a majority of the processes are correct,
+Consensus can be solved with OW, the weakest failure detector class in the
+hierarchy. Thus:
+  Observation  A3. 1. In asynchronous systems with f < [n/2], Consensus can
+be solved using any failure detector class in the hierarchy of Figure Al.
+   We now consider the solvability of Consensus in systems that do not have a
+majority of correct processes. For these systems, we determine the maximum m
+for which Consensus is solvable using Y27(rn ) or W%(m). We first show that
+Consensus is solvable using Y~(m) if and only if m, the number of mistakes, is
+less than or equal to n - f, the number of correct processes. We then show that
+Consensus is solvable using ‘W~(m) if and only if M = O.
+  THEOREM A3.2.    In asynchronous systems                                    with f > rn/21, if m > n – f then
+Consensus cannot be solved using Y%(m).
+
+   PROOF (SKETCH). Consider       an asynchronous  system with f a [n/21    and
+assume m > n – f. We show that there is a failure detector 9 G ~~(m ) such
+that no algorithm solves Consensus using 9. We do so by describing the behavior
+of a Strongly m-Mistaken failure detector Q such that for every algorithm A,
+there is a run R~ of A usin 9 that violates the specification of Consensus.
+   Since 1 s n – ~ s m/2 7 , we can partition the processes into three sets 110,
+II, and IIc,a,h,d, such that HO and 111 are non-empty sets containing n – f
+processes each, and I&h=d is a (possibly empty) set containing the remaining
+n – 2(n – f) processes. Henceforth, we only consider runs in which all
+processes in IIC,a,A,d crash at the beginning of the run. Let go E llo and
+q ~ c II ~. Consider the following two runs of A using $2:
+  Run RO =        (FO, Ho, l., SO, TO). All processes propose O. All processes
+in 110 are correct    in FO, while all the f processes in HI U llcr.$h=~ crash in
+264                                                 T. D. CHANDRA AND S. TOUEG
+
+
+FO at the beginning of the run, that is, Vt G 9: FO(t ) = II ~ U llcr.~h=d. Process
+qO G 110 permanently suspects every process in ITl U l_IC~h,d, that is, Vt C 9:
+HO(qO, t) = II ~ U llcr.~h,d = FO(t). No other process suspects any process,
+that is, Vt E 9, Vq # qO: HO(q, t) = 0. Clearly, !3 satisfies the specification of
+a Strongly m-Mistaken failure detector in Ro.
+
+   Run RI = (Fl, Z-ll, ]1, Sl, Tl). All processes propose 1. All processes in 111
+are correct in F1, while all the ~ processes in II. U IIcr.,~,d crash in F1 at the
+beginning of the run, that is, Vt ~ 9: Fl(t) = II. U IIc,.,hcd. Process q, E II ~
+permanently suspects every process in II. U Ilc,a$k,d, and no other process
+suspects any process. Q satisfies the specification of a Strongly m-Mistaken
+failure detector in R ~.
+   If R. or R ~ violates the specification of Consensus, A does not solve Consensus
+using $3, as we wanted to show. Now assume that both R. and R ~ satisfy the
+specification of Consensus. In this case, all correct processes decide O in R. and
+1 in R1. Let to be the time at which go decides O in Ro, and let tl be the time at
+which q ~ decides 1 in R ~. We now describe the behaviour of $3 and a run R~ =
+(F~, HA, IA, S~, T~) of A using Q that violates the specification of Consensus.
+   In R~ all processes in II. propose O and all processes in 111 U IIC,a$hed
+propose 1. All processes in Ilc,a,A.d crash in F~ at the beginning of the run. All
+messages from processes in lTOto those in 111 and vice-versa, are delayed until
+time to + tl. Until time to,(i) 9 behaves as in Ro, and (ii) all the processes in 111
+are “very slow”: they do not take any steps. Thus, until time fO, no process in 110
+can distinguish between R. and RA, and all processes in II. execute exactly as in
+RO. In particular, q. decides O at time to in R~ (as it did in Ro). Note that by time
+to,9 made n – f mistakes in RA: go erroneously suspected that all processes in
+111crashed (while they were only slow). From time to,the behavior of !9 and run
+R~ continue as follows:
+
+(1) At time to, all processes in IIo, except go, crash in FA.
+(2) From time to to time to + tl, ql suspects all processes in II. U llC,@Agd,that
+    is, Vt, to s t S to + t~:HA (ql, t) = no U ~cra,h,d, and no other process
+    suspects any process. By suspecting all the processes in 110, including go, QI
+    makes one mistake at process q ~ (about go). Thus, by time to + t~,9) has
+    made a total of (n – f ) + 1 mistakes in R~. Since m > n - f, Qb has made
+    at most m mistakes in R~ until time to + t~.
+(3) At time tO, processes in 111 “wake up.” From time ?0 to time to + fl they
+    execute exactly as they did in R ~ from time O to time t~ (they cannot perceive
+    this real-time shift of ro). Thus, at time to + t~ in run RA, q ~ decides 1 (as it
+    did at time t~ in RI). Since go previously decided O, R~ violates the
+    agreement property of Consensus.
+(4) From time to + t~ onwards, no more processes crash and every correct
+    process suspects exactly all the processes that have crashed. Thus, S3satisfies
+    weak completeness, repentance, and makes no further mistakes.
+
+By (2) and (4), &3 satisfies the specification of a Strongly m-Mistaken failure
+detector, that is, !3 E SW(m). From (3), A does not solve Consensus using 9. •l
+Unreliable Failure Detectors for Reliable Distributed        Systems                        265
+
+
+  We now show that the above lower bound is tight:
+   THEOREM A3.3.    In asynchronous         systems   with m 5 n – f, Consensus         can be
+solved using Y@(m).
+
+   PROOF. Suppose m < n - f, and consider any failure detector QilE SPW(m).
+Since m, the number of mistakes made by ‘3, is less than the number of correct
+processes, there is at least one correct process that ~ never suspects. Thus, ~
+satisfies weak accuracy. By the definition of Y9(m ), Q also satisfies weak
+completeness. So ‘2 E W, and it can be used to solve Consensus (Corollary
+6.1.9).
+   Suppose m = n - f. Even though $3 can now make a mistake about every
+correct process, it can still be used to solve Consensus (even if a majority of the
+processes are faulty). The corresponding algorithm uses rotating coordinators,
+and is similar to the one for OW given in Figure 6. Because of this similarity, we
+omit the details, ❑
+  From    the above two theorems:
+
+  COROLLARY       A3.4.      in asynchronous systems with f z [n/21, Consensus          can be
+solved using X%(m)        if and only if m s n – f.
+
+  We now turn our attention        to solving Consensus using W ~(m ).
+   THEOREM A3.5.   In asynchronous          ~stems    with f ? rn/21, Consensus      cannot be
+solved using W%(m) with m > 0.
+
+   PROOF. In Theorem A3,2, we described a failure detector ~ that cannot
+be used to solve Consensus in asynchronous systems with f = rn / 21. It is easy
+to verify that ~ makes at most one mistake about each correct process, and thus
+!2 E w%(l).     ❑
+  From Corollary A2.2, and the above theorem, we have:
+   COROLLARY A3.6.    In asynchronous systems with f ? [n/21, Consensus                 can be
+solved using W%(m) if and only if m = O.
+
+ACKNOWLEDGMENTS.       We are deeply grateful to Vassos Hadzilacos for his
+crucial help in revising this paper. The comments and suggestions of the
+anonymous referees, Navin Budhiraja, and Bernadette Charron-Best, were also
+instrumental in improving the paper. Finally, we would like to thank Prasad
+Jayanti for greatly simplifying the algorithm in Figure 3.
+REFERENCES
+AMIR, Y., DOLEV, D,, KRAMER, S., ANDMALKI,D.       1991. Transis: A communication sub-system for
+  high availability. Tech. Rep. CS91-13 (Nov.), Computer Science Department, The Hebrew
+  University of .Ierusalem, Jerusalem, Israel.
+ATrIYA, H., BAR-N• Y, A., DOLEV, D., KOLLER, D., PELEG, D., AND REISCHUK, R.        1987. Achiev-
+  able cases in an asynchronous environment. In Proceedings of the 28rh Symposium on Foundations
+  of Compufer Science (Oct.), IEEE Computer Society Press, Washington, D. C., pp. 337-346.
+ATTIYA, H,, DWORK, C., LYNCH, N., AND STOCKMEYER,         L. 1991. Bounds on the time to reach
+  agreement in the presence of timing uncertainty. Irr Proceedings of rhe 23rd ACM Symposium CM
+  Theory of Computing (New Orleans, La,, May 6-8). ACM, New York, pp. 359-369.
+BEN-OR, M,     1983. Another advantage of free choice: Completely asynchronous agreement proto-
+  cols. 1n Proceedings of the 2nd ACM Symposium on Principles of Distributed Compuring (Montreal,
+  Que.. Canada, Aug. 17-19). ACM, New York, pp. 27-30.
+266                                                                T. D. CHANDRA AND S. TOUEG
+
+
+BERMAN, P.,GARAY, J. A., AND PERRY, K. J. 1989. Towards optimal distributed consensus. In
+  Proceedings of the 30th Symposium on Foundations of Computer Science (Oct.). IEEE Computer
+  Society Press, Washington, D. C., pp. 410-415.
+               S., AND~rcs, S. 1988. A combinatorialcharacterizationof the distributed
+BiRAN,O., MORAN,
+  tasks which are solvable in the presence of one faulty processor. In Proceedingsof the 7th ACM
+  Symposium on Principles of Distributed Computing (Toronto, Ont., Canada, Aug. 15-17). ACM,
+  New York, pp. 263-275.
+BIRMAN, K. P., COOPER, R., JOSEPH, T.      A., KANE, K. P., AND SCHMUCK,F. B. 1990. lsis-A
+  Dism”buted Programming Environment.
+BIRMAN, K. P., AND JOSEPH,T. A. 1987. Reliable communication in the presence of failures. ACM
+  Trans. Compur. Sysf. 5, 1 (Feb.), 47-76.
+BRACHA, G., ANDTOUEG,S. 1985. Asynchronous consensus and broadcast protocols. J. ACM 32,4
+  (Oct.), 824-840.
+BRIDGLAND, M. F., ANDWATRO,R. J.        1987.   Fault-tolerant    decision making in totally asynchronous
+  distributed systems. In Proceedings    of the 6th ACIU         Symposium   on Principles   of Distributed
+  Computing   (Vancouver, B.C., Canada, Aug. 10-12). ACM, New York, pp. 52-63.
+BUDHIRAJA,N., GOPAL, A., AND TOUEG, S. 1990. Early-stopping distributed bidding and applica-
+  tions. In Proceedings of the 4th International Workshop on Distributed Algon’thms (Sept.). Springer-
+  Verlag, New York, pp. 301-320.
+CHANDRA, T. D., HADZILACOS, V., AND TOUEG, S. 1992.             The weakest failure detector for solving
+  consensus. Technical Report 92-1293 (July), Department of Computer Science, Cornell University.
+  Available from ftp://ftp.cs.cornell. edu/pub/chandra/failure. detectom.weakest. dvi.Z. A preliminary
+  version appeared in the Proceedings of the 1 lth ACM Symposium on Principles of Distn”buted
+  Computing (Vancouver, B.C., Canada, Aug. 10-12). ACM, New York, pp. 147-158.
+CHANDRA, T. D., HADZILACOS, V., ANDTOUEG, S. 1995. Impossibility of group membership in
+  asynchronous systems. Tech. Rep. 95-1533. Computer Science Department, Cornell University,
+  Ithaca, New York.
+CHANDRA,T. D., ANDLARREA,M. 1994. E-mail correspondence. Showed that OW cannot be used
+  to solve non-blocking atomic commit.
+CHANDRA, T. D., AND TOUEG, S. 1990. Time and message efficient reliable broadcasts. In
+  Proceedings of the Fourth International Workshop on Distributed Algorithms (Sept.). Springer-Verlag,
+  New York, pp. 289-300.
+CHANG, J., ANDMAXEMCHUK,        N. 1984. ReliabIe broadcast protocols. ACM Trans. Comput. Syst. 2,
+  3 (Aug.), 251-273.
+CHOR, B., AND DWORK, C. 1989. Randomization in byzantine agreement. Adv. Compur. Res. 5,
+  443-497.
+CRISTIAN, F. 1987. Issues in the design of highly available computing setvices. In Annual Sympo-
+ sium of the Canadian information Processing Society (July), pp. 9 –16. Also IBM Res. Rep. RJ5856.
+  Thomas J. Watson Research Center, Hawthorne, N.Y,
+CRIST~AN,F., AGHILI, H., STRONG,R., ANDDOLEV, D. 1985/1989. Atomic broadcast: From simple
+  message diffusion to Byzantine agreement. In Proceedings of the 15th international Symposium on
+  Fault- Tolemnt Computing (June 1985), pp. 200-206. A revised version appears as IBM Research
+  Laboratory Technical Report RJ5244 (April 1989). Thomas J. Watson Research Center, Haw-
+  thorne, N.Y.
+CRtSTLAN,F., DANCEY,R. D., AND DEHN, J. 1990. Fault-tolerance in the advanced automation
+  system. Tech. Rep. RJ 7424 (April), IBM Research Laboratory, Thomas J. Watson Research
+  Center, Hawthorne, N.Y.
+DOLEV, D., DWORK, C., ANCISTOCKMEYER,L. 1987. On the minimal synchronism needed for
+  distributed consensus. J. ACM 34, 1 (Jan.), 77-97.
+DOLEV, D., LYNCH, N. A., PINTER, S. S., STARK, E. W., AND WEIHL, W. E. 1986. Reaching
+  approximate agreement in the presence of faults. J. ACM 33, 3 (July), 499-516.
+DWORK, C., LYNCH, N. A., AND STOCKMEYER,L. 1988. Consensus in the presence of partial
+  synchrony. J. ACM 35, 2 (Apr.), 288-323.
+FISCHER, M. J. 1983. The consensus problem in unreliable distributed systems (a brief survey).
+  Tech. Rep. 273 (June), Department of Computer WIence, Yale University, New Haven, Corm.
+FISCHER,M. J., LYNCH,N. A., ANDPATERSON,M. S. 1985. Impossibility of distributed consensus
+  with one faulty process. J. ACM 32, 2 (Apr.), 374–382,
+Unreliable Failure Detectors for Reliable Distributed          Systems                                   267
+
+
+GOPAL, A., STRONG,R., TOUEG, S., AND CRISTIAN,F. 1990. Early-delivery atomic broadcast. In
+  Proceedings of the 9th ACM Symposium on Principles of Distributed Computing (Quebec City, Que,,
+  Canada, Aug. 22-24). ACM, New York, pp. 297-310.
+GUERRAOUI,R. 1995. Revisiting the relationship between non blocking atomic commitment and
+  consensus. [n Proceedings of the 9th International Workshop on Distributed Algorithms (Sept.).
+  Springer-Verlag, New York, pp. 87-100.
+HADZILACOS, V.,AND TOUEG, S, 1993. Fault-tolerant broadcasts and related problems. In Distrib-
+  uted Sysrerns, Chap. 5, S. J, MULLENDER, Ed,, Addison-Wesley, Reading, Mass., pp. 97–145,
+HADZILACOS, V,, AND TOUEG, S. 1994. A modular approach to fault-tolerant broadcasts and
+  related problems. Tech. Rep. 94-1425 (May), Computer Science Department, Cornell University,
+  Ithaca. NY. Available by anonymous ftp from ftp://ftp.db.toronto. edu/pub/vassos/fault. tolerant.
+  broadcasts. dvi.Z. (An earlier version is also available in Hadzilacos and Toueg [1993]),
+HALPERN, J. Y., AND MOSES, Y. 1990. Knowledge and common knowledge in a distributed
+  environment. J. ACM 37, 3 (July), 549–587,
+LAMPORT, L. 1978. The implementation of reliable distributed multiprocess systems. Comput.
+  Netw, 2, 95-114.
+LAMPORT, L., SHOSTAK,R., AND PEASE, M. 1982. The Byzantine generals problem. ACM Trans.
+  Prog. Lang. Syst, 4, 3 (July), 382-401.
+Lo, W, K., AND HADZILACOS,V. 1994. Using failure detectors to solve consensus in asynchronous
+  shared-memory systems. In Proceedings of the 8th International Workshop on Distributed Algon”thms
+   (Sept.), Springer-Verlag, New York, pp. 280-295. Available from ftp://ftp,db.toronto. edu/pub/
+  vassos/failure. detectors. shared. memory, ps.Z.
+LGUI, M., AND ABU-AMARA. 1987. Memory requirements for agreement among unreliable asyn-
+   chronous processes, Adv. Compur. Res. 4, 163–1 83.
+MOSES, Y., DOLEV, D., AND HALPERN, J. Y. 1986. Cheating husbands and other stories: a case
+   study of knowledge, action, and communication. Dishib. Compur. 1, 3, 167-176,
+MULLENDER.S. J., ED. 1987. The Amoeba Distributed Operating System. Seiected papers 1984-1987.
+   Centre for Mathematics and Computer Science.
+NEIGER, G. 1995. Failure detectors and the wait-free hierarchy. In Proceedings of the 14th ACM
+  Symposium on Principles of Diswibuted Computing (Ottawa, Ont. Canada, Aug.). ACM, New York,
+   pp. 10(-109.
+NEIGER, G., AND TOUEG, S. 1990. Automatically increasing the fault-tolerance of distributed
+  algorithms. J. Algon”thms 11, 3 (Sept.), 374–419.
+PEASE,M., SHOSTAK,R., AND LAMPORT, L. 1980. Reaching agreement in the presence of faults. J.
+  ACM 27, 2 (Apr.), 228-234.
+PETERSON,L. L., BUCHOLZ, N. C., AND SCHLICHTING,R. D. 1989. Preserving and using context
+   information in interprocess communication. ACM Trans. Comput. Syst. 7, 3 (Aug.), 217–246.
+PIITELLI, F., ANDGARCIA-M•LINA,H. 1989. Reliable scheduling in a tmr database system. ACM
+   Trans. Compur. Syst. 7, 1 (Feb.), 25-60.
+POWELL, D., ED. 1991. Delta-4: A Generic Architecture for Dependable Distributed Computing.
+  Springer-Verlag, New York.
+REISCHUK, R. 1982, A new solution for the Byzantine general’s problem. Tech. Rep. RJ 3673
+   (Nov.), IBM Research Laboratory, Thomas J, Watson Research Center, Hawthorne, N.Y,
+RICCIARDI, A,, ANDBIRMAN,K. P. 1991. Using process groups to implement failure detection in
+  asynchronous environment ts. Jn Proceedings of the IOth ACM Symposium on Principles of Drktnbuted
+   Computing (Montreal, Que., Canada, Aug. 19-21). ACM, New York, pp. 341-354.
+SABEL, L,, ANDMARZULLO,K. 1995. Election vs. consensus in asynchronous systems. Tech. Rep.
+  TR95-411 (Feb.). Univ. California at San Diego. San Diego, Calif. Available at ftp://ftp.cs.
+  cornell.edu/pub/sabel/tr94-1413.ps.
+SCHNE]D~R,F. B. 1990. Implementing fault-tolerant services using the state machine approach: A
+   tutorial. ACM Cornput. Surv. 22, 4 (Dec.), 299–319.
+WENSLEY, J. H., LAMPORT, L., GOLDBERG,J., GREEN, M. W., LEVITT, K. N., MELLIAR-SMITH, P.,
+ SHOSTAK, R. E., AND WEINSTOCK, C. B. 1978. SIFT Design and analysis of a fault-tolerant
+ computer for aircraft control. Proc. IEEE 66, 10 (Oct.), 1240–1255.
+
+RECEIVEDJULY 1993; REVISEDMARCH 1995; ACCEPTEDOCTOBER1995
+
+
+                                                              Journal of the ACM,   Vol. 43, No 2, March 1996.
+

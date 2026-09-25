@@ -1,0 +1,478 @@
+ The Weakest Failure Detector
+       for Consensus
+
+
+
+
+     References and Thanks
+• [CHT] Chandra, Hadzilacos and Toueg,
+  The Weakest Failure Detector for Solving
+  Consensus, JACM 43(4), 1996
+• Gärtner, Guerraoui and Kouznetsov, The
+  CHT Play
+  – A highly recommended informal and very
+    accessible overview of the CHT proof
+• Some of the following slides were provided
+  by Rachid Guerraoui
+
+
+
+
+                                               1
+        What we need to prove
+• To prove that a failure detector class C is the
+  weakest for a problem P, one needs to show
+  that
+   – If: P can be solved with D∈C, and
+   – Only if: For all C’ that can be used to solve P, C’≥C
+• ◊S= ◊W is sufficient for Consensus with n>2t
+• Need to prove that for all D that can be used to
+  implement Consensus, D ≥ ◊W with n>2t
+
+
+
+
+                     The Outline
+• Define a failure detector Ω (leader oracle):
+   – Output: process id
+   – Eventually all correct processes permanently output
+     the same process id p ,and p is correct
+• Lemma 1: For any failure environment: Ω ≥ ◊W
+   – Proof:?
+• Lemma 2: For any failure environment:
+     If D solves Consensus, then D ≥ Ω
+   – Proof: ? ☺
+
+ A question: Is it possible that Ω > ◊W?
+
+
+
+
+                                                             2
+              The Outline
+• Theorem: For any failure environment:
+      If D can be used to solve Consensus,
+      then D ≥ ◊W
+Proof:
+• If D solves Consensus, then D ≥ Ω
+  (Lemma 2). Ω ≥ ◊W (Lemma 1).
+  Transitivity: If D solves Consensus, then
+  D ≥ ◊W
+
+
+
+
+ D solves Consensus ⇒ D ≥ Ω
+• Let A be a consensus algorithm using D
+• Construct an algorithm T that emulates Ω
+  on top of D
+
+
+
+
+                                              3
+     Overview of the emulation
+1. The exchange
+
+2. The simulation
+
+3. The tagging
+
+4. The stabilization
+
+5. The extraction
+
+
+
+
+           (1) The Exchange
+• Every process periodically queries its
+  failure detector module (D) and sends all
+  outputs it has seen to all
+• A process builds a growing DAG using the
+  outputs provided by other processes
+• A vertex of the DAG is a triple:
+  – (process, f. d. value, f. d. query#)
+• An arrow (p1,d1,k1)   (p2,d2,k2) means that
+  p1 saw d1 before p2 saw d2
+
+
+
+
+                                                4
+        (1) The Exchange Algorithm
+     DAG := empty graph;
+     k := 0;
+     Forever do:
+     • k := k+1;
+     • p receives (q,DAGq)       // maybe null
+     • d := output of p’s failure detector
+     • DAG := DAG ∪ DAGq;
+        Add [p,d,k] to DAG and edges from all vertices
+        of DAG to to [p,d,k];
+        Send (p,DAG) to all processes
+
+
+
+
+        (1) The Exchange Algorithm
+      null FD: d1 [p1,d1,1]
+p1
+
+                          (p1,[p1,d1,1])
+
+
+                              FD: d2 [p1,d1,1] [p2,d2,1]
+p2
+                                               [p1,d1,1] [p2,d2,1]
+
+
+                                                    FD: d3
+p3
+                                                              [p3,d3,1]
+
+                                                     [p1,d1,1] [p2,d2,1]
+
+
+
+
+                                                                           5
+        (1) The Exchange Algorithm
+      null FD: d1 [p1,d1,1]
+p1
+
+                              (p1,[p1,d1,1])
+
+
+                                  FD: d2 [p1,d1,1] [p2,d2,1]
+p2
+                                                         [p1,d1,1] [p2,d2,1]
+
+
+         null        FD: d3     [p3,d3,1]                         FD: d3
+p3
+                                                      [p3,d3,1]                 [p3,d3,2]
+
+                                                                  [p1,d1,1] [p2,d2,1]
+
+
+
+
+           Properties of Local DAGs
+     • For any correct process p and time t
+          (1) DAGp(t) is transitively closed
+                     An easy induction
+           (2) There is a time t’≥t, d and k such
+           that ∀v∈Vertices(DAGp(t)), v (p,d,k) is
+           an edge of DAGp(t’)
+                                                  t                        t’
+                [p3,d3,1]             [p3,d3,2]                            [p3,d3,3]
+
+                            [p1,d1,1] [p2,d2,1]
+
+
+
+
+                                                                                            6
+     Properties of Local DAGs
+• The DAG of each correct process is ever
+  increasing finite approximation of the
+  same infinite limit graph
+  – The common portion of correct process DAGs
+    grows without limit
+
+
+
+
+          (2) The Simulation
+• Every process pi uses its DAG to simulate
+  runs of A in the system, i.e., every process
+  locally plays the role of all other processes
+• Whenever pi updates its DAG, pi triggers
+  runs of A for:
+  – All paths in the DAG
+  – All input vectors I0, I2,.. In, where Ii makes
+   processes p1-pi propose 1 and the rest
+   propose 0
+
+
+
+
+                                                     7
+          (2) The Simulation
+
+                  pi simulates runs of A for each
+                  (0000), (1000),(1100),(1110),(1111)
+
+                  pi
+
+
+
+
+          (2) The Simulation
+Forever do:
+• p receives (q,DAGq)       // maybe null
+• d := output of p’s failure detector
+• DAG := DAG ∪ DAGq;
+  Add [p,d] to DAG and edges from all
+  vertices of DAG to to [p,d];
+  Simulate(A,DAG);
+  Send (p,DAG) to all processes
+
+
+
+
+                                                        8
+     The Simulation Algorithm
+For each I=Ij, 0≤j≤n do
+  YI := ∅;
+  For each path g in DAGp:
+      Rg := a run of A from I with the
+      sequence of failure detector events
+      induced by g;
+       YI := YI ∪ Rg;
+Simulation output is a collection of trees YIj
+
+
+
+
+          (2) The Simulation
+Forever do:
+• p receives (q,DAGq)       // maybe null
+• d := output of p’s failure detector
+• DAG := DAG ∪ DAGq;
+  Add [p,d] to DAG and edges from all
+  vertices of DAG to to [p,d];
+  {YI0,…,YIn} := Simulate(A,DAG);
+  Send (p,DAG) to all processes
+
+
+
+
+                                                 9
+      Properties of the simulation
+         at correct processes
+Property 1: For any vertex S of YI, there
+exists a finite trace E containing only the steps
+of correct process such that S·E is in YI and
+all correct process decide in S·E
+                   I
+
+                       S
+                             only correct processes
+
+
+
+
+     Intuition Behind Property 1
+
+
+
+
+                                                      10
+                  An Example
+ [p1,d1,1]
+
+
+
+
+             [p2,d2,1]           [p2,d2,1]
+
+
+
+
+ [p3,d3,1]           [p3,d3,2]    [p3,d3,1]
+
+
+
+
+                   (3) Tagging
+Forever do:
+• p receives (q,DAGq)       // maybe null
+• d := output of p’s failure detector
+• DAG := DAG ∪ DAGq;
+  Add [p,d] to DAG and edges from all vertices of
+  DAG to to [p,d];
+  {YI0,…,YIn} := Simulate(A,DAG);
+  TAG({YI0,…,YIn});
+  Send (p,DAG) to all processes
+
+
+
+
+                                                    11
+       The Tagging Algorithm
+• For every vector YIj: Tag Ij as
+  – 0-valent if only 0 are decided in YIj
+  – 1-valent if only 1 are decided in YIj
+  – Bivalent if both 0 and 1 are decided in
+    YIj
+
+
+
+
+                (3) Tagging
+Forever do:
+• p receives (q,DAGq)       // maybe null
+• d := output of p’s failure detector
+• DAG := DAG ∪ DAGq;
+  Add [p,d] to DAG and edges from all vertices of
+  DAG to to [p,d];
+  {YI0,…,YIn} := Simulate(A,DAG);
+  Tagged_forest := TAG({YI0,…,YIn});
+  Send (p,DAG) to all processes
+
+
+
+
+                                                    12
+          Tagging Properties
+• By validity of consensus, I0 is always
+  tagged as 0-valent and In as 1-valent
+• Other 0 or 1-valent input vector can only
+  get tagged bivalent
+• A bivalent input vector stays bivalent
+  forever
+
+
+
+
+               Critical Index
+• There is some index k in the sequence of
+  vectors such that Ik-1 is 0-valent and Ik is
+  not: k is called the critical index
+
+• If Ik is 1-valent, then pi trusts pk
+
+• (we do not consider here the more
+  complicated case when Ik is bivalent)
+
+
+
+
+                                                 13
+           (4) The Stabilization
+• Eventually, the critical index at a given
+  process does not change anymore: this is
+  because the index can only decrease and
+  cannot go lower than 1
+
+• All DAGs converge to the same infinite
+  DAG and the same critical index k is
+  eventually computed at all processes
+
+
+
+
+            (5) The Extraction
+Forever do:
+• p receives (q,DAGq)       // maybe null
+• d := output of p’s failure detector
+• DAG := DAG ∪ DAGq;
+  Add [p,d] to DAG and edges from all vertices of DAG to
+  to [p,d];
+  {YI0,…,YIn} := Simulate(A,DAG);
+  Tagged_forest := TAG({YI0,…,YIn});
+  p := Extract_Leader(Tagged_forest);
+  Output p;
+  Send (p,DAG) to all processes
+
+
+
+
+                                                           14
+      The Extraction Algorithm
+If k is critical then
+   If Ik-1 is 0-valent and Ik is 1-valent then
+        return pk;
+   else // Ik-1 is 0-valent and Ik is bivalent then
+        Look for decision gadgets;
+        choose a process based on a
+        deterministically chosen decision
+        gadget;
+
+
+
+
+     Correctness of Extraction
+Claim: Eventually, (1) all correct processes
+  permanently return the same process pk
+  and (2) pk correct
+Proof:
+  (1) At each correct process, the critical
+  index eventually stabilizes at k.
+  It is eventually the same at all processes.
+  All correct processes return pk
+
+
+
+
+                                                      15
+    Correctness of Extraction
+(2) Assume pk crashes
+
+       Ik-1, tag(Ik-1)=0        Ik, tag(Ik)=1
+                                              Run without pk where
+                                              all processes decide
+
+
+
+
+                         A contradiction
+
+
+
+
+      Decision Gadgets: Fork
+               Ik, tag(Ik)=Bivalent
+
+
+
+                            S (bivalent)
+                                                       p is correct
+                     p           p
+
+     S1 (1-valent)                     S0 (0-valent)
+
+
+                            Run without p where
+                            all processes decide 0
+
+
+
+
+                                                                      16
+            Decision Gadgets: Hook
+                         Ik, tag(Ik)=Bivalent
+
+
+
+                                    S (bivalent)
+                                                    p is correct
+                            p’            p
+           S0 (0-valent)
+
+                                          p’
+
+                                    S1 (1-valent)
+
+Run without p where
+all processes decide 0
+
+
+
+
+                What people think ☺
+  • Actual replies I’ve got when enquiring
+    about an instructional material on CHT
+      – My advice is: don't do it!
+      – I tried to understand it for a while and gave up
+      – It's a terrible proof
+      – It’s mind-boggling
+      – No way I'm going to try and teach it in a class
+
+
+
+
+                                                                   17
+

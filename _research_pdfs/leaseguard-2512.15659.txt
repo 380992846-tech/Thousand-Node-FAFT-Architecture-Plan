@@ -1,0 +1,1150 @@
+                                                                            LeaseGuard: Raft Leases Done Right∗
+                                                       A. Jesse Jiryu Davis                                   Murat Demirbas                                     Lingzhi Deng
+                                                        jesse@mongodb.com                            murat.demirbas@mongodb.com                           lingzhi.deng@mongodb.com
+                                                         MongoDB Research                                 MongoDB Research                                       MongoDB, Inc.
+                                                       New York City, NY, USA                          New York City, NY, USA                                New York City, NY, USA
+
+                                         Abstract                                                                             leader returns stale data, violating consistency. Although elections
+                                         Raft is a leading consensus algorithm for replicating writes in dis-                 may be rare in a single Raft group, large deployments make “rare”
+                                         tributed databases. However, distributed databases also require con-                 events common. MongoDB’s public DBaaS fleet has about 200,000
+                                         sistent reads. To guarantee read consistency, a Raft-based system                    Raft replica sets, of which half experience an election each week.
+                                         must either accept the high communication overhead of a safety                       Half of those elections are related to routine maintenance, and half
+arXiv:2512.15659v2 [cs.DC] 19 Dec 2025
+
+
+
+
+                                         check for each read, or implement leader leases. Prior lease protocols               are unplanned. A system of this size requires some mechanism to
+                                         are vaguely specified and hurt availability, so most Raft systems                    avoid stale reads during elections. Unfortunately, Raft’s original
+                                         implement them incorrectly or not at all. We introduce LeaseGuard,                   mechanism [42] is expensive: before responding to each read re-
+                                         a novel lease algorithm that relies on guarantees specific to Raft                   quest, a leader exchanges messages with a majority of the replica
+                                         elections. LeaseGuard is simple, rigorously specified in TLA+, and                   set to confirm it is still the highest-term leader. This quorum check
+                                         includes two novel optimizations that maximize availability during                   incurs latency, I/O contention, and monetary costs in the cloud. It
+                                         leader failover. The first optimization restores write throughput                    is a high price to pay for every query, just to ensure consistency
+                                         quickly, and the second improves read availability. We evaluate                      during occasional elections.
+                                         LeaseGuard with a simulation in Python and an implementation in                          Leader leases have been proposed [41] to make Raft reads con-
+                                         LogCabin, the C++ reference implementation of Raft. By replacing                     sistent and efficient. A lease ensures that at most one node believes
+                                         LogCabin’s default consistency mechanism (quorum checks), Lease-                     it is the leader at a time, so it can serve consistent reads locally
+                                         Guard reduces the overhead of consistent reads from one to zero                      without talking to other nodes. Unfortunately, the original descrip-
+                                         network roundtrips. It also improves write throughput from ∼1000                     tion of Raft leases is vague, without code or formal specifications
+                                         to ∼10,000 writes per second, by eliminating contention between                      (see Section 8). The same applies to leader leases in Paxos, Raft’s
+                                         writes and quorum reads. Whereas traditional leases ban all reads                    predecessor [10, 14]. For this reason, Raft systems often implement
+                                         on a new leader while it waits for a lease, in our LeaseGuard test                   leases with bugs. HashiCorp’s Raft implementation, for example,
+                                         the new leader instantly allows 99% of reads to succeed.                             does not follow the Raft paper. It can violate consistency due to
+                                                                                                                              message delays, or because a new leader does not know of a prior
+                                         CCS Concepts                                                                         leader’s lease [31, 52]. These bugs were reported in 2016. The etcd
+                                                                                                                              Raft implementation also allows stale reads due to miscalculations
+                                         • Computer systems organization → Cloud computing; Avail-
+                                                                                                                              of lease timeouts [5]. This bug was reported in 2024. All these bugs
+                                         ability; • Theory of computation → Distributed algorithms.
+                                                                                                                              were still open at the time of writing. Most Raft implementations
+                                                                                                                              forego leases. They use expensive quorum checks, or they do not
+                                         1    Introduction                                                                    guarantee consistency at all. MongoDB’s Raft variant [57] avoids
+                                         The Raft consensus algorithm is used in MongoDB [57], Cock-                          leases: if a user demands consistent reads, the leader writes an
+                                         roachDB [49], TiDB [25], YugabyteDB [51], and others [4, 16, 29].                    empty entry to its log for each read request, and waits for majority
+                                         It reliably replicates a log of write commands and handles leader                    replication of the entry to confirm it is not deposed.
+                                         failures. But replication introduces the risk of reading from a stale                    Prior lease designs also hurt availability: a deposed leader’s lease
+                                         replica. If a database served stale reads while promising strong con-                must expire before a new leader can process reads and writes. (E.g.,
+                                         sistency, it would break its promise. For example, CockroachDB and                   TiDB’s Raft lease causes 10 seconds of unavailability after an elec-
+                                         YugabyteDB promise serializability and strongly consistent reads                     tion [34].) During this period, blocked operations may queue up,
+                                         by default; TiDB and MongoDB support snapshot isolation. Violat-                     then overwhelm the leader as soon as it acquires a lease; and this
+                                         ing these guarantees would lead to application misbehavior [15],                     thundering herd could in turn cause a metastable failure [26]. Prior
+                                         lost updates [20], and security vulnerabilities [55], so the database                designs also risk gray failures, where a leader may continue renew-
+                                         needs a mechanism to ensure it reads from a fresh replica.                           ing its lease, but fail to execute writes due to internal issues such
+                                             It is surprisingly hard to ensure consistent reads from a Raft                   as disk failure. The system is stuck with a “faux leader” that cannot
+                                         leader. The leader is elected at the start of a term and executes all                make progress yet refuses to step aside.
+                                         reads and writes until it crashes or is deposed, i.e., a new leader is                   LeaseGuard is a new lease protocol for Raft which solves the
+                                         elected with a higher term number. The deposed leader may be                         problems above. It is specified in detail, and it is simpler than pre-
+                                         unaware for some time that it has been deposed, for example if                       vious lease designs: there are no changes to Raft messages, no
+                                         it is on the minority side of a network partition. If it continues                   additional messages, no new data structures, and no changes to the
+                                         serving reads while the new leader executes writes, the deposed                      election protocol. Instead, in LeaseGuard the log is the lease. The
+                                                                                                                              leader establishes its lease by committing a log entry, and followers
+                                         ∗ This paper has been accepted to ACM SIGMOD 2026. This is the author-accepted
+                                                                                                                              learn of the lease by replicating the log normally. We can rely on the
+                                         manuscript.
+                                                                                                                          1
+                                                                                                                                                    Davis et al.
+
+
+                                                                                  Client                Leader            Follower 1            Follower 2
+log due to a Raft-specific guarantee called Leader Completeness:
+a newly elected leader is guaranteed to have all log entries that
+                                                                                                     commitIndex=1
+were replicated by a majority in the previous term. (Competing
+consensus protocols like Paxos and Viewstamped Replication [36]                              write
+do not guarantee Leader Completeness.) This guarantee enables
+a simpler lease design, reduces implementation bugs, and enables                                             AppendEntries
+                                                                                                            leaderCommit=1
+availability optimizations overlooked in prior work. It also solves
+                                                                                                                                   commitIndex=1
+the gray-failure/faux-leader problem: only a leader who can make
+real progress (by writing and replicating log entries) can maintain
+its lease.                                                                                                       acknowledge
+    It is critical for distributed databases to maintain high avail-                                 commitIndex=2
+ability and reliable performance, and avoid metastable failures.
+LeaseGuard minimizes write unavailability through its deferred-
+commit writes optimization (Section 3.2), allowing the new leader                                            AppendEntries
+to write and replicate log entries while it waits for the deposed                                           leaderCommit=2
+
+leader’s lease to expire. LeaseGuard also minimizes read unavail-                                                                  commitIndex=2
+ability through its inherited lease reads optimization, enabling
+a new leader to serve some consistent reads concurrently with a
+deposed leader during the deposed leader’s lease period, with zero            Figure 1: Raft replication. The leader advances its
+communication overhead. This optimization in particular requires              commitIndex when it learns that an entry is majority-
+bounded-uncertainty clocks. Such clocks have recently become                  replicated. Followers learn the new commitIndex from later
+available in the cloud. Our formal TLA+ [33] specification and cor-           AppendEntries messages.
+rectness proofs (Section 4) validate the safety of these optimizations.
+Notably, we discovered these surprising optimizations through our
+exploration of leases in TLA+. Our improvements to read availabil-            2 Background
+ity and write throughput together decrease the risk that a thunder-
+ing herd of operations will overwhelm a new leader as soon as it
+                                                                              2.1 Raft
+acquires a lease.                                                             In Raft, each node has a state: “leader”, “candidate”, or “follower”.
+    To evaluate performance, we developed a Python simulation1                Each node has a term that tracks the highest term number it has seen.
+of Raft and LeaseGuard (Section 6). The simulator models nodes                Nodes gossip their term numbers during every communication. To
+as Python objects that communicate asynchronously, similar to                 run for election, a follower increments its term and becomes a
+Python’s asyncio library. It enables deterministic, reproducible              candidate, then requests votes from a majority of the replica set.
+experiments given a set of parameters and a random seed. We also              Once elected, a node remains a leader until it crashes or observes
+implemented a linearizability checker to validate protocol behavior.          another node with a higher term.
+    For real-world validation, we implemented LeaseGuard in C++2                 Clients invoke commands on the leader, which records them
+by modifying LogCabin, a key-value database atop the reference                as entries in its log and sends them to followers in AppendEntries
+implementation of Raft (Section 7). LogCabin lacked any lease mech-           messages. Followers record entries in their own logs in the same
+anism until now. Our experiments evaluate LeaseGuard’s impact                 order. An entry’s log index is its position in the log. Each node has
+on read and write latency, its availability after leader crashes, and         a commitIndex, the index of the latest entry it knows is durable.
+how workload skewness affects read availability post-election. The            When the leader learns that a majority of nodes (including itself)
+results demonstrate that LeaseGuard achieves microsecond-latency              have replicated up to a given log index, it advances its commitIndex
+local linearizable reads compared to many milliseconds of latency             to that point, i.e. it commits the entry and all previous entries. It
+with LogCabin’s default consistency mechanism, quorum checks.                 applies committed entries’ commands to its local state machine
+By avoiding quorum checks, LeaseGuard reduces the overhead of                 and updates its lastApplied index. The leader then replies to wait-
+consistent reads from one to zero network roundtrips. It also im-             ing clients, confirming their commands have succeeded. Followers
+proves write throughput from ∼1000 to ∼10,000 writes per second,              eventually learn the leader’s new commitIndex, which the leader
+by eliminating contention between writes and quorum reads. Lease-             sends them in subsequent AppendEntries messages. Thus follow-
+Guard improves read and write availability compared to traditional            ers’ commitIndexes are less than or equal to the leader’s in normal
+leases. Whereas traditional leases ban all reads on a new leader              operation (Figure 1).
+while it waits for a lease, in our LeaseGuard test the new leader                Raft and its predecessor MultiPaxos are similar [24, 54], but their
+instantly allows 99% of reads to succeed.                                     election protocols differ significantly. In MultiPaxos, any node can
+                                                                              be elected, and it must transfer from other nodes any log entries it
+                                                                              lacks before it is fully functional. Raft, however, guarantees that a
+                                                                              node is elected only if its log already includes all committed entries
+
+                                                                              1 https://github.com/muratdem/RaftLeaderLeases/tree/main/Python
+                                                                              2 https://github.com/mongodb-labs/logcabin/tree/leaseguard
+
+                                                                          2
+LeaseGuard: Raft Leases Done Right
+
+
+(“Leader Completeness”). Our work depends on this guarantee to                  1     # Handle a write request from a client.
+                                                                                2     def ClientWrite(command):
+provide novel simplifications and optimizations for leases.
+                                                                                3       if self.state != "leader": return "not leader"
+    State Machine Replication protocols provide strongly-consistent,            4       # Create new entry, log it and record its index.
+fault-tolerant write replication. But it is challenging to guarantee            5       entry = (self.term, command, intervalNow())
+that reads conform to the strongest consistency level, linearizabil-            6       index = self.log.append(entry)
+ity [22]. Linearizability requires that (1) each operation appears to           7       # Another thread replicates, commits, and applies the
+execute at a single instant between its invocation (when the client             8       # command, and advances lastApplied, see CommitEntry.
+submits it) and completion (when the client receives the response),             9       await(self.lastApplied >= index)
+and (2) the execution order at these instants forms a valid sequen-            10       if self.state != "leader":
+                                                                               11         # Deposed, don't know if command succeeded.
+tial history, as if operations were executed atomically by a single
+                                                                               12         return "not leader"
+thread. As discussed in the introduction, a deposed leader in Raft             13       return "ok"
+may violate linearizability, if it serves a stale read assuming it is          14
+still the leader.                                                              15     # Handle a read request from a client for key k.
+                                                                               16     def ClientRead(k):
+2.2     Clocks with bounded uncertainty                                        17       if self.state != "leader": return "not leader"
+                                                                               18       # Last committed entry's age is calculated using
+We assume each node has access to some function intervalNow()                  19       # bounded-uncertainty clock.
+which returns the interval [earliest, latest]. It is guaranteed that the       20       if self.log[self.commitIndex].age > delta:
+true time was in this interval for at least a moment between the               21         return "no lease"
+function’s invocation and completion. Our lease algorithm requires             22       # Prevent "limbo" reads.
+a node to decide if a time recorded on another node is now more                23       if self.term != self.log[self.commitIndex].term:
+than Δ old, for some duration Δ. For any two time intervals t1 and             24         if any limbo region entry affects k:
+t2 , a node knows that t1 is more than Δ old if intervalNow() has              25           return "key affected by limbo region"
+                                                                               26       return self.data[k]
+returned t2 and t1 .latest + Δ < t2 .earliest.
+                                                                               27
+     Google’s Spanner paper [14] popularized the concept of bounded-           28     # When this node learns some followers have replicated
+uncertainty clocks in the cloud. It describes the TrueTime API,                29     # entries up to index i, advance the commitIndex.
+which returns an interval that is guaranteed to increase monoton-              30     def CommitEntry(i):
+ically and to include the true time. Each Google data center has               31       if self.state != "leader": return
+multiple time master machines; most have GPS receivers and the                 32       if not majorityAcknowledged(self.log[i]):
+remainder have atomic clocks. Each Spanner server keeps its clock              33         return
+tightly synchronized, with known error bounds, by communicat-                  34       # Check for past-term entry < Delta old.
+                                                                               35       # In reality this loop is optimized away, Sec. 7.
+ing with multiple time master machines and applying a variant of
+                                                                               36       for e in self.log:
+Marzullo’s algorithm [37]. TrueTime’s average error was 4ms in                 37         if e.term < self.term and e.age < delta:
+2012. Presumably its precision has improved, but it is still available         38           return
+only for Google’s own systems, not Google Cloud Platform cus-                  39       self.commitIndex = max(self.commitIndex, i)
+tomers. Meta has deployed a similar infrastructure, also for their             40       while self.lastApplied<self.commitIndex:
+exclusive use, with sub-microsecond error [40].                                41         apply(self.log[self.lastApplied+1].command)
+     Starting in 2023, Amazon has deployed clocks with microsecond             42         self.lastApplied += 1
+precision for public use. AWS TimeSync combines GPS receivers,
+the Precision Time Protocol [1], and a physical hardware clock on                   Figure 2: LeaseGuard leader logic for a key-value store.
+each server to provide a high-precision time signal [2]. Amazon’s
+open source clock-bound [27] daemon monitors the local clock
+and calculates reliable error bounds. The AWS servers used in our                  Writes: A leader can always accept a write command. It creates
+evaluation have an average clock error less than 50µs.                         a log entry that includes the command, and replicates it to follow-
+     The Huygens protocol [17] and its commercialization, Clock-               ers, as in Raft. In LeaseGuard, the leader includes its current time
+work [28], provide a similar guarantee, and they can be deployed on            interval, intervalNow(), in the entry (Figure 2 lines 5-6).
+any cloud. As more cloud providers recognize the value of precise,                 Advancing the commitIndex: As in Raft, a leader can advance
+bounded-uncertainty clocks, we hope and expect they will become                its commitIndex to i once a majority of nodes have replicated the
+more widely available.                                                         entry at i. Once an entry is committed and applied, the leader
+                                                                               acknowledges it to the client (lines 13 and 40-42). LeaseGuard adds
+                                                                               a restriction: the leader L1 of term t cannot advance its commitIndex
+3     Adding leases to Raft
+                                                                               if L1 has an entry < Δ old with term < t from a deposed leader L0
+   This section describes LeaseGuard using prose, pseudocode, and              (lines 34-38). This prevents L1 from committing writes while L0
+diagrams. A TLA+ model of LeaseGuard is available on GitHub3 .                 may have an active lease and may be executing reads, see Figure 4.
+We defer the correctness arguments to Section 4.                                   Reads: A leader L can serve a local linearizable read if it has a
+   Configuration: All nodes have the same lease duration Δ.                    committed entry < Δ old in any term, because it knows no newer
+                                                                               leader is committing writes (lines 18-21). If L has not yet committed
+3 https://github.com/muratdem/RaftLeaderLeases/tree/main/TLA                   an entry in its term, there is a “limbo region” of entries past L’s
+                                                                           3
+                                                                                                                                             Davis et al.
+
+
+                         L0’s commitIndex = 5                                                                                     L0’s lease expires
+             L0’s lease expires when this entry is >Δ old
+                                                                                                 reads
+                                                                               Leader L0
+ L0’s log entry 1 entry 2 entry 3 entry 4 entry 5 entry 6 entry 7                                writes
+                                                                                                                  some reads        reads
+                                                                               Leader L1
+                                                                                                                 staged writes      writes
+           L1’s commitIndex = 3        limbo region on L1
+                                                                              L1 elected, awaiting lease                           L1 acquires lease
+ L1’s log entry 1 entry 2 entry 3 entry 4 entry 5 entry 6
+                                                                                                          time
+
+                       L1 knows the prior lease                               Figure 4: Transitions in the read/write availability of leaders
+                expired once entry 6 is >Δ old                                with LeaseGuard. While the new leader waits for a lease, it
+                                                                              can serve some consistent reads and accept writes. Meanwhile
+Figure 3: Logs of old leader L0 and new leader L1 just after                  the old leader serves reads.
+L1 was elected, before it commits any entry in its term.
+
+                                                                              of the latest majority-replicated entry, and acknowledges all the
+commitIndex, up to and including the last entry L had when it was             pending writes that are now committed.
+elected. L does not yet know if an earlier leader committed any of               This optimization lets the leader prepare writes to be committed
+these entries, so L executes a read only if its result is not affected        as soon as the old lease expires without requiring further follower
+by any entry in the limbo region (lines 23-25).                               communication. Even if the leader crashes or is deposed before these
+   Followers: LeaseGuard does not change follower behavior com-               writes are committed, they are durable once majority-replicated,
+pared to vanilla Raft. Only when a follower is elected as a leader            and will be committed by a future leader. By accepting writes while
+does it make use of the lease information implied by its log.                 waiting for a lease, the new leader avoids being overwhelmed by a
+   Elections: In contrast to previous work [14, 36, 44, 49], we leave         thundering herd of writes the moment its lease begins.
+Raft’s election protocol [42] unmodified. Since our priority is to
+maximize availability, we allow a new leader to be elected before
+                                                                              3.3    Inherited lease reads
+the old leader’s lease expires. Even a node that knows of a valid             LeaseGuard allows multiple leaders to read simultaneously, signif-
+lease may vote, become a candidate, and/or become a leader.                   icantly enhancing read availability during leadership transitions
+   Figure 2 presents the pseudocode for LeaseGuard. The following             (Figure 4). Consider a leader L0 that has been deposed by L1 . L0
+sections focus on certain details of LeaseGuard.                              may still believe it is the leader and can serve reads while its last
+                                                                              committed entry e is < Δ old. L1 (and any future leader) is guar-
+3.1    Establishing a lease                                                   anteed to have e (Leader Completeness) and will not advance its
+                                                                              own commitIndex until e is more than Δ old. Thus L0 has the latest
+Leases are naturally established and extended by Raft’s replication
+                                                                              committed data in the replica set while its lease is valid.
+protocol. A leader L1 establishes a lease on followers by creating
+                                                                                 In LeaseGuard, we propose that L1 can also serve linearizable
+an entry e in its log and sending it to followers. When L1 commits
+                                                                              reads with the lease it inherited from L0 . L1 has all the entries L0
+e (after hearing acks from a majority of nodes), L1 can serve local
+                                                                              committed. It knows L0 cannot commit any more entries in its
+linearizable reads while e is at most Δ old, because it knows no fu-
+                                                                              leadership term, because when L1 won the election it increased a
+ture leader will advance the commitIndex until e is more than Δ old.
+                                                                              majority of the nodes’ terms and prevented L0 from committing
+It knows this because, once e is committed, Leader Completeness
+                                                                              any more entries [42]. Since L1 has the latest committed data, this
+implies that any leader L2 in a future term will have e in its log, and
+                                                                              might seem to guarantee that L1 can execute linearizable reads, but
+thus know of L1 ’s lease. Later entries after e, including ordinary
+                                                                              there is an additional kink: we need to take the “limbo region” of
+client write commands, automatically extend the lease.
+                                                                              the log into account.
+   Expressed another way, once a leader has committed any entries,
+                                                                                 Consider Figure 3. L1 has been elected in a later term than L0 ,
+its newest committed entry is its lease. On the other hand, a new
+                                                                              but L1 has not yet committed any entries, and its commitIndex lags
+leader that hasn’t committed entries considers its newest (possibly
+                                                                              that of L0 . We define L1 ’s “limbo region” as entries in L1 ’s log with
+uncommitted) entry from the prior term as the prior leader’s lease.
+                                                                              indexes greater than L1 ’s commitIndex, up to the last entry in L1 ’s
+                                                                              log when it was elected. L1 does not know where in the range [3,6]
+3.2    Deferred commit writes                                                 L0 ’s commitIndex falls. If L1 acts pessimistically and executes client
+In existing protocols, a non-leaseholder cannot accept writes. In             reads from its commitIndex, it may return older data than L0 (if
+LeaseGuard a leader can always accept writes, send them to fol-               L0 is alive), violating linearizability. If L1 acts optimistically and
+lowers, and make them fault-tolerantly durable. It simply cannot              applies all commands through index 6, it may return newer data
+commit, apply, or acknowledge writes until its latest prior-term              than L0 , which also violates linearizability.
+entry (i.e., the deposed leader’s lease) is more than Δ old. We call             Therefore, LeaseGuard adds an additional check: a node executes
+this the deferred commit optimization. When the prior-term entry              reads only if they are unaffected by writes in the limbo region.
+is old enough, the leader advances its commitIndex to the index               This way both L0 and L1 can serve linearizable reads. Once L0 ’s
+                                                                          4
+LeaseGuard: Raft Leases Done Right
+
+
+lease expires, L1 commits an entry and the limbo region disappears.                 To prove this, we show that r observes w ’s effect in three cases:
+For a simple key-value store, it is self-evident whether a write in the             Case 1: r is sent to L1 while it is still the leader in term t1 . We
+limbo region affects some point query or range query. Databases                know that w was applied on L1 , and Raft prevents undoing writes,
+that support more complex queries require specialized algorithms.              so Theorem 1 holds. If L1 becomes a leader again in a future term,
+For example, if a database supports multi-version concurrency con-             we call it L2 and handle it in Case 3.
+trol (MVCC), the leader could execute a query on each version of                    Case 2: r is sent to a deposed leader L0 with term t0 < t1 . L1
+its data corresponding to each entry in the limbo region, and reject           has L0 ’s last committed entry e0 in its log by Leader Completeness.
+the query if any results are unequal. To make this practical is the            LeaseGuard requires L1 to wait until all prior-term entries in its
+subject of future research.                                                    log are more than Δ old before committing an entry in t1 . Since L1
+                                                                               has committed e1 , we know that e0 is more than Δ old. LeaseGuard
+4     Correctness                                                              requires L0 to have a committed entry less than Δ old in order to
+In this section, we show that LeaseGuard guarantees linearizabil-              read (Section 3.3), but e0 is L0 ’s last committed entry and it is older
+ity. Section 4.1 describes Raft’s guarantees. Section 4.2 shows that           than Δ; thus L0 rejects r and upholds Theorem 1.
+LeaseGuard is correct, assuming perfect clocks. We consider clock                   Case 3: r is sent to leader L2 with term t2 > t1 . We subdivide
+uncertainty in Section 4.3, and discuss why correctness is preserved           this case according to the state of L2 ’s log and commitIndex.
+under reconfiguration in Section 4.4.                                               Case 3.1: L2 ’s commitIndex is i0 ≤ i1 and L2 has no limbo region.
+                                                                               By Leader Completeness, e1 is in L2 ’s log, thus since it has no limbo
+4.1     Raft guarantees                                                        region i0 = i1 . By State Machine Safety, L2 has applied or will
+We rely on the following guarantees, which we quote from [42]:                 eventually apply w . Raft requires L2 to wait until its lastApplied
+Leader Append-Only: a leader never overwrites or deletes entries               reaches the commitIndex L2 had when r arrived, before executing
+in its log; it only appends new entries.                                       r (see ClientRead in Figure 2). So L2 applies w before executing r ,
+Log Matching: if two logs contain an entry with the same index                 and satisfies Theorem 1.
+and term, then the logs are identical in all entries up through the                 Case 3.2: L2 ’s commitIndex is i0 ≤ i1 and it has a limbo region,
+given index.                                                                   meaning that it has not committed an entry in its term. L2 ’s limbo
+Leader Completeness: if a log entry is committed in a given term,              region spans from its commitIndex i0 to its last prior-term log index
+then that entry will be present in the logs of the leaders for all             i2 , where i0 ≤ i1 ≤ i2 , so the limbo region includes w . According
+higher-numbered terms.                                                         to the limbo read rule in Section 3.3, L2 will not execute r if it is
+State Machine Safety: if a server has applied a log entry at a given           affected by a command in the limbo region. L2 will reject r if it is
+index to its state machine, no other server will ever apply a different        affected by w , otherwise execute r ; either way the client cannot
+log entry for the same index.                                                  observe that w has not been executed, so Theorem 1 is upheld.
+                                                                                    Case 3.3: L2 ’s commitIndex is i2 > i1 . Thus it has no limbo
+4.2     Correctness with perfect clocks                                        region, and it must eventually apply w (State Machine Safety). It
+                                                                               must apply w some time before it executes r , satisfying Theorem 1.
+A concurrent computation is linearizable if it is equivalent to a se-
+                                                                                    Theorem 1 holds in all cases: read r observes write w ’s effect
+quential computation that preserves the real-time ordering of oper-
+                                                                               regardless of whether r is sent to the leader that committed w , an
+ations; that is, each operation appears to take effect at some instant
+                                                                               earlier-term leader, or a later-term leader (with or without a limbo
+between its invocation and acknowledgment [22]. Raft without
+                                                                               region or a committed entry in its term).
+LeaseGuard permits multiple leaders at a time, but it is nevertheless
+                                                                                    Now we show that Theorem 1 implies that reads reflect the latest
+linearizable. Raft guarantees that only the highest-term leader can
+                                                                               committed state among all leaders in the replica set. Note that it
+commit writes, that it commits and applies each write between
+                                                                               is theoretically possible for a replica set with 2f + 1 nodes to have
+its invocation and acknowledgment, and that writes are applied
+                                                                               f + 1 leaders simultaneously: each received f + 1 votes from itself
+sequentially in the same order on all nodes. To ensure linearizable
+                                                                               and its f non-leader peers. In real systems, more than two leaders
+reads, Raft performs a quorum check for each read to ensure the
+                                                                               is practically unheard of.
+leader executing the read is the highest-term leader.
+   LeaseGuard alters Raft’s behavior in two ways. First, a leader
+may wait before committing recent writes and acknowledging                        Theorem 2 (Read At Highest commitIndex). For the set of
+them to the client (deferred commit write, Section 3.2). Raft has              nodes L whose state is “leader” at some moment, let imax be the
+no real-time bound on when a leader commits an entry after it is               greatest commitIndex over L. Any read r observes the effects of all
+majority-acknowledged, so this delay cannot break Raft’s lineariz-             commands ci associated with all entries ei that were ever committed
+ability guarantee.                                                             by any leader, for all i ≤ imax , for the value of imax at some moment
+   Second, a leader can execute a read without contacting other                between r ’s invocation and acknowledgment.
+nodes (inherited lease reads, Section 3.3). We sketch a proof that
+LeaseGuard guarantees Read-Your-Writes, and therefore guarantees
+                                                                                  Proof: Suppose r observes some earlier version of the state ma-
+linearizability.
+                                                                               chine before the entry with index imax was applied. There must
+   Theorem 1 (Read-Your-Writes). If a leader L1 in term t1 com-                be a write w associated with the imax entry, whose effect r does
+mits and applies write w , represented by log entry e1 with index i1 , a       not observe. This contradicts Theorem 1, thus r cannot observe the
+later read r must observe w ’s effect.                                         state machine at an earlier version.
+                                                                           5
+                                                                                                                                                    Davis et al.
+
+
+   Raft guarantees that the sequence of state machine versions at                                                    read availability
+sequential commitIndexes is a linearizable history, and that the                                                     write availability
+latest commitIndex in the replica set increases monotonically. Since                                  crash     lease expires     new leader with lease
+LeaseGuard ensures that each read observes the latest commitIndex
+in the replica set, LeaseGuard preserves linearizability.
+                                                                                  a) ∆ = 250ms
+                                                                                                         0          250          500
+4.3    Correctness with clock uncertainty                                                             crash                       new leader with lease
+In Case 2 above, a node must determine whether a time interval
+was recorded on another node more than Δ ago. This requires                       b) ∆ = 500ms
+clocks with correctly measured uncertainty bounds on each node,
+                                                                                                         0                       500
+such that t1 is more than Δ old if intervalNow() returns t2 and
+                                                                                                      crash       new leader              acquire
+t1 .latest + Δ < t2 .earliest. Such clocks have become available in
+                                                                                                                 without lease             lease
+the cloud over the last two years (Section 2.2). If a clock’s bounds
+are wrong, i.e. if the true time is outside the interval [earliest, latest]       c) ∆ = 1000ms
+for the entire duration between the invocation and completion of                                         0                       500                1000
+a call to intervalNow(), then multiple leaders may think they are                                                          inherited lease reads and
+leaseholders at once. In that case a deposed leader may execute reads                                                        deferred commit writes
+while a higher-term leader commits writes. Reads from the deposed                              election timeout = 500 ms for all charts
+leader will violate Read-Your-Writes, and thus violate linearizability.
+Inherited lease reads require correct clock bounds!                               Figure 5: Effect of lease duration on availability in Lease-
+                                                                                  Guard. Election timeout = Δ is usually optimal.
+4.4    Correctness with reconfigurations
+Raft has two protocols for “reconfiguration”, i.e. adding and remov-
+ing replica set nodes: joint consensus, or single-node changes [46].              Δ = ET (Figure 5). If Δ < ET and writes are rare, the leader must
+Both protocols uphold all the Raft guarantees we rely on, includ-                 extend its lease more often without any benefit from the short Δ: the
+ing Leader Completeness and State Machine Safety. With joint                      long election timeout causes unavailability after a crash, regardless
+consensus, a replica set with configuration Cold switches to con-                 of leases. If Δ > ET, there is a period after an election when the
+figuration Cnew by adding and removing arbitrary members. The                     new leader has no lease. LeaseGuard tolerates this better than prior
+replica set transitions through a period when all entries must be                 protocols, because the elected leader can still serve linearizable
+committed by a majority of both Cold and Cnew , then it retires Cold              reads using the inherited lease optimization and perform deferred
+and makes all subsequent decisions with a majority of Cnew only.                  commit writes (see evaluations in Sections 6 and 7). Regardless of
+With single-node changes, the replica set can either add one node                 ET, a leader might be deposed at any time, perhaps by a human
+or remove one node per reconfiguration, and there is no transitional              operator or a failure detector. We anticipate that LeaseGuard will
+period. The protocol is safe because a majority of the old and new                enable deployment of more aggressive failure detectors, since it
+configuration always overlaps if they differ by one server. This                  improves availability after an election.
+overlapping-majorities property preserves the Raft guarantees on
+which LeaseGuard depends.                                                         5.3    Leases without bounded-uncertainty clocks
+                                                                                  Most of LeaseGuard can be implemented using local timers with
+5 Extensions and optimizations                                                    bounded drift rates; bounded-uncertainty clocks are not required.
+5.1 Automatic lease extension                                                     All nodes must know some value 𝜖, the maximum amount that their
+                                                                                  clocks can gain or lose while measuring a duration of Δ. Whenever
+LeaseGuard extends leases automatically through write operations,                 a leader creates or a follower replicates an entry, it starts a timer
+but a lease expires after Δ duration with no writes. When writes                  to track that entry’s age. The leader’s timer starts as soon as it
+are rare, the leader can write a no-op to reestablish its lease when-             creates an entry, before any followers can replicate the entry, so
+ever needed to serve a read, or (to avoid cold starts) proactively                the leader’s timer expires before any follower’s timer for that entry.
+write a no-op to maintain its lease. It is also possible to change Δ              LeaseGuard’s rules can be revised to use timers instead of time
+dynamically, e.g. to increase Δ to reduce the frequency of no-ops.                intervals: a leader can advance its commitIndex or serve reads so
+This is out of our current scope. For planned leader transitions (e.g.            long as its last entry in any previous term is > Δ + 𝜖 old, and the
+for rolling upgrades and other maintenance tasks), the outgoing                   last committed entry in its own term is < Δ − 𝜖 old.
+leader can relinquish its lease by committing an “end-lease” entry                    Timers suffice for LeaseGuard with deferred commit writes, but
+as its final act of leadership. The next leader can execute reads and             not for inherited lease reads: Suppose a leader L1 is deposed by
+writes without restriction.                                                       L2 , which commits no entries before it is deposed by L3 . Due to a
+                                                                                  network partition, L2 is unaware of L3 ’s election; L3 is elected by a
+5.2    Choosing election timeout and Δ                                            quorum that does not include L2 . Now L2 and L3 are both leaders
+LeaseGuard allows the election timeout ET and lease duration Δ                    at the same time. They may disagree on when L1 ’s lease expires,
+to be tuned independently. If ET is a fixed number, it is best to set             based on when they last replicated an L1 entry when they were
+                                                                              6
+LeaseGuard: Raft Leases Done Right
+
+
+followers. This disagreement can lead to a linearizability violation:            6.1    Simulator architecture
+L3 believes L1 ’s lease has expired, so L3 commits entries, while                The simulator comprises these files (about 1000 lines of code, ex-
+L2 thinks the lease it inherited from L1 is still valid, so L2 serves            cluding whitespace and comments):
+inherited lease reads from stale data, which does not reflect L3 ’s
+writes. Thus, systems must have access to clocks with bounded                    simulate.py: An event loop. Callbacks are scheduled to run at
+uncertainty to implement inherited lease reads. With such clocks,                times in the future. The event loop finds the callback with the earli-
+L1 stores a time interval in each entry, and there is no ambiguity               est deadline, advances the simulated clock to exactly that deadline,
+about whether its entries are > Δ old.                                           executes the callback (which may schedule more callbacks), then
+                                                                                 repeats. Atop the loop we layered an API with tasks, futures, and
+                                                                                 coroutines, similar to Python’s standard asyncio. Coroutines sim-
+5.4     Lessons learned
+                                                                                 ulate processes and threads, but they are deterministic, with the
+Our experience offers several lessons for the design of replicated               same scheduling and interleaving each time the simulation runs
+databases. First, we found that Raft’s Leader Completeness property              with a given seed.
+provides a surprisingly powerful foundation for reasoning about
+leases: by tying lease validity to log replication rather than to ad-            lease guard.py: Implements Raft with various consistency mech-
+hoc timers or heartbeats, we eliminate entire classes of gray-failure            anisms, including LeaseGuard. Any number of nodes can form a
+and faux-leader bugs that plagued production systems.                            replica set (our experiments use three nodes). Nodes communicate
+   Second, our work reinforced the value of formal methods not                   via message-passing, with random network delays. Each node has
+only as a tool for verification, but also as a tool for design discov-           an independent, bounded-uncertainty clock. Nodes expose two com-
+ery: both our deferred commit and inherited lease optimizations                  mands to clients: write(key, value) permits a client to append
+emerged from exploring corner cases in our TLA+ model. At the                    value to the append-only list associated with key, and read(key)
+same time, our early iterations reminded us that formal tools are                returns the values appended to this list, in order. We use append-
+not foolproof. Our first specification missed the “limbo-region” read            only lists because they are ideal for checking that our algorithm
+problem because we modeled using large atomic actions that hid the               upholds linearizability [32] (Section 6.2).
+bug. This experience taught us to approach even successful model                 client.py: Simulates a client. Any number of clients can concur-
+checks with skepticism: as Lamport puts it, “always be suspicious                rently communicate with the Raft leader. Each client appends one
+of success.”                                                                     unique value to one key, or reads the list of values for one key. For
+   Finally, reasoning through these bugs and correctness arguments               our experiments we implement workload generators that launch
+led us to view LeaseGuard through the lens of knowledge and com-                 many concurrent clients. These workload generators are open loop:
+mon knowledge in distributed systems [21]. We are exploring how                  they start requests at a fixed rate regardless of the response latency.
+to make this epistemic-reasoning approach more practical for de-
+signing distributed database protocols.                                          params.py: Contains parameters that control every aspect of the
+                                                                                 Raft and LeaseGuard protocols, e.g. whether leases are enabled,
+                                                                                 which optimizations are enabled, the election timeout, and lease
+6     Simulation
+                                                                                 duration. The module also includes parameters that control the
+We wrote a Raft simulation in Python. Simulation is helpful for                  simulation, e.g. maximum clock error bounds, the network latency
+quickly exploring performance characteristics, which are impossi-                mean and variance, the number of clients and their arrival rate.
+ble to analyze with a TLA+ specification, and difficult to measure
+cleanly with a real system [6, 7, 12]. Our simulation is at a level of ab-       prob.py: Produces pseudorandom numbers with various probabil-
+straction somewhere between our specification and our implemen-                  ity distributions.
+tation. It includes I/O latency, periodic no-ops for lease extension,            run with params.py: Reads parameters from params.py, config-
+and other details we omit in TLA+. On the other hand, it is far more             ures a replica set, waits for it to elect a leader, concurrently runs a
+abstract than the C++ implementation: it has no storage layer, net-              large number of clients, gathers statistics such as average read/write
+work protocol, or query language. The simulation runs in a single                latency, and checks that the execution was linearizable.
+process. It represents nodes as Python objects that pass messages.
+Time, clock error bounds, thread scheduling, and network delays
+                                                                                 6.2    Linearizability checking
+are all simulated. For nondeterministic events such as checking an
+imperfect clock, or sending a message with unpredictable latency,                We implemented a linearizability checker in Python to catch bugs in
+we choose appropriate probability distributions and produce values               lease raft.py, i.e. nonconformance with the TLA+ specification.
+with a pseudorandom number generator (PRNG). For a given seed                    Each run of the simulator compiles a history of operations. A history
+and set of parameters, the PRNG produces the same sequence of                    is a sequence of ClientLogEntry objects with these fields:
+values, thus the simulator executes the same events. We carefully                      • op type: ListAppend or Read.
+engineered this reproducibility to ease debugging and analysis. The                    • start ts: True time the client started the operation.
+simulator expresses the LeaseGuard algorithm more simply and                           • execution ts: True time the operation completed.
+directly than the implementation, providing a useful reference (in                     • end ts: True time the client received the reply.
+addition to the TLA+ spec and C++ code) for implementers. We                           • key: The key that was read from or written to.
+implemented two consistency mechanisms in our Raft simulator:                          • value: The appended value for ListAppend, or the returned
+quorum checks as described in the Raft paper, and LeaseGuard.                            list of values for Read.
+                                                                             7
+                                                                                                                                                    Davis et al.
+
+
+
+                               write latency p90          read latency p90            6.4    Latency simulation
+                   20                                                                 For Q1, we simulate a range of one-way network latencies between
+                        inconsistent
+                   10                                                                 server nodes, to explore the effects of latencies within and across
+                                                                                      regions. We use a lognormal distribution with means from 1-10ms
+                    0                                                                 and with variance equal to the mean, to simulate the latencies we
+                                                                                      would observe within and across regions. Client-server latency
+p90 latency (ms)
+
+
+
+
+                   20                                                                 is zero. There are 50 clients, half do a single Read operation and
+                        quorum
+                   10                                                                 half do a single ListAppend. Clients arrive according to a Poisson
+                                                                                      process, with an average of 100ms between arrivals.
+                    0                                                                    Figure 6 shows how network latency affects read and write 90th-
+                   20                                                                 percentile latency in three configurations. The inconsistent con-
+                        LeaseGuard                                                    figuration does not ensure Read-Your-Writes consistency during
+                   10                                                                 elections. Write latency is determined by the time it takes the leader
+                                                                                      to replicate the write to at least one follower and receive acknowl-
+                    0
+                           1     2      3 4 5 6 7 8 9                        10       edgment. Read latency is zero in our simulation, since the leader
+                                     added one-way network latency (ms)               serves reads without communicating with followers. The quorum
+                                                                                      configuration uses Raft’s default consistency mechanism: the leader
+    Figure 6: Effect of network latency on read/write latency,                        exchanges messages with a majority of nodes for each read, there-
+    milliseconds (simulation). The quorum check mechanism                             fore read latency is determined by the round-trip time between the
+    makes reads as slow as writes. LeaseGuard makes consistent                        leader and at least one follower. The 90th-percentile write latency
+    reads as fast as inconsistent reads.                                              is higher in this configuration (6% higher with 10ms one-way net-
+                                                                                      work latency), because replication competes with quorum checks
+                                                                                      for I/O. The LeaseGuard configuration uses our protocol, which
+                                                                                      enables instant linearizable reads served locally. Writes are as fast
+                                                                                      as the “inconsistent” configuration, since replication no longer com-
+                    • success: Whether the operation succeeded.                       petes with reads for I/O. LeaseGuard improves consistency with no
+                                                                                      overhead.
+        Linearizability checking in general is NP-complete [18] because
+    it requires evaluating all serializations that respect real-time order.
+    Our simulator has the advantage of omniscience: it knows the true
+                                                                                      6.5    Availability simulation
+    time when all client and server events occur. Each ListAppend                     For Q2, we used network latency parameters derived from AWS
+    entry’s execution ts records when the write was committed on                      same-subnet statistics (191 𝜇s mean, 391 𝜇s variance) [23]. An open-
+    the leader, and each Read entry’s execution ts marks when it was                  loop workload generator starts an operation every 300µs. One-third
+    executed. To check linearizability, we check that each operation’s                of operations write 1 kilobyte to a random key, two-thirds read a
+    execution time falls between its start and end times, then sort                   random key. Keys are uniformly randomly selected from a list of
+    operations by execution time, and verify that Reads observe all                   1000. The election timeout ET is 500ms. (This value is within the
+    preceding ListAppends for the same key. In some cases we still must               range used by other Raft implementations; [42] proposes timeouts
+    consider multiple serializations: (1) If multiple ListAppends share               from 12ms to 300ms. Production systems use larger timeouts, typi-
+    the same exact execution time, we test all orderings. The history is              cally 1 to 10 seconds to avoid spurious elections, e.g. CockroachDB’s
+    linearizable if at least one ordering preserves ListAppend and Read               default is 9 seconds and TiDB Placement Driver’s is 10.) We set
+    semantics. (2) If a ListAppend fails from the client’s perspective, it            lease duration Δ to 1 second (twice ET) to observe leader-transition
+    may have succeeded on the server, e.g., if the leader was deposed                 availability effects. In practice, a system that uses a constant ET to
+    after replication but before responding. We check linearizability                 detect leader failures should set Δ = ET, see Section 5.2. However, a
+    under both possibilities: the ListAppend either succeeded after it                sophisticated system might use a dynamic failure detector that calls
+    started or never succeeded. Despite these permutations, checking                  for an election whenever it suspects the leader, even when its lease
+    simulated histories with hundreds of operations usually completes                 is a long time from expiring. Setting Δ = 2ET is a simple way to
+    in a few seconds.                                                                 examine this scenario. We study the effects of various consistency
+                                                                                      mechanisms on availability (Figure 7). In each experiment we create
+                                                                                      a 3-node replica set and begin executing the workload. After 500ms,
+    6.3                 Simulated experiment design                                   the leader crashes; 500ms later another leader is elected, and 500ms
+    We perform simulated experiments to evaluate the following:                       after that the old leader’s lease expires.
+    Q1 (Latency): How do several consistency mechanisms affect the                       Inconsistent: No mechanism ensures Read-Your-Writes. After
+    latency of linearizable reads and writes?                                         the first leader crashes, all reads fail. Once the new leader is elected,
+    Q2 (Availability): How do several consistency mechanisms affect                   they resume at their normal throughput instantly. Writes also fail
+    availability after a leader crashes?                                              during the interregnum between the old and new leader. After the
+    Q3 (Skewness): How does workload skewness affect read availabil-                  election, clients resume writing to the new leader, but the leader
+    ity after a leader crashes?                                                       has not yet committed any writes. There is a short delay while the
+                                                                                  8
+      LeaseGuard: Raft Leases Done Right
+
+
+                                      writes              reads                             Defer commit: The new leader begins to accept writes, create
+                                                                                         log entries, and replicate them as soon as it is elected, while waiting
+
+
+
+
+                                                                      inconsistent
+                  2000              leader                                               for the old lease to expire. However, it does not advance the com-
+                                   crash                                                 mit index until it acquires a lease at 1500ms. These writes are all
+                                                                                         acknowledged near-simultaneously when the leader fast-forwards
+                        0                                                                its commit index, so write throughput goes off the chart and the
+                                                                                         replica set returns to steady state quickly. The deferred commit
+                                  new leader
+                                                                                         write optimization allows the system to stabilize more quickly than
+
+
+
+
+                                                                      quorum
+                  2000            elected                                                with unoptimized leases.
+                                                                                            LeaseGuard: Our lease protocol with all optimizations enabled.
+                        0                                                                The new leader can serve linearizable reads as soon as it is elected,
+operations per second
+
+
+
+
+                                                                                         without waiting for the old lease to expire. There are few writes in
+                                                                                         progress when the leader dies (since write interarrival times are
+                                                 old lease
+
+
+                                                                     log-based
+                                                                                         large compared to network latency), so the new leader has a small
+                  2000                           expires
+
+
+                                                                       lease
+                                                                                         limbo region which does not significantly interfere with reads. The
+                                                                                         inherited lease read optimization restores read availability sooner
+                        0                                                                after an election.
+                                     off chart, 55k ops/sec                                 In summary: When Δ > ET, leader leases inevitably hurt avail-
+                                                                     commit              ability. But this experiment shows that LeaseGuard’s two optimiza-
+                  2000
+                                                                      defer
+                                                                                         tions, inherited read leases and deferred-commit writes, help the
+                                                                                         replica set return to steady state more quickly after a leader failure.
+
+                        0
+                                     off chart, 55k ops/sec
+                                                                                         6.6    Skewness simulation
+                                                                      LeaseGuard
+
+
+
+
+                  2000                                                                   We use Q2 parameters with Zipfian skewness a ranging from 0 to 2
+                                                                                         across 1000 keys. At a = 0, keys have equal probability of being read
+                                                                                         or written; at a = 2, the hottest key accounts for 61% of operations.
+                        0
+                            500             1000             1500                        As in Q2, the leader crashes and a new one is elected. It can use
+                                   time in milliseconds                                  an inherited lease to read any data written by the prior leader,
+                                                                                         except for data affected by log entries in the limbo region (Section
+      Figure 7: Availability (simulation). Δ = 1 second, ET = 500 ms.                    3.3). Higher skew makes reads more likely to conflict with limbo
+      Just after failover, LeaseGuard’s deferred commit optimiza-                        region entries. We place 100 log entries into the limbo region and
+      tion increases write throughput, and its inherited lease reads                     measure the simulated read throughput on the new leader (Figure 8).
+      improve read availability.                                                         The number 100 is chosen to stress-test the protocol for skewness
+                                                                                         effects; in reality the number of limbo entries is determined by
+                                                                                         workload intensity and the network latency among servers. Once
+                                                                                         the inherited lease expires, all reads are permitted.
+      surviving follower discovers the new leader and begins replicating.
+      Write throughput then appears to spike as the follower catches
+      up and acknowledges recent log entries, and the leader commits                     7 LogCabin evaluation
+      them and acknowledges them to the client. This option has good
+      availability but does not guarantee linearizability.                               7.1 Experiment design
+          Quorum: The leader communicates with a majority of nodes                       We implemented LeaseGuard in the LogCabin codebase, the ref-
+      (itself and at least one follower) for each read/write. All operations             erence implementation of Raft. Prior to our work, LogCabin did
+      fail during the interregnum, and reads and writes are both delayed                 not use leases: instead, LogCabin leaders ensured consistent reads
+      a short time after the election. Since reads and writes compete for                with a quorum check, as described in the Raft paper. LogCabin
+      I/O, they both show a throughput spike after the election, but the                 implements a key-value database atop the Raft log. Its codebase
+      spike is lower than the write spike in the “inconsistent” scenario.                is 27,000 lines of C++ excluding tests and comments; LeaseGuard
+      Once the new leader has cleared its replication backlog, throughput                required adding or changing 1600 lines. To execute a sufficiently
+      returns to the steady state. This option has good availability, at the             intense open-loop workload from a single client node required en-
+      cost of a lower throughput ceiling and higher latency (Section 6.4).               hancing the LogCabin client with an async API, another 650 added
+          Log-based lease: This is Raft with LeaseGuard, but without                     or changed lines. The client changes were more difficult than the
+      inherited read leases or deferred-commit writes. After the election,               server changes, but necessary to ensure a valid benchmark, where
+      reads and writes fail until 1500ms when the new leader acquires its                the client’s offered load always matched our intended intensity,
+      lease. (An implementer could choose to retry operations instead of                 no matter whether the servers experienced high latency or hit a
+      fail-fast.)                                                                        throughput ceiling [45].
+                                                                                     9
+                                                                                                                                                                                 Davis et al.
+
+
+                                                        Skewness Experiment                                                                        writes           reads
+
+
+
+
+                                                                                                                                                                                      inconsistent
+                                3000                                                                                                              leader
+                                                                                                                             25000               crash
+Read/sec with inherited lease
+
+
+
+
+                                2500
+                                                                                                                                      0
+                                2000
+                                1500                                                                                                            new leader
+
+
+
+
+                                                                                                                                                                                      quorum
+                                                                                                                                   2500         elected
+                                1000
+                                                                                                                                      0
+                                500           Attempted reads/sec
+                                              Successful reads/sec
+                                                                                                                                                              old lease
+
+
+
+
+                                                                                                                                                                                     Ongaro
+                                                                                                                             25000                            expires
+
+
+
+
+                                                                                                           operations per second
+                                       0.00   0.25   0.50   0.75     1.00 1.25   1.50   1.75   2.00
+
+
+
+
+                                                                                                                                                                                      lease
+                                                                   Skewness
+                                                                                                                                      0
+        Figure 8: Effect of workload skewness on read throughput on
+        the new leader while it awaits a lease (simulation). More skew
+
+
+
+
+                                                                                                                                                                                    log-based
+        means fewer consistent reads are permitted. Throughput
+                                                                                                                             25000
+
+
+
+
+                                                                                                                                                                                      lease
+        recovers once the leader acquires a lease.
+
+                                                                                                                                      0
+          We ignore efficiency in our abstract description of the Lease-                                                                           off chart, 45k ops/sec
+      Guard algorithm, but our C++ implementation is reasonably op-
+
+
+
+
+                                                                                                                                                                                     commit
+                                                                                                                             25000
+
+
+
+
+                                                                                                                                                                                      defer
+      timized. For example, in our pseudocode for CommitEntry (Fig-
+      ure 2), the leader determines if it has any previous-term log entry
+      < Δ old by iterating its whole log. In C++, the leader caches a
+                                                                                                                                      0
+      lastEntryInPreviousTermIndex variable, which always points                                                                                   off chart, 44k ops/sec
+      to the latest log entry in the last term, so the CommitEntry check
+
+
+
+
+                                                                                                                                                                                      LeaseGuard
+      is constant-time. Our pseudocode for ClientRead does not specify
+      how the leader checks if any limbo region entry affects the queried
+                                                                                                                             25000
+      key. In C++, we optimize this check, while preserving Raft’s layer
+                                                                                                                                      0
+      separation: the consensus layer manages the log and elections,
+                                                                                                                                          500            1000             1500
+      while the state machine layer manages the keys and values, and                                                                            time in milliseconds
+      the two layers are ignorant of each other’s domains. In our im-
+      plementation, when a node is elected, its consensus layer calls a                                          Figure 9: Availability (LogCabin). Ongaro leases and our log-
+      new method StateMachine::setLimboRegion(vector<Entry>).                                                    based leases (without optimizations) have the same avail-
+      This method receives a list of entries in the limbo region and stores                                      ability. Our deferred commit optimization improves write
+      an unordered set<string> of keys affected by limbo region en-                                              throughput when the new leader acquires a lease, and our
+      tries. While the node waits to establish a lease, the state machine                                        inherited lease reads restore read availability sooner.
+      efficiently rejects queries involving keys in this set. When the node
+      acquires a lease, the consensus layer calls setLimboRegion again
+      with an empty vector, indicating that the state machine can read                                           then the leader has a lease, because it knows a majority of follow-
+      all keys freely.                                                                                           ers have heard from it recently and therefore have not voted for
+          We also implemented in LogCabin the “Ongaro lease” protocol,                                           another node in an election. A leader with a lease runs queries
+      for comparison. By “Ongaro lease” we mean the mechanism pro-                                               without communicating with followers. In Ongaro’s description
+      posed by Ongaro in [41] §6.4.1. Ongaro sketches the mechanism in                                           the lease is shortened slightly to compensate for clock drift; we did
+      a few sentences and has not implemented it, so we have inferred                                            not implement this safety check. The Ongaro lease protocol lacks
+      some details and implemented the highest-availability version of                                           the defer commit and inherited lease read optimizations, and does
+      the protocol we can imagine. This protocol depends on the Raft                                             not allow ET to be different from Δ.
+      rule that a follower will not vote for a candidate if it has heard from                                       In our experiments each node is an EC2 m7g.xlarge in the us-
+      a leader less than ET ago. In our implementation of Ongaro leases,                                         east-1 region. The single client and three servers are in the same
+      the leader tracks the start time of each AppendEntries message it                                          placement group. Ping times among them average 155µs. Starting
+      sends to any follower. If the follower replies, the leader updates                                         in 2024, servers of this instance type use AWS TimeSync by de-
+      a local variable si , which is the start time of the last successful                                       fault, but for maximum clock precision we installed the Precision
+      AppendEntries sent to node i. The leader considers its own si to                                           Time Protocol kernel module, recompiled Amazon’s Elastic Net-
+      be the current time. If a majority of si values are less than ET old,                                      work Adapter with physical hardware clock support, and installed
+                                                                                                      10
+    LeaseGuard: Raft Leases Done Right
+
+
+
+                               write latency p90           read latency p90             lease”. For all configurations, writes require leader-follower commu-
+                                                                                        nication and write latency is affected by latency between servers.
+                   20                                                                   In the “inconsistent”, “Ongaro lease”, and “LeaseGuard” configu-
+                        inconsistent                                                    rations, reads require no communication with the followers, so
+                   10                                                                   90th -percentile latency is in the hundreds of microseconds. Perfor-
+                                                                                        mance is similar to the simulation’s. In the “quorum” configuration,
+                    0                                                                   reads require leader-follower communication, and they compete
+                                                                                        with writes for I/O, harming latency for both. A small increase in
+             16k                                                                        network latency causes a huge increase in operation latency due
+                        quorum                                                          to queueing effects, which we do not observe in our simulation.
+                   8k
+p90 latency (ms)
+
+
+
+
+                                                                                        LeaseGuard permits consistent reads and writes with zero overhead
+                                                                                        compared to Ongaro leases or the inconsistent configuration.
+                   0k
+                   20
+                        Ongaro lease
+                   10
+                                                                                        7.3    Availability
+                    0                                                                   As we did in the simulated experiment, we set lease duration Δ
+                                                                                        to 1 second (twice ET) to observe the effect of various consistency
+                   20
+                        LeaseGuard                                                      mechanisms on availability after an election (Figure 9). Ongaro
+                   10                                                                   leases do not have a separate Δ parameter so we set ET to 1 second
+                                                                                        for Ongaro leases. An open-loop workload generator starts 30 op-
+                    0                                                                   erations per millisecond. One-third of operations write 1 kilobyte
+                           1      2       3 4 5 6 7 8 9                       10        to a random key, two-thirds read a random key. Keys are randomly
+                                      added one-way network latency (ms)                selected from a list of 1000 according to a Zipf distribution with
+                                                                                        a = 0.5, so the hottest key is chosen 1.6% of the time. We test four
+    Figure 10: Effect of network latency on read/write latency,                         consistency configurations:
+    milliseconds (LogCabin). Quorum reads hugely increase read                              Inconsistent: No mechanism ensures linearizability. The same
+    and write latency, due to queuing. With Ongaro leases and                           as in the simulation, throughput recovers soon after the election.
+    LeaseGuard, consistent read latency is the same as with no                              Quorum: LogCabin’s default consistency mechanism. Note that
+    consistency.                                                                        the Y axis for this chart is one tenth as high as the others: quorum
+                                                                                        checks dramatically harm throughput. LogCabin shows a much
+                                                                                        worse impact from quorum checks than our simulation does.
+                                                                                            Ongaro Lease: The leader serves reads if a majority of successful
+    Amazon’s open-source clock-bound daemon [27]. The clock-bound
+                                                                                        RPCs began less than ET ago. Throughput is restored when a new
+    API provides time intervals spanning less than 100µs (clock error
+                                                                                        leader is elected.
+    less than 50µs). We used our modified LogCabin implementation to
+                                                                                            Log-based lease: Our lease protocol with no optimizations. As
+    replicate two of our three simulated experiments, plus a fourth:
+                                                                                        in the simulation, the system is unavailable after the election until
+    Q1 (Latency): How do leases affect the latency of linearizable reads
+                                                                                        the old leader’s lease expires.
+    and writes?
+                                                                                            Defer commit: LeaseGuard with our write optimization. We
+    Q2 (Availability): How do leases, inherited leases, and deferred-
+                                                                                        see a write spike when the new leader acknowledges all the writes
+    commit writes affect availability after a leader crashes?
+                                                                                        it had buffered while waiting for a lease. This spike is not as vertical
+    Q4 (Scalability): What is the max throughput with various consis-
+                                                                                        as in the simulation, but still goes off the chart to 90 writes per
+    tency mechanisms?
+                                                                                        millisecond. The avalanche of acks briefly slows read throughput,
+                                                                                        which then spikes and recovers. The deferred commit write opti-
+    7.2                 Latency                                                         mization reduces failed writes and allows the system to stabilize
+    For Q1, the client executes an open-loop workload. One third of op-                 quickly after an election.
+    erations write a 1-kilobyte value each, and two-thirds of operations                    LeaseGuard: Our lease protocol with both optimizations (de-
+    read a 1-kilobyte value. The client starts an operation every 300                   ferred commit writes and inherited lease reads). Unlike our sim-
+    microseconds and measures its round-trip time. We use “tc”, the                     ulation, our actual test produces a significant limbo region of 37
+    Linux traffic control utility, to add one-way latency from 1 to 10ms                possibly-committed log entries on the new leader that prevent some
+    between server nodes. This range covers the latencies we would                      linearizable reads. Therefore read throughput is slightly lower while
+    observe between servers within and across regions. Client-server                    the new leader waits for a lease: the client attempts 10,000 reads
+    latency is unaffected. Figure 10 shows how network latency affects                  during this half-second period, but only 9,930 succeed. Neverthe-
+    90th -percentile read and write latency, in the same three config-                  less, the inherited lease read optimization improves read availability
+    urations as we used for the simulated experiment, plus “Ongaro                      while the new leader waits for a lease.
+                                                                                   11
+                                                                                                                                                 Davis et al.
+
+
+                        inconsistent      quorum    Ongaro lease   LeaseGuard        8 Related work
+                                                   10% writes                        8.1 Leases
+                       10000
+                                                                                     Leases were originally introduced for distributed file cache consis-
+average latency (ms)
+
+
+
+
+                        1000                                                         tency [19, 35]. Consensus with leader leases was implemented for
+                         100                                                         MultiPaxos in [9, 10, 14]. Unlike Raft, MultiPaxos does not guaran-
+                                                                                     tee Leader Completeness, so it is incompatible with LeaseGuard’s
+                          10                                                         simplification (“the log is the lease”) and its read optimization.
+                           1                                                            A Raft lease protocol was described in [41], but not specified in
+                                                                                     detail or built into LogCabin, Raft’s reference implementation. In
+                         0.1                                                         that protocol, the leader starts a timer, sends a heartbeat message
+                                                                                     to all nodes, and acquires a lease once a majority replies. The lease
+                                                                                     lasts until the timer, plus some clock-drift compensation, exceeds
+                                                   25% writes
+                       10000                                                         some timeout. The leader extends its lease periodically. Followers
+                                                                                     promise not to vote for a new leader until the last known lease
+average latency (ms)
+
+
+
+
+                        1000                                                         expires. Compared to LeaseGuard, this protocol delays elections and
+                         100
+                                                                                     thus harms read and write availability. It is prone to gray failures,
+                                                                                     where a leader can maintain its lease although it cannot write log
+                          10                                                         entries. It also risks a thundering herd of requests overwhelming
+                                                                                     the new leader once it acquires a lease.
+                           1                                                            TiKV uses a separate lease management service called the TiDB
+                         0.1                                                         Placement Driver, requiring additional infrastructure and communi-
+                                                                                     cation [50]. The TiDB Placement Driver includes a Raft implemen-
+                                                                                     tation with a 10-second leader lease, resulting in a 10-second outage
+                                                   50% writes                        after any leader failure [34]. Spanner implements Paxos with leases
+                       10000                                                         using tightly synchronized clocks [14]. In both protocols, a node
+average latency (ms)
+
+
+
+
+                        1000                                                         that knows of a lease does not call an election or cast a vote until
+                                                                                     that lease expires. In contrast, LeaseGuard does not delay elections
+                         100                                                         or modify the election protocol at all.
+                          10                                                            YugabyteDB’s implementation of Raft leases [44] allows leader
+                                                                                     election to overlap with an outstanding lease, like ours. But during
+                           1                                                         elections, voters must tell the candidate explicitly about existing
+                         0.1                                                         leases. LeaseGuard is simpler. It avoids the need for an explicit
+                                                                                     lease-learning mechanism by inferring the lease from the log; this
+                                  10000     20000 30000 40000 50000                  technique was partly inspired by [13].
+                                           actual throughput (ops/sec)                  In CockroachDB’s Raft variant [49], replicas hold leases on data
+                                                                                     ranges, and leaseholders need not be leaders. A replica acquires/ex-
+      Figure 11: LogCabin scalability with various consistency                       tends its lease on a data range by writing a special lease-acquisition
+      mechanisms. LeaseGuard is more scalable than quorum                            log entry. In LeaseGuard, every log entry acquires/extends the lease,
+      check or Ongaro leases and nearly equals the inconsistent                      obviating the need for a special entry type. CockroachDB lacks our
+      configuration.                                                                 improvements to read and write availability.
+
+                                                                                     8.2    Other mechanisms for consistent reads
+                                                                                     Ongaro proposed a mechanism for ensuring causal consistency in
+                                                                                     Raft in [41] §6.4.1: the leader includes its lastApplied index with
+                                                                                     each reply, and the client remembers this index and includes it
+                                                                                     with each request. If a leader receives a request with a lastApplied
+                                                                                     greater than its own, it waits until its lastApplied catches up before
+      7.4                 Scalability                                                executing the request. This guarantees causal consistency because
+     We subjected LogCabin to increasing load with our async client,                 Raft ensures that all servers apply the same commands in the same
+     starting at 5000 operations per second and stopping at 60,000 oper-             order (State Machine Safety). We implemented this mechanism in
+     ations per second, or once latency increased over 100 ms. As in our             MongoDB years ago, but customers dislike it. It requires an applica-
+     latency experiment, the client reads and writes 1 kilobyte values to            tion to use the same client for all related requests, which is onerous
+     uniformly-distributed random keys. Figure 11 shows LogCabin’s                   in a scaled-out cloud application. Besides, some applications require
+     throughput and latency with various consistency mechanisms and                  linearizability; causal consistency is relatively weak.
+     write ratios. Its throughput with LeaseGuard matches or exceeds                    Prior research investigated linearizable reads from followers to
+     that of Ongaro leases for each workload.                                        ease the leader’s load. In the Paxos Quorum Lease protocol [38],
+                                                                                12
+LeaseGuard: Raft Leases Done Right
+
+
+followers have leases, so an individual follower can provide lineariz-        8.3    Bounded-uncertainty clocks
+able reads without communicating with its peers. The leader needs             The use of bounded-uncertainty clocks in distributed systems has
+acknowledgment from each leaseholding follower for each write,                become more common recently. Spanner [14] famously uses Google’s
+so the loss of any single follower can harm write availability. Other         proprietary time infrastructure to enforce consistency. CockroachDB [49]
+work [3, 11, 56] ensures linearizable follower reads by contacting a          uses a similar mechanism adapted for public clouds. Accord [48]
+quorum of followers. While these relieve the leader of the read load,         and Detock [39] use time to order conflicting transactions. Yugabyt-
+they require communication with a majority, and cannot match the              eDB [43], Aurora Limitless [47], and Aurora DSQL [8] use AWS
+efficiency of leader leases.                                                  TimeSync to enforce consistency with high-precision clocks.
+    For strongly-consistent transactional follower reads, Arora et
+al. [3] detect write conflicts using CockroachDB’s write intents. A           9     Conclusion
+write intent is a per-key marker that records any uncommitted
+                                                                              We presented a novel leader lease protocol for the Raft consensus
+update’s timestamp, value, and transaction metadata. A client sends
+                                                                              algorithm that relies on bounded-uncertainty clocks and the guaran-
+a quorum read to a majority, and followers return data and the
+                                                                              tees provided by the Raft log. LeaseGuard simplifies the design and
+timestamp for each key. A follower that encounters a write in-
+                                                                              implementation of leader leases while minimizing read and write
+tent, however, returns only a timestamp without data, signaling an
+                                                                              unavailability during elections. We provide TLA+ specifications and
+uncommitted update. The client checks whether the highest times-
+                                                                              correctness proofs for our protocol. Through analysis, simulation,
+tamp in the quorum lacks data, and if so it retries its query. This
+                                                                              and benchmarking, we demonstrated LeaseGuard’s availability and
+protocol improves steady-state read scalability by safely offloading
+                                                                              efficiency benefits.
+reads to followers. It bears a resemblance to LeaseGuard’s limbo
+region: both are ways to determine which keys are safe to read.
+But our limbo region’s purpose is to guarantee non-transactional
+consistent local reads on the leader just after an election, not the
+follower; and the limbo region is a range of log entries, not a marker
+on a key.
+    BUC-Raft [53] proposes two Raft optimizations to reduce la-
+tency. In the original Raft protocol, a command must be committed,
+then applied to the leader’s data, before it is acknowledged to the
+client. BUC-Raft introduces Commit Return (CR), which lets the
+leader acknowledge writes as soon as they are committed, without
+awaiting application. This introduces a risk of reading stale data,
+which BUC-Raft solves with Read Acceleration (RA). RA executes
+each query on the leader’s current data, then patches up the query
+result with any relevant committed-but-unapplied commands, to
+ensure freshness. BUC-Raft claims to preserve linearizability, but
+this implicitly requires leader leases, since BUC-Raft has no mecha-
+nism of its own to prevent clients querying a deposed leader. RA
+resembles our limbo-read mechanism, but with fundamental differ-
+ences. RA aims to reduce steady-state read latency caused by the
+lag between committing and applying writes, whereas our limbo
+reads improve availability just after an election. BUC-Raft’s CR
+and our deferred-commit optimization solve different problems
+with different techniques: CR acknowledges committed commands
+sooner and shifts risk to the read path, whereas LeaseGuard ac-
+cepts writes sooner but withholds acknowledgment until they are
+committed. Overall, BUC-Raft targets steady-leader performance,
+whereas LeaseGuard ensures consistency and maximizes availabil-
+ity during leader transitions. The approaches are orthogonal and
+can be composed.
+    Recent work by Katsarakis et al. [30] proves the LAW impossi-
+bility: in linearizable asynchronous read/write registers tolerating a
+single crash, no reads can be local. They then introduce almost-local
+reads (ALRs): eager and lazy schemes that execute reads locally
+but add a lightweight “sync” per batch (or piggyback on a timely
+write) so the result is linearizable under asynchrony. LeaseGuard,
+on the other hand, assumes partial synchrony and the availability
+of bounded-uncertainty clocks. LeaseGuard provides linearizable
+reads from the leader with no communication overhead or waiting.
+                                                                         13
+                                                                                                                                                                        Davis et al.
+
+
+References                                                                                         doi:10.1007/3-540-08755-9_9
+ [1] 2020. IEEE Standard for a Precision Clock Synchronization Protocol for Networked         [21] Joseph Y. Halpern and Yoram Moses. 2000. Knowledge and common knowledge
+     Measurement and Control Systems. doi:10.1109/IEEESTD.2020.9120376                             in a distributed environment. CoRR cs.DC/0006009 (2000). https://arxiv.org/abs/
+ [2] Amazon Web Services. 2023. Amazon Time Sync Service now supports                              cs/0006009
+     microsecond-accurate time. https://aws.amazon.com/about-aws/whats-new/                   [22] Maurice Herlihy and Jeannette M. Wing. 1990. Linearizability: A Correctness
+     2023/11/amazon-time-sync-service-microsecond-accurate-time/ Accessed:                         Condition for Concurrent Objects. ACM Trans. Program. Lang. Syst. 12, 3 (1990),
+     2024-07-14.                                                                                   463–492. doi:10.1145/78969.78972
+ [3] Vaibhav Arora, Tanuj Mittal, Divyakant Agrawal, Amr El Abbadi, Xun Xue,                  [23] Owen Hilyard, Bocheng Cui, Marielle Webster, Abishek Bangalore Muralikrishna,
+     Yanan Zhi, and Jianfeng Zhu. 2017. Leader or Majority: Why have one when                      and Aleksey Charapko. 2024. Cloudy Forecast: How Predictable is Communi-
+     you can have both? Improving Read Scalability in Raft-like consensus protocols.               cation Latency in the Cloud?. In 33rd International Conference on Computer
+     In 9th USENIX Workshop on Hot Topics in Cloud Computing, HotCloud 2017, Santa                 Communications and Networks, ICCCN 2024, Kailua-Kona, HI, USA, July 29-31,
+     Clara, CA, USA, July 10-11, 2017, Eyal de Lara and Swaminathan Sundararaman                   2024. IEEE, Kailua-Kona, HI, USA, 1–9. doi:10.1109/ICCCN61486.2024.10637631
+     (Eds.). USENIX Association, Santa Clara, CA, USA, 6 pages. https://www.usenix.           [24] Heidi Howard and Richard Mortier. 2020. Paxos vs Raft: have we reached
+     org/conference/hotcloud17/program/presentation/arora                                          consensus on distributed consensus?. In 7th Workshop on Principles and Practice
+ [4] RethinkDB Authors. 2024. RethinkDB, the open-source database for the realtime                 of Consistency for Distributed Data, PaPoC@EuroSys 2020, Heraklion, Greece, April
+     web. https://rethinkdb.com/                                                                   27, 2020, Alan D. Fekete and Martin Kleppmann (Eds.). ACM, Heraklion, Greece,
+ [5] boringhello. 2024. etcd-io/raft Issue 166: Question about LeaseRead. https:                   8:1–8:9. doi:10.1145/3380787.3393681
+     //github.com/etcd-io/raft/issues/166                                                     [25] Dongxu Huang, Qi Liu, Qiu Cui, Zhuhe Fang, Xiaoyu Ma, Fei Xu, Li Shen, Liu
+ [6] Marc Brooker. 2022. Formal Methods Only Solve Half My Problems. https:                        Tang, Yuxing Zhou, Menglong Huang, Wan Wei, Cong Liu, Jian Zhang, Jianjun
+     //brooker.co.za/blog/2022/06/02/formal.html                                                   Li, Xuelian Wu, Lingyu Song, Ruoxi Sun, Shuaipeng Yu, Lei Zhao, Nicholas
+ [7] Marc Brooker. 2022. Simple Simulations for System Builders. https://brooker.co.               Cameron, Liquan Pei, and Xin Tang. 2020. TiDB: A Raft-based HTAP Database.
+     za/blog/2022/04/11/simulation.html                                                            Proc. VLDB Endow. 13, 12 (2020), 3072–3084. doi:10.14778/3415478.3415535
+ [8] Marc Brooker. 2024. DSQL Vignette: Reads and Compute. https://brooker.co.za/             [26] Lexiang Huang, Matthew Magnusson, Abishek Bangalore Muralikrishna, Salman
+     blog/2024/12/04/inside-dsql.html Accessed: 2025-03-09.                                        Estyak, Rebecca Isaacs, Abutalib Aghayev, Timothy Zhu, and Aleksey Charapko.
+ [9] Michael Burrows. 2006. The Chubby Lock Service for Loosely-Coupled Dis-                       2022. Metastable Failures in the Wild. In 16th USENIX Symposium on Operating
+     tributed Systems. In 7th Symposium on Operating Systems Design and Im-                        Systems Design and Implementation, OSDI 2022, Carlsbad, CA, USA, July 11-13,
+     plementation (OSDI ’06), November 6-8, Seattle, WA, USA, Brian N. Bershad                     2022, Marcos K. Aguilera and Hakim Weatherspoon (Eds.). USENIX Association,
+     and Jeffrey C. Mogul (Eds.). USENIX Association, Seattle, WA, USA, 335–350.                   73–90. https://www.usenix.org/conference/osdi22/presentation/huang-lexiang
+     http://www.usenix.org/events/osdi06/tech/burrows.html                                    [27] Amazon.com Inc. 2021. clock-bound. https://github.com/aws/clock-bound
+[10] Tushar Deepak Chandra, Robert Griesemer, and Joshua Redstone. 2007. Paxos                     Accessed: 2025-02-11.
+     made live: an engineering perspective. In Proceedings of the Twenty-Sixth Annual         [28] Clockwork Inc. 2022. clockwork. https://www.clockwork.io/ Accessed: 2025-
+     ACM Symposium on Principles of Distributed Computing, PODC 2007, Portland,                    02-12.
+     Oregon, USA, August 12-15, 2007, Indranil Gupta and Roger Wattenhofer (Eds.).            [29] HashiCorp Inc. [n. d.]. Consul. https://www.consul.io. Accessed: 2025-07-05.
+     ACM, Portland, Oregon, USA, 398–407. doi:10.1145/1281100.1281103                         [30] Antonios Katsarakis, Vasilis Gavrielatos, Emmanouil Giortamis, Pramod Bhato-
+[11] Aleksey Charapko, Ailidani Ailijiang, and Murat Demirbas. 2019. Linearizable                  tia, Aleksandar Dragojevic, Boris Grot, Vijay Nagarajan, and Panagiota Fatourou.
+     Quorum Reads in Paxos. In 11th USENIX Workshop on Hot Topics in Storage and                   2025. The LAW Theorem: Local Reads and Linearizable Asynchronous Replica-
+     File Systems, HotStorage 2019, Renton, WA, USA, July 8-9, 2019, Daniel Peek and               tion. Proceedings of the VLDB Endowment 18, 9 (2025), 2831–2845.
+     Gala Yadgar (Eds.). USENIX Association, Renton, WA, USA, 7 pages. https:                 [31] Kyle Kingsbury. [n. d.]. Jepsen: etcd and Consul. https://aphyr.com/posts/316-
+     //www.usenix.org/conference/hotstorage19/presentation/charapko                                jepsen-etcd-and-consul. Accessed:2025-07-10.
+[12] Audrey Cheng, Shu Liu, Melissa Pan, Zhifei Li, Bowen Wang, Alex Krentsel,                [32] Kyle Kingsbury. 2021. Elle: Finding Isolation Violations in Real-World Databases.
+     Tian Xia, Mert Cemri, Jongseok Park, Shuo Yang, Jeff Chen, Lakshya Agrawal,                   In PODC ’21: ACM Symposium on Principles of Distributed Computing, Virtual
+     Aditya Desai, Jiarong Xing, Koushik Sen, Matei Zaharia, and Ion Stoica. 2025.                 Event, Italy, July 26-30, 2021, Avery Miller, Keren Censor-Hillel, and Janne H.
+     Barbarians at the Gate: How AI is Upending Systems Research. arXiv:2510.06189                 Korhonen (Eds.). ACM, Italy, 7. doi:10.1145/3465084.3467483
+     [cs] doi:10.48550/arXiv.2510.06189                                                       [33] Leslie Lamport. 2002. Specifying Systems, The TLA+ Language and Tools for
+[13] Archie Cobbs. 2017. Lock and leadership election in Raft. https://groups.google.              Hardware and Software Engineers. Addison-Wesley, Boston, MA, US. http:
+     com/g/raft-dev/c/oO0NfgUVrjg/m/R1BnnbNcAwAJ                                                   //research.microsoft.com/users/lamport/tla/book.html
+[14] James C. Corbett, Jeffrey Dean, Michael Epstein, Andrew Fikes, Christopher               [34] Yishuai Li, Yunfeng Zhu, Chao Shi, Guanhua Zhang, Jianzhong Wang, and Xiaolu
+     Frost, J. J. Furman, Sanjay Ghemawat, Andrey Gubarev, Christopher Heiser,                     Zhang. 2024. Timestamp as a Service, not an Oracle. Proc. VLDB Endow. 17, 5
+     Peter Hochschild, Wilson C. Hsieh, Sebastian Kanthak, Eugene Kogan, Hongyi                    (2024), 994–1006. doi:10.14778/3641204.3641210
+     Li, Alexander Lloyd, Sergey Melnik, David Mwaura, David Nagle, Sean Quinlan,             [35] Barbara Liskov. 1993. Practical Uses of Synchronized Clocks in Distributed
+     Rajesh Rao, Lindsay Rolig, Yasushi Saito, Michal Szymaniak, Christopher Taylor,               Systems. Distributed Comput. 6, 4 (1993), 211–219. doi:10.1007/BF02242709
+     Ruth Wang, and Dale Woodford. 2013. Spanner: Google’s Globally Distributed               [36] Barbara Liskov and James Cowling. 2012. Viewstamped Replication Revisited.
+     Database. ACM Trans. Comput. Syst. 31, 3 (2013), 8. doi:10.1145/2491245                       Tech. Rep. MIT-CSAIL-TR-2012-021. MIT.
+[15] Mike Curtiss. [n. d.]. Why you should pick strong consistency, whenever possi-           [37] Keith Marzullo and Susan Owicki. 1983. Maintaining the time in a distributed
+     ble. https://cloud.google.com/blog/products/databases/why-you-should-pick-                    system. In Proceedings of the Second Annual ACM Symposium on Principles of
+     strong-consistency-whenever-possible. Accessed:2025-07-15.                                    Distributed Computing (Montreal, Quebec, Canada) (PODC ’83). Association for
+[16] etcd Authors. 2024. etcd, a distributed, reliable key-value store for the most                Computing Machinery, New York, NY, USA, 295–305. doi:10.1145/800221.806730
+     critical data of a distributed system. https://etcd.io/                                  [38] Iulian Moraru, David G. Andersen, and Michael Kaminsky. 2014. Paxos Quorum
+[17] Yilong Geng, Shiyu Liu, Zi Yin, Ashish Naik, Balaji Prabhakar, Mendel Rosenblum,              Leases: Fast Reads Without Sacrificing Writes. In Proceedings of the ACM Sympo-
+     and Amin Vahdat. 2018. Exploiting a Natural Network Effect for Scalable, Fine-                sium on Cloud Computing, Seattle, WA, USA, November 3-5, 2014, Ed Lazowska,
+     grained Clock Synchronization. In 15th USENIX Symposium on Networked Systems                  Doug Terry, Remzi H. Arpaci-Dusseau, and Johannes Gehrke (Eds.). ACM, Seattle,
+     Design and Implementation, NSDI 2018, Renton, WA, USA, April 9-11, 2018, Sujata               WA, US, 22:1–22:13. doi:10.1145/2670979.2671001
+     Banerjee and Srinivasan Seshan (Eds.). USENIX Association, Renton, WA, USA,              [39] Cuong DT Nguyen, Johann K Miller, and Daniel J Abadi. 2023. Detock: High
+     81–94. https://www.usenix.org/conference/nsdi18/presentation/geng                             performance multi-region transactions at scale. Proceedings of the ACM on
+[18] Phillip B. Gibbons and Ephraim Korach. 1997.                              Testing             Management of Data 1, 2 (2023), 1–27.
+     Shared Memories.              SIAM J. Comput. 26, 4 (1997), 1208–1244.                   [40] Oleg Obleukhov and Ahmad Byagowi. 2022. How Precision Time Protocol is
+     arXiv:https://doi.org/10.1137/S0097539794279614                      doi:10.1137/             being deployed at Meta. https://engineering.fb.com/2022/11/21/production-
+     S0097539794279614                                                                             engineering/precision-time-protocol-at-meta/ Accessed: 2025-03-07.
+[19] Cary G. Gray and David R. Cheriton. 1989. Leases: An Efficient Fault-Tolerant            [41] Diego Ongaro. 2014. Consensus: bridging theory and practice. Ph. D. Dissertation.
+     Mechanism for Distributed File Cache Consistency. In Proceedings of the Twelfth               Stanford University, USA. https://searchworks.stanford.edu/view/10608105
+     ACM Symposium on Operating System Principles, SOSP 1989, The Wigwam, Litch-              [42] Diego Ongaro and John K. Ousterhout. 2014. In Search of an Understandable Con-
+     field Park, Arizona, USA, December 3-6, 1989, Gregory R. Andrews (Ed.). ACM,                  sensus Algorithm. In Proceedings of the 2014 USENIX Annual Technical Conference,
+     Litchfield Park, Arizona, USA, 202–210. doi:10.1145/74850.74870                               USENIX ATC 2014, Philadelphia, PA, USA, June 19-20, 2014, Garth Gibson and Nick-
+[20] Jim Gray. 1978. Notes on Data Base Operating Systems. In Operating Systems, An                olai Zeldovich (Eds.). USENIX Association, Philadelphia, PA, USA, 305–319. https:
+     Advanced Course (Lecture Notes in Computer Science, Vol. 60), Michael J. Flynn,               //www.usenix.org/conference/atc14/technical-sessions/presentation/ongaro
+     Jim Gray, Anita K. Jones, Klaus Lagally, Holger Opderbeck, Gerald J. Popek, Brian        [43] Franck Pachot. 2024. Achieving Precise Clock Synchronization on AWS. https:
+     Randell, Jerome H. Saltzer, and Hans-Rüdiger Wiehle (Eds.). Springer, 393–481.                //www.yugabyte.com/blog/aws-clock-synchronization/ Accessed: 2025-03-09.
+
+                                                                                         14
+LeaseGuard: Raft Leases Done Right
+
+
+[44] Karthik Ranganathan. 2019. Low Latency Reads in Geo-Distributed SQL with
+     Raft Leader Leases. https://www.yugabyte.com/blog/low-latency-reads-in-geo-
+     distributed-sql-with-raft-leader-leases/
+[45] Bianca Schroeder, Adam Wierman, and Mor Harchol-Balter. 2006. Open Versus
+     Closed: A Cautionary Tale. In 3rd Symposium on Networked Systems Design and
+     Implementation (NSDI 2006), May 8-10, 2007, San Jose, California, USA, Proceedings,
+     Larry L. Peterson and Timothy Roscoe (Eds.). USENIX. http://www.usenix.org/
+     events/nsdi06/tech/schroeder.html
+[46] William Schultz, Siyuan Zhou, Ian Dardik, and Stavros Tripakis. 2021. Design and
+     Analysis of a Logless Dynamic Reconfiguration Protocol. In 25th International
+     Conference on Principles of Distributed Systems, OPODIS 2021, December 13-15,
+     2021, Strasbourg, France (LIPIcs, Vol. 217), Quentin Bramas, Vincent Gramoli,
+     and Alessia Milani (Eds.). Schloss Dagstuhl - Leibniz-Zentrum für Informatik,
+     Strasbourg, France, 26:1–26:16. doi:10.4230/LIPICS.OPODIS.2021.26
+[47] Anum Jang Sher and David Wein. 2024. Achieving scale with Amazon Au-
+     rora PostgreSQL Limitless Database. https://www.youtube.com/watch?v=
+     pUqVCK7Ggh0 Accessed: 2025-03-09.
+[48] Benedict Elliot Smith, Tony Zhang, Blake Eggleston, and Scott An-
+     dreas. 2022.       CEP-15: Fast General Purpose Transactions.               (2022).
+     https://cwiki.apache.org/confluence/download/attachments/188744725/
+     Accord.pdf?version=1&modificationDate=1630847737000&api=v2
+[49] Rebecca Taft, Irfan Sharif, Andrei Matei, Nathan VanBenschoten, Jordan Lewis,
+     Tobias Grieger, Kai Niemi, Andy Woods, Anne Birzin, Raphael Poss, Paul Bardea,
+     Amruta Ranade, Ben Darnell, Bram Gruneir, Justin Jaffray, Lucy Zhang, and Peter
+     Mattis. 2020. CockroachDB: The Resilient Geo-Distributed SQL Database. In
+     Proceedings of the 2020 International Conference on Management of Data, SIGMOD
+     Conference 2020, online conference [Portland, OR, USA], June 14-19, 2020, David
+     Maier, Rachel Pottinger, AnHai Doan, Wang-Chiew Tan, Abdussalam Alawini,
+     and Hung Q. Ngo (Eds.). ACM, Portland, OR, USA, 1493–1509. doi:10.1145/
+     3318464.3386134
+[50] Siddon Tang. 2018. How TiKV Uses "Lease Read" to Guarantee High Perfor-
+     mances, Strong Consistency and Linearizability. https://www.pingcap.com/
+     blog/lease-read/
+[51] YugabyteDB Team. 2021. YugabyteDB: cloud native distributed SQL database
+     for mission-critical applications. https://www.yugabyte.com/
+[52] Jelle van den Hooff. 2016. Make leader leases actual leases. https://github.com/
+     hashicorp/raft/issues/108
+[53] Yangyang Wang, Zikai Wang, Yunpeng Chai, and Xin Wang. 2023. Rethink the
+     linearizability constraints of Raft for distributed systems. IEEE Transactions on
+     Knowledge and Data Engineering 35, 11 (2023), 11815–11829.
+[54] Zhaoguo Wang, Changgeng Zhao, Shuai Mu, Haibo Chen, and Jinyang Li. 2019.
+     On the Parallels between Paxos and Raft, and how to Port Optimizations. In
+     Proceedings of the 2019 ACM Symposium on Principles of Distributed Computing,
+     PODC 2019, Toronto, ON, Canada, July 29 - August 2, 2019, Peter Robinson and
+     Faith Ellen (Eds.). ACM, Toronto, ON, Canada, 445–454. doi:10.1145/3293611.
+     3331595
+[55] Todd Warszawski and Peter Bailis. 2017. ACIDRain: Concurrency-Related Attacks
+     on Database-Backed Web Applications. In Proceedings of the 2017 ACM Interna-
+     tional Conference on Management of Data, SIGMOD Conference 2017, Chicago,
+     IL, USA, May 14-19, 2017, Semih Salihoglu, Wenchao Zhou, Rada Chirkova, Jun
+     Yang, and Dan Suciu (Eds.). ACM, 5–20. doi:10.1145/3035918.3064037
+[56] Jianjun Zheng, Qian Lin, Jiatao Xu, Cheng Wei, Chuwei Zeng, Pingan Yang, and
+     Yunfan Zhang. 2017. PaxosStore: High-availability Storage Made Practical in
+     WeChat. Proc. VLDB Endow. 10, 12 (2017), 1730–1741. doi:10.14778/3137765.
+     3137778
+[57] Siyuan Zhou and Shuai Mu. 2021. Fault-Tolerant Replication with Pull-Based
+     Consensus in MongoDB. In 18th USENIX Symposium on Networked Systems
+     Design and Implementation, NSDI 2021, April 12-14, 2021, James Mickens and
+     Renata Teixeira (Eds.). USENIX Association, Berkeley, CA, US, 687–703. https:
+     //www.usenix.org/conference/nsdi21/presentation/zhou
+
+Received 17 December 2025
+
+
+
+
+                                                                                           15
+

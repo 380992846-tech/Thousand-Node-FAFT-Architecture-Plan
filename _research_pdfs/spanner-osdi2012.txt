@@ -1,0 +1,283 @@
+                                                                                                                                              11/24/19
+
+
+
+
+                                                          Why Google Built Spanner
+
+         Spanner                                            2005 – BigTable [OSDI 2006]
+                                                               • Eventually consistent across datacenters
+                                                               • Lesson: “don’t need distributed transactions”
+
+                                                            2008? – MegaStore [CIDR 2011]
+                                                               • Strongly consistent across datacenters
+   COS 418/518: Distributed Systems                            • Option for distributed transactions
+             Lecture 17                                           • Performance was not great…
+
+                                                            2011 – Spanner [OSDI 2012]
+    Mike Freedman & Wyatt Lloyd                                • Strictly Serializable Distributed Transactions
+                                                               • “We wanted to make it easy for developers to build their applications”
+          Slides adapted from the Spanner OSDI talk
+
+
+
+
+                                                          Google’s Setting
+
+                                                              • Dozens of datacenters (zones)
+Spanner: Google’s Globally-
+   Distributed Database                                       • Per zone, 100-1000s of servers
+
+
+            OSDI 2012                                         • Per server, 100-1000 shards (tablets)
+
+
+                                                              • Every shard replicated for fault-tolerance (e.g., 5x)
+                                                                                                                                          4
+                                                      3
+
+
+
+
+                                                                                                                                                    1
+                                                                                                                                                 11/24/19
+
+
+
+
+Scale-out vs. Fault Tolerance                                             Read-Only Transactions
+             O
+              O
+               O                                                          • Transactions that only read data
+             P
+                                                                            • Predeclared, i.e., developer uses READ_ONLY flag / interface
+              P
+               P
+
+             Q
+              Q
+               Q
+                                                                          • Reads are dominant operations
+                                                                            • e.g., FB’s TAO had 500 reads : 1 write [ATC 2013]
+     • Every shard replicated via MultiPaxos                                • e.g., Google Ads (F1) on Spanner from 1? DC in 24h:
+                                                                                    21.5B reads
+     • So every “operation” within transactions across tablets                      31.2M single-shard transactions
+       actually a replicated operation within Paxos RSM                             32.1M multi-shard transactions
+     • Paxos groups can stretch across datacenters!
+                                                                      5
+
+
+
+
+Make Read-Only Txns Efficient
+  • Ideal: Read-only transactions that are non-blocking                                         Disruptive idea:
+    • Arrive at shard, read data, send data back
+    • Impossible with Strict Serializability (“SNOW theorem” later)
+                                                                                          Do clocks really need to be
+                                                                                          arbitrarily unsynchronized?
+  • Goal 1: Lock-free read-only transactions
+
+                                                                                 Can you engineer some max divergence?
+  • Goal 2: Non-blocking stale read-only txns
+
+
+                                                                                                                                             8
+
+
+
+
+                                                                                                                                                       2
+                                                                                                                                                                                    11/24/19
+
+
+
+
+TrueTime                                                                         TrueTime for Read-Only Txns
+      • “Global wall-clock time” with bounded uncertainty                         • Assign all transactions a wall-clock commit time (s)
+                                                                                      • All replicas of all shards track how up-to-date they are with tsafe:
+          • ε is worst-case clock divergence                                          • all transactions with s < tsafe have committed on this machine
+          • Timestamps become intervals, not single values
+                                                                                  • tsafe = min (tPaxossafe , tTMsafe)
+                                 TT.now()
+                                                          time
+
+                         earliest           latest
+                                     2*ε
+        • Consider event enow which invoked tt = TT.now():
+           • Guarantee: tt.earliest <= tabs(enow) <= tt.latest
+                                                                             9
+
+
+
+
+TrueTime for Read-Only Txns                                                      Timestamps and TrueTime
+ • Assign all transactions a wall-clock commit time (s)
+    • All replicas of all shards track how up-to-date they are with tsafe:
+                                                                                                     Acquired locks                          Release locks
+    • all transactions with s < tsafe have committed on this machine
+                                                                                                      T
+ • Goal 1: Lock-free read-only transactions
+    • Current time ≤ TT.now.latest()                                                               Pick s > TT.now().latest        s        Wait until TT.now().earliest > s
+    • sread = TT.now.latest()
+                                                                                                                          Commit wait
+    • wait until sread < tsafe
+    • Read data as of sread                                                                                            average ε       average ε
+
+ • Goal 2: Non-blocking stale read-only txns
+    • Similar to above, except explicitly choose time in the past
+    • (Trades away consistency for better perf, e.g., lower latency)                                                                                                           12
+
+
+
+
+                                                                                                                                                                                          3
+                                                                                                                                                                11/24/19
+
+
+
+
+ Commit Wait                                                                Commit Wait and Replication
+                                                                                                          Start       Achieve     Notify
+                                                                                                          consensus   consensus   followers
+ • Enables efficient read-only transactions
+                                                                                               Acquired locks               Release locks
+
+ • Cost: 2ε extra latency                                                                       T
+
+
+                                                                                                       Pick s           Commit wait done
+
+ • Reduce/eliminate by overlapping with:
+   • Replication
+   • Two-phase commit
+                                                                                        Sufficient for single-shard transactions!
+                                                                                                                                                       14
+
+
+
+
+Client-Driven Transactions for Multi-Shard Transactions                     Commit Wait and 2PC
+                                                                         • On commit msg
+                                                                           from client,        • If non-coordinator:
+    Client (via 2PL w/ 2PC) :
+                                                                           leaders acquire          • Choose prepare ts > previous local timestamps
+    1. Issues reads to leader of each shard group, which acquires          local write locks        • Log prepare record through Paxos
+       read locks and returns most recent data                                                      • Notify coordinator of prepare timestamp
+    2. Locally performs writes
+                                                                                             • If coordinator:
+    3. Chooses coordinator from set of leaders, initiates commit                                  • Wait until hear from other participants
+                                                                                                  • Choose commit timestamp >= prepare ts, > local ts
+    4. Sends commit message to each leader, include identity of
+       coordinator and buffered writes                                   • All apply at           • Logs commit record through Paxos
+                                                                           commit timestamp       • Wait commit-wait period
+    5. Waits for commit from coordinator                                                          • Sends commit timestamp to replicas, other leaders, client
+                                                                           and release locks
+                                                                    15                                                                                 16
+
+
+
+
+                                                                                                                                                                      4
+                                                                                                                                                                                             11/24/19
+
+
+
+
+Commit Wait and 2PC                                                                       Commit Wait and 2PC
+                                                                                                                        Start logging         Done logging
+           Acquired locks                                                                                Acquired locks
+           TC                                                                                            TC
+
+                Acquired locks                                                                                Acquired locks
+                TP1                                                                                           TP1
+
+          Acquired locks                                                                                 Acquired locks
+          TP2                                                                                         TP2
+                                                                                                                                             Prepared
+                                                                                                                                             Send sp
+           Compute sp for each                                                                            Compute sp for each
+
+                                                                                             2.   Locally performs writes
+    1. Client issues reads to leader of each shard group,                                    3.   Chooses coordinator from set of leaders, initiates commit
+       which acquires read locks and returns most recent data                                4.   Sends commit msg to each leader, incl. identity of coordinator
+                                                                                     17                                                                                                 18
+
+
+
+
+Commit Wait and 2PC                                                                       Example
+                        Start logging    Done logging
+                                                                                                                      Remove X from
+           Acquired locks                          Release locks                                                      friend list                                        Risky post P
+           TC                                               Committed                               TC                                                        T2
+                                                            Notify participants sc                                  sp= 6                 sc= 8                     s = 15
+                Acquired locks                               Release locks
+                                                                                                                       Remove myself from
+                TP1
+                                                                                                                       X’s friend list
+          Acquired locks                                    Release locks                                TP
+                                                                                                                    sp= 8                                 sc= 8
+          TP2
+                                        Prepared
+                                        Send sp
+           Compute sp for each                        Commit wait done
+                                                                                                                               Time                <8    8         15
+                                  Compute overall sc
+                                                                                                                            My friends            [X]    []
+    5. Client waits for commit from coordinator                                                                             My posts                               [P]
+                                                                                                                            X’s friends           [me]   []
+                                                                                     19                                                                                                 20
+
+
+
+
+                                                                                                                                                                                                   5
+                                                                                                                                                           11/24/19
+
+
+
+
+                                                                                TrueTime Architecture
+                                                                                                 GPS            GPS                 GPS
+                                                                                              timemaster     timemaster          timemaster
+                        Disruptive idea:
+                                                                                                 GPS        Atomic-clock            GPS
+                                                                                              timemaster     timemaster          timemaster
+
+             Do clocks really need to be
+             arbitrarily unsynchronized?
+                                                                                                Client
+
+                                                                                            Datacenter 1   Datacenter 2    …   Datacenter n
+   Can you engineer some max divergence?
+
+                                                                                         Compute reference [earliest, latest] = now ± ε
+
+                                                                                                                                                      22
+                                                                           21
+
+
+
+
+TrueTime Implementation
+                                                                                Spanner
+      now      = reference now       + local-clock offset
+        ε      = reference ε         + worst-case local-clock drift               • Make it easy for developers to build apps!
+               = 1ms                 + 200 μs/sec
+                                                                                  • Reads dominant, make them lock-free
+                    ε
+                                                                                  • TrueTime exposes clock uncertainty
+            +6ms
+                                                                                     • Commit wait ensures transactions end after their commit time
+                                                                                     • Read at TT.now.latest()
+                                                  time                            • Globally-distributed database
+                   0sec   30sec   60sec   90sec
+                                                                                     • 2PL w/ 2PC over Paxos!
+     • What about faulty clocks?
+        – Bad CPUs 6x more likely in 1 year of empirical data         23
+
+
+
+
+                                                                                                                                                                 6
+

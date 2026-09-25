@@ -1,0 +1,962 @@
+                              Failure Detection Lower Bounds
+                                on Registers and Consensus
+                                   (Preliminary Version)
+
+                    C. Delporte-Gallet †, H. Fauconnier †, and R. Guerraoui ‡
+
+                     †Laboratoire d’Informatique Algorithmique: Fondements et Applications
+                                       Université Paris VII - Denis Diderot
+                                      ‡Distributed Programming Laboratory
+                                Swiss Federal Institute of Technology in Lausanne
+
+
+
+                                                    Abstract
+          This paper addresses the problem of determining the weakest failure detector to implement consensus
+      in a message passing system when t out of n processes can crash (including when n/2 ≤ t < n − 1),
+      by addressing the problem of determining the weakest failure detector to implement a register. We
+      complement and, in a precise sense, generalise previous results on the implementability of consensus and
+      registers in a message passing model (augmented with the failure detector abstraction).
+
+    • Category: Regular.
+    • Contact Author: Rachid Guerraoui. LPD EPFL CH1015 Lausanne, Switzerland. Tel: 41 21 693 52
+      72. Fax: 41 21 693 75 70.
+
+
+1    Introduction
+This paper considers an asynchronous distributed system augmented with the failure detector abstraction [4].
+The system is made of n processes that communicate through reliable channels but t among these processes
+can fail by crashing [9]. The system is asynchronous in the sense that there is no timing assumption on
+communication delays and process relative speeds. In fact, timing assumptions [6] are encapsulated within
+the failure detector abstraction: a distributed oracle that provides each process with hints about failures
+that have occurred in the system.
+    Several classes of failure detectors were proposed in the literature, each gathering a set of failure detectors
+that ensure some abstract axiomatic properties. In particular, three interesting classes were identified in [4]:
+the class P of Perfect failure detectors that eventually suspect all crashed processes and never make false
+suspicions, the class S of Strong failure detectors that eventually suspect all crashes and never make false
+suspicions on at least one correct process (if there is such a process), and the class ♦S of Eventually Strong
+failure detectors that eventually suspect all crashes and eventually never make false suspicions on at least
+one correct process (if there is such a process).
+    In [4], two algorithms using failure detectors were proposed to implement the consensus problem. In
+consensus, the processes propose an initial value and correct processes (those that do not crash) need to
+decide one among these values, such that no two processes decide differently [9]. We consider in this paper
+the uniform variant of consensus, which precludes any disagreement among two processes, even if one of
+them ends up crashing [13]. We will come back to the impact of this assumption in Section 6. The first
+algorithm of [4] implements consensus with any failure detector of S for any t, whereas the second algorithm
+implements consensus with any failure detector of ♦S if t < n/2. It was furthermore shown [5] that there
+
+
+                                                         1
+is an algorithm that transforms any failure detector D that implements consensus into a failure detector of
+♦S. In the parlance of [5], ♦S is the weakest to implement consensus if t < n/2.
+    When t ≥ n/2, ♦S is not the weakest for consensus [4]. What is then the weakest failure detector class
+for consensus when t ≥ n/2? The question remained open for more than a decade now.
+    In a recent companion paper [7], we addressed this question for the specific case where t ∈ {n, n − 1}. We
+first restricted the universe of failure detectors to those, we called realistic, that cannot predict the future.
+Basically, we focused on determining the weakest failure detector class among those that provide information
+about past failures and cannot provide information about failures that will occur [14, 7]. Although failure
+detectors that predict the future are permitted in [4], they cannot be implemented even in the synchronous
+model of [20], where process relative speeds and communication delays are bounded, and these bounds are
+known. Note that ♦S is the weakest among realistic classes for consensus if t < n/2.
+    We then showed that, among realistic failure detectors, P is the weakest for consensus when t ∈ {n, n−1}.
+(We also showed that in this case the classes P and S are the same.) The case where t ∈ {n, n−1} is actually
+very specific. What happens when n/2 ≤ t < n − 1? This question turns out to be challenging: none of the
+failure detector classes defined so far in the literature, including those of [4] (e.g., S), is actually the weakest
+for consensus if n/2 ≤ t < n − 1.
+    The motivation of this work was precisely to address this question. While doing so, we faced another
+interesting problem: determining the weakest failure detector class to implement a register when n/2 ≤ t ≤ n.
+What we actually mean here is to determine the weakest failure detector class to implement a wait-free
+atomic register in the sense of [3] 1 , i.e., to implement a data abstraction accessed through read() and write()
+operations such that, despite concurrent accesses and failures of processes, (1) every operation invoked by
+a correct process eventually returns, (2) although it spans over an interval time, every operation appears
+to have been executed at a single point in time in this interval, and (3) every read operation returns the
+last value written. In a purely asynchronous message passing system model (e.g., without failure detectors)
+a register can be implemented iff t < n/2 [3]. To implement a register when n/2 ≤ t ≤ n, we need some
+information about failures. Several authors considered augmenting an asynchronous model with registers
+and failure detectors (e.g., [19, 22]) but, to our knowledge, the question of the exact failure detector class
+that implements a register in a message passing model was never addressed for n/2 ≤ t ≤ n.
+    This paper defines a new generic failure detector class P k (k-Perfect). Instances of this generic class
+are determined by the integer k (0 ≤ k ≤ n). Failure detectors of class P k eventually suspect all crashed
+processes and do not falsely suspect more than max(n − k − 1, 0) processes at every process. The processes
+might permanently disagree here on their perception on which processes have crashed, i.e., on the subset of
+n − k − 1 processes each process falsely suspects. They might even change their mind about which processes
+they falsely suspect. For k < n/2, failure detectors of class P k can be implemented in an asynchronous
+system if up to t < n/2 processes can crash, i.e., they do not encapsulate any timing assumption. For
+k ≥ n − 1, P k is P, i.e., P n−1 = P n = P.
+    We show that, if we assume that t processes can crash, then P t × ♦S is the weakest class to implement
+consensus. To prove our result, we prove the interesting intermediate result that, if we assume that t processes
+can crash, then P t is the weakest to implement a register. Our results hold among realistic failure detectors:
+the very fact that we exclude failure detectors that can predict the future is meaningful from a practical
+perspective [7], yet it has however some impact on our theoretical results, as we discuss in Section 6.
+To summarize, the contributions of this paper are the following:
+
+   1. We introduce a new failure detector class P k , and assuming that t processes can crash, we show that
+      (among realistic failure detectors):
+   2. P t is the weakest to implement a register, and
+   3. P t × ♦S is the weakest to implement consensus.
+
+    For the case where n/2 ≤ t < n − 1, we hence address the open questions of the weakest failure detector
+classes to implement consensus and atomic register. We also show that, in this case, S is strictly stronger
+than P t × ♦S, revisiting the first glance intuition that S might have been the weakest for consensus with
+  1 The wait-free notion was introduced in [16] and the notion of atomic register was introduced in [18].
+
+
+
+
+                                                              2
+n/2 ≤ t < n − 1. For t ∈ {n, n − 1}, and given that in this case P t is P, our result comes down to the result
+of [7] as far as consensus is concerned, and we address the open question of the weakest failure detector to
+implement an atomic register if any number of processes can crash. For n/2 > t, and given that in this case
+P t can be implemented in an asynchronous system, our result simply comes down the known result that,
+with a majority of correct processes, no timing assumption is needed to implement an atomic register [3],
+and that ♦S is the weakest for consensus [5].
+    Interestingly, the decoupled structure of our weakest failure detector class for consensus (i.e., P t × ♦S)
+conveys its double role: P t encapsulates the information about failures needed to ensure the safety part of
+consensus (i.e., to implement a register that will lock the consensus value and prevent disagreement), whereas
+♦S encapsulates the information about failures needed to ensure the liveness part of consensus (i.e., to ensure
+that some correct will eventually stop being suspected and store a decision value in the register). We prove
+our results using simple algorithm reductions (like in [5] but unlike in [14]). Hence, by determining the
+weakest failure detector class to implement a register (or consensus), we determine what exact information
+about failures processes need to know and effectively compute to implement a register (or consensus).
+    The rest of the paper is organized as follows. In Section 2, we sketch our system model and, in particular,
+we specify the universe of failure detectors within which we identify the weakest for consensus and atomic
+register. Section 3 defines our generic failure detector class P k . We compare instances of this class, and
+position them with respect to various failure detector classes introduced in the literature. Section 4 shows
+(sufficient condition) that, if t processes can crash, then P t implements a register. We then simply reuse the
+result of [19] to derive the fact than P t × ♦S implements consensus. Section 5 shows (necessary condition)
+that if t processes can crash, then any failure detector that implements a register can be transformed into a
+failure detector of P t . We then simply reuse the fact that consensus can implement a register and the result
+of [5] to show that any failure detector that implements consensus can be transformed into a failure detector
+of P t × ♦S. Section 6 concludes the paper by discussing the scope of our results. For space limitation,
+detailed proofs of our results are given in the appendix.
+
+
+2     System model
+Our model of asynchronous computation with failure detection is the FLP model [9] augmented with the
+failure detector abstraction [4, 5]. A discrete global clock is assumed, and Φ, the range of the clock’s ticks,
+is the set of natural numbers. The global clock is used for presentation simplicity and is not accessible to
+the processes. We sketch here the fundamentals of the model. The reader interested in specific details about
+the model should consult [5, 7].
+
+2.1    Failure patterns and environments
+We consider a distributed system composed of a finite set of n processes Π = {p 1 , p2 , . . . , pn } (|Π| = n ≥ 3).
+A process p is said to crash at time τ if p does not perform any action after time τ (the notion of action is
+recalled below). Failures are permanent, i.e., no process recovers after a crash. A correct process is a process
+that does not crash. A failure pattern is a function F from Φ to 2Π , where F (τ ) denotes the set of processes
+that have crashed through time τ . The set of correct processes in a failure pattern F is noted correct(F ).
+We say that a process p is alive at time τ if p is not in F (τ ). An environment E is a set of failure patterns.
+Environments describe the crashes that can occur in a system. In this paper, we consider environments,
+denoted by Et , composed of all failure patterns with at most t crashes.
+
+2.2    Failure detectors
+Roughly speaking, a failure detector D is a distributed oracle which gives hints about failure patterns. Each
+process p has a local failure detector module of D, denoted by Dp . Associated with each failure detector D
+is a range RD (when the context is clear we omit the subscript) of values output by the failure detector. A
+failure detector history H with range R is a function H from Π × Φ to R. For every process p ∈ Π, for every
+time τ ∈ Φ, H(p, τ ) denotes the value of the failure detector module of process p at time τ , i.e., H(p, τ )
+denotes the value output by Dp at time τ . A failure detector D is defined as a function that maps each
+
+
+                                                         3
+failure pattern F to a set of failure detector histories with range RD . D(F ) denotes the set of possible failure
+detector histories permitted for the failure pattern F , i.e., each history represents a possible behavior of D
+for the failure pattern F .
+    In [4], any function of the failure pattern is a failure detector, including a function that, for a time τ ,
+outputs information about crashes that will occur after τ . We restrict ourselves here to (realistic [7]) failure
+detectors D as functions of the past, i.e., we exclude failure detectors that can predict the future (we will
+come back to the ramifications of this assumption in Section 6). A failure detector cannot distinguish at
+a time τ two failure patterns based on what will happen after τ . More precisely, ∀F, F 0 ∈ En , ∀τ ∈ Φ
+s.t. ∀τ1 ≤ τ, F (τ1 ) = F 0 (τ1 ), we have the following realism property: ∀H ∈ D(F ), ∃H 0 ∈ D(F 0 ) s.t.
+∀τ1 ≤ τ, ∀p ∈ Π : H(p, τ1 ) = H 0 (p, τ1 ).
+    Three classes of failure detectors introduced in [4] are of interest in this paper. These classes do all
+have range R = 2Π : for any failure detector D in these classes, any failure pattern F , and any history H
+in D(F ), H(p, τ ) is the set of processes suspected by process p at time τ . (1) The class of Perfect failure
+detectors (P) gathers all those that ensure strong completeness, i.e., eventually every process that crashes is
+permanently suspected by every correct process, and strong accuracy, i.e., no process is suspected before it
+crashes. (2) The class of Strong failure detectors (S) gathers those that ensure strong completeness and weak
+accuracy, i.e., some correct process is never suspected (if there is such a process). (3) The class of Eventually
+Strong failure detectors (♦S) gathers those that ensure strong completeness and eventual weak accuracy, i.e.,
+eventually, some correct process is never suspected (if there is such a process). Note that, in the context of
+this paper, we restrict these classes to failures detectors that are realistic.
+
+2.3    Algorithms
+An algorithm using a failure detector D is a collection A of n deterministic automata A p (one per process
+p). Computation proceeds in steps of the algorithm. In each step of an algorithm A, a process p atomically
+performs the following three actions: (1) p receives a message from some process q, or a “null” message
+λ; (2) p queries and receives a value d from its failure detector module Dp (d ∈ RD is said to be seen
+by p); (3) p changes its state and sends a message (possibly null) to some process. This third action is
+performed according to (a) the automaton Ap , (b) the state of p at the beginning of the step, (c) the
+message received in action 1, and (d) the value d seen by p in action 2. The message received by a process is
+chosen non-deterministically among the messages in the message buffer destined to p, and the null message
+λ. A configuration is a pair (I, M ) where I is a function mapping each process p to its local state, and M is
+a set of messages currently in the message buffer. A configuration (I, M ) is an initial configuration if M = ∅
+(no message is initially in the buffer): in this case, the states to which I maps the processes are called initial
+states. A step of an algorithm A is a tuple e = (p, m, d, A), uniquely defined by the algorithm A, the identity
+of the process p that takes the step, the message m received by p, and the failure detector value d seen by p
+during the step. A step e = (p, m, d, A) is applicable to a configuration (I, M ) if and only if m ∈ M ∪ {λ}.
+The unique configuration that results from applying e to configuration C = (I, M ) is noted e(C).
+
+2.4    Schedules and runs
+A schedule of an algorithm A is a (possibly infinite) sequence S = S[1]; S[2]; . . . S[k]; . . . of steps of A. A
+schedule S is applicable to a configuration C if (1) S is the empty schedule, or (2) S[1] is applicable to C,
+S[2] is applicable to S[1](C) (the configuration obtained from applying S[1] to C), etc.
+   Let A be any algorithm and D any failure detector. A run of of A using D is a tuple R =< F, H, C, S, T >
+where H is a failure detector history and H ∈ D(F ), C is an initial configuration of A, S is an infinite schedule
+of A, T is an infinite sequence of increasing time values, and (1) S is applicable to C, (2) for all k ≤ |S|
+where S[k] = (p, m, d, A), we have p 6∈ F (T [k]) and d = H(p, T [k]), (3) every correct process takes an infinite
+number of steps, and (4) every message sent to a correct process p is eventually received by p. 2
+   2 In fact, our results and proofs hold with a weaker assumption where we only require that (4’) every message sent by a
+
+correct process to a correct process p is eventually received by p.
+
+
+
+
+                                                            4
+2.5    Implementability
+An algorithm A implements a problem B using a failure detector D in an environment E t if every run of A
+using D in Et satisfies the specification of B. We say that D implements B in Et if there is an algorithm
+that implements B using D in Et . We say that a failure detector D1 is stronger than a failure detector D2 in
+environment Et (D2 t D1) if there is an algorithm (called a reduction algorithm) that transforms D1 into
+D2 in Et , i.e., that can emulate the output D2 using D1 in Et [4]. The algorithm does not need to emulate
+all histories of D2. It is required however that, for every run R =< F, H, C, S, T > where H ∈ D1(F ),
+the output of the algorithm with R be a history of D2(F ). We say that D1 is strictly stronger than D2
+in environment Et (D2 ≺t D1) if D2 t D1 and ¬(D1 t D2). We say that D1 is equivalent to D2 in
+environment Et (D1 ≡t D2), if D2 t D1 and D1 t D2.
+    Finally, we say that a failure detector D is the weakest to implement a problem B in environment E t if (a.
+sufficient condition) D implements B in Et and (b. necessary condition) any failure detector that implements
+B is stronger than D in Et .
+
+
+3     k-Perfect failure detectors
+3.1    Definitions
+We define in this section the generic class of k-Perfect (P k ) failure detectors, where 0 ≤ k ≤ n. This class
+is generic in the sense that its semantics depend on the value of the integer k. Failure detectors of class P k
+output, at each process p and each time τ , a list of suspected processes P k (p, τ ) (i.e., the range of P k is 2Π ).
+These failure detectors ensure strong completeness as well as the following k-accuracy property: at any time
+τ , no process suspects more than n − k − 1 processes that are alive at time τ . More precisely:
+
+    • k- Accuracy: ∀p ∈ Π, ∀τ ∈ Φ |P k (p, τ ) \ F (τ )| ≤ max(n − k − 1, 0).
+
+    For k ≥ n − 1, processes do not make false suspicions and P k is P. For k < n − 1, processes can make
+false suspicions and can even permanently disagree on the processes they falsely suspect. To better illustrate
+the behavior of a k-Perfect failure detector, consider a system of 5 processes {p 1 , p2 , p3 , p4 , p5 } and the case
+k = 2. The failure detector should eventually suspect permanently all crashed processes and should not
+falsely suspect more that 2 processes at every process. Consider a failure pattern where p 1 and p2 crash.
+It can be the case that after some time τ , p3 permanently suspects {p1 , p2 , p4 , p5 }, p4 permanently suspects
+{p1 , p2 , p3 , p5 }, and p5 permanently suspects {p1 , p2 , p3 , p4 }. It can also be the case that after some time τ ,
+p5 forever alternately suspects {p1 , p2 , p3 } and {p1 , p2 , p4 }.
+    The idea of limited accuracy is not new. Failure detectors of S already provide a limited form of accuracy,
+with respect to those of P, in the sense that they only need to ensure weak accuracy: they can falsely suspect
+correct processes, as long as there is one correct process that is never suspected. Our notion of limited
+accuracy is different in that processes do not need to agree on a process they never suspect, as conveyed by
+our example above and specified by our Proposition 3.3 below. In [11, 21], the notion of accuracy was further
+limited in the sense that only a subset of the processes need to satisfy it: again, and even if we consider the
+case of weak accuracy, the subset of processes should still agree on some process not to suspect. In [4], the
+authors introduced the notion of k-Mistaken failure detectors as those that can make k false suspicions. In
+our case, except when k ∈ {n − 1, n} (Perfect failure detection), a failure detector of P k can make an infinite
+number of mistakes.
+    We also define here the failure detector class P t × ♦S. This class gathers failure detectors D of range
+2Π × 2Π , such that given H1 a history of a failure detector of P t and H2 a history of a failure detector of ♦S,
+for each process p and at each time τ , the value of the failure detector module D p is a pair (H1 (p, τ ), H2 (p, τ )).
+
+3.2    Relationships
+In the following, we give some general properties of P k failure detectors. Certain properties follow trivially
+from the definition. Others are less trivial and we prove them in the appendix.
+
+
+
+                                                           5
+                                                                  0
+Proposition 3.1 ∀t, k, k 0 ∈ [0, n], k ≤ k 0 ⇒ P k t P k .
+
+
+                                                          0
+Proposition 3.2 ∀t, t0 ∈ [n/2, n − 1], t0 < t ⇒ P t ≺t P t .
+
+     We already pointed out the fact that P n−1 = P n = P. We state below a relationship between P t and S.
+
+Proposition 3.3 ∀t ∈ [1, n − 2], P t × ♦S ≺t S.
+
+    We show (later in the paper) that, for any t, P t × ♦S is the weakest failure detector class for consensus
+in Et . Hence, a corollary of Proposition 3.3 above is that S is not the weakest for consensus in E t if t < n − 1.
+Note that we have shown in [7] that P (and hence P n−1 and P n ) is equivalent to S in E(n−1) and En .3
+    We state below some relationships between P k and ⊥, the empty failure detector that never outputs
+anything: ⊥ can thus be implemented in an asynchronous system. Through these relationships, we point
+out some situations in which P k can be implemented in an asynchronous system.
+
+Proposition 3.4 ∀t ∈ [0, n − 1], P n−t−1 ≡t ⊥.
+
+
+                                                    0
+Proposition 3.5 ∀t, t0 ∈ [0, dn/2e − 1], P t ≡t ⊥.
+
+    To get an intuition of the implementability of P k in an asynchronous system (i.e., the equivalence with
+⊥), consider a system of 5 processes and an environment where a majority of the processes are correct. We
+can implement P 2 if up to 2 processes can crash as follows: processes periodically exchange messages, and
+every process waits for 3 messages and suspects the processes from which it did not receive messages (the
+complete algorithm is given in the appendix).
+    Given that (as we show in the next section), for any t ∈ [0, n], P t is the weakest for register in Et , clearly,
+  k
+P cannot be implemented in an asynchronous system in any Et where k ≥ t ≥ n/2.
+
+
+4      The sufficient conditions
+In this section, we show that, in any environment Et , (1) any failure detector of P t implements a register,
+and (2) any failure detector of P t × ♦S implements consensus. To show (2), we reuse the fact that consensus
+can be implementable with registers and any failure detector of ♦S (in any environment) [19]. To show (1),
+we first give an algorithm (Figure 1) that implements a 1-writer–1-reader atomic register (for any reader
+or writer) using a failure detector of P t . Then, as in [1], we use the fact that a N -writer–M -reader atomic
+register can be implemented from 1-writer–1-reader atomic registers (see [15] for a tutorial on relationships
+between registers).
+    Our register implementation (Figure 1) is an adaptation of [3]. Roughly speaking, whereas [3] uses the
+assumption of a majority of correct processes to ensure a quorum property for read and write operations, we
+make use of P t to ensure that quorum property. Basically, each process maintains the current value of the
+register. In order to perform its read (resp write) operation, the reader (resp the writer) sends a message to
+all and waits until it receives acknowledgments from (1) at least max(n − t, 1) processes, and (2) from every
+process that is not suspected by its failure detector module.
+
+Proposition 4.1 With any failure detector of P t , Algorithm 1 implements a 1-reader–1-writer atomic reg-
+ister (for any reader or writer) in environment Et .
+
+Corollary 4.2 Any failure detector of P t implements a (n-writer–n-reader) register in Et .
+
+Corollary 4.3 Any failure detector of P t × ♦S implements consensus in Et .
+    3 Remember that we consider realistic restrictions.
+
+
+
+
+                                                              6
+1    Every process p (including pw and pr ) executes the following code:
+2      Initialization:
+3         current := ⊥
+4         last write := −1
+5         upon receive (W RIT E, y, s) from the writer
+6         if s > last write then
+7            current := y
+8            last write := s
+9            send(ACK W RIT E, s) to the writer
+10        upon receive (READ, s) from the reader
+11          send(ACK READ, last write, current, s) to the reader
+12 Code for pw the (unique) writer:
+13     Initialization:
+14        seq := 0 /* sequence number */
+15     procedure write(x)
+16       send(W RIT E, x, seq) to all
+17       wait until receive (ACK W RIT E, seq)
+              from all processes not in Ppt w
+              and from at least max(n − t, 1) processes
+18       seq := seq + 1
+19     end write
+20 Code for pr the (unique) reader:
+21     Initialization:
+22        rc := 0 /* reading counter */
+23     function read()
+24       send(READ, rc) to all
+25       wait until receive (ACK READ, ∗, ∗, rc)
+               from all processes not in Ppt r
+               and from at least max(n − t, 1) processes
+26       a := max{v | (ACK READ, v, ∗, rc) is a received message}
+27       if a > last write then
+28          current := v such that (ACK READ, a, v, rc) is a received message
+29          last write := a
+30       return(current)
+31     end read
+
+
+
+
+                          Figure 1: Implementation of an 1-writer–1-reader atomic register
+
+
+5        The necessary conditions
+In this section, we show that, in any environment Et , (1) any failure detector class that implements a register
+is stronger than P t , and (2) any failure detector class that implements consensus is stronger than P t × ♦S.
+    To state (1) we give an algorithm in Figure 2 that emulates, with any failure detector D that implements
+a 1-writer–n-reader register for any writer, a failure detector of P t . We only describe the algorithm: its proof
+is given in the appendix. To state (2), we use (1) above plus the very fact that, (2.1) one can implement a
+register using (uniform) consensus (e.g., through a fault-tolerant state machine replication approach [24]),
+and (2.2) any failure detector class that implements a consensus is stronger than ♦S [5].
+    The idea of the algorithm of Figure 2 is the following. We use exactly one 1-writer–n-reader register
+per process, and we also denote by p the register of process p. Each process p is the writer of its register.
+Periodically, each process writes in its register alternatively two different values: v 0 and v1 . The very fact
+that the register has been implemented using a failure detector D has the nice consequence that, for any
+write operation that terminates at some time τ , all processes that have not crashed by time τ , except at
+most max(n − t − 1, 0) processes, have participated in the operation (the very fact that D is realistic is
+important here). A failure detector of P t is emulated through a distributed variable where every process
+basically outputs (suspects) the list of processes that did not participate in a write operation. More precisely,
+each process p maintains, for each register r, a list of participants and the sequence number of the last write
+
+
+                                                                 7
+operation seen by the process p on r. Every message exchanged in the context of an operation is tagged
+with these lists and the sequence numbers of the last write operation on each register. When p ends its write
+operation, it suspects all processes that are not in its list for p. The details on how processes update the
+lists, as well as the sequence numbers of the write operations, are given in Figure 2.
+
+/* Process p repeatedly writes v0 , v1 on register p */
+/* Outputp is the output of the emulated failure detector */
+1    Initialization:
+2       ∀i : L[i] = ∅; last write[i] := 0;
+/*L[p] is the list of participants in the write (last write[i]) operation on the register p */
+/*all messages are tagged with (L, last write)*/
+3    When p begins a new write operation on its register (register p)
+4     last write[p] := last write[p] + 1
+5     L[p] := {p}
+6    When p ends the current write operation on its register (register p)
+7     Outputp = Π − L[p]
+8    When p receives a message m with tag M, lw
+9     forall i do
+10      switch:
+11         case lw[i] > last write[i]:L[i] := M [i] ∪ {p}
+12         case lw[i] = last write[i]:L[i] := L[i] ∪ M [i]
+13         case lw[i] < last write[i]:skip
+14      last write[i] := max(last write[i], lw[i])
+
+
+
+Figure 2: TD→P t - Emulation at process p of a failure detector in P t from a register implementation using
+a failure detector.
+
+
+Proposition 5.1 For any failure detector class D that implements a register in E t , we have: P t t D.
+
+     From Proposition 5.1 and Corollary 4.2, we deduce:
+Theorem 5.2 For any t, P t is the weakest failure detector class to implement a register in environment E t .
+Given that a register cannot be implemented in asynchronous systems in environment E t for n ≤ 2t [1], we
+deduce:
+
+Corollary 5.3 If t ≥ n/2 then P t cannot be implemented in an asynchronous system in Et .
+
+    Let D be any failure detector that implements consensus in Et . From [5], D can be transformed into a
+failure detector of ♦S in environment Et .
+
+Proposition 5.4 For any failure detector class D that implements consensus in E t , we have: P t × ♦S t D.
+
+     From Proposition 5.4 and Corollary 4.3, we deduce that:
+Theorem 5.5 For any t, P t ×♦S is the weakest failure detector class to implement consensus in environment
+Et .
+
+
+6      Concluding remarks
+We discuss here the scope of our lower bound failure detection results. We first discuss the universe of failure
+detectors among which we determine the weakest class, then we consider the environment within which we
+state and prove our results, and finally we come back to the relationship between registers and consensus
+and the impact of uniformity.
+
+
+                                                                 8
+6.1     The failure detector universe
+Our results hold among the original universe of failure detectors defined in [4], with one exception however:
+we exclude failure detectors that can guess the future [7]. These failure detectors cannot be implemented
+even in a synchronous system (in the sense of [20]).4 From a theoretical perspective, excluding such failure
+detectors has clearly an impact. For instance, there is a class (denoted by M in [12]) of failure detectors
+that output exactly the list of faulty processes since time 0, and which implement consensus and registers
+for any number of possible crashes. This class is incomparable with P t (this is not completely trivial and we
+give the proof in the appendix A-6.1) Hence, our results do not hold within the overall original universe of
+failure detectors [4]: this might explain why the questions we address in this paper remained open for more
+than a decade.
+
+6.2     The environments
+Strictly speaking, our failure detection lower bound result on consensus does not generalize the result of [5].
+Whereas [5] shows that any failure detector that implements consensus in any environment can be trans-
+formed into a failure detector of ♦S, we show that any failure detector that implements consensus in any
+environment where up to t processes can crash (Et ), for any t, can be transformed into a failure detector
+of P t × ♦S. Our result generalizes the result of [5] for environments of the form Et . It is not applicable to
+arbitrary environments, say where two specific processes p1 and p2 cannot crash in the same failure pattern.
+
+6.3     The uniformity of consensus
+We considered throughout the paper the uniform variant of consensus. If we consider a correct-restricted
+variant of consensus [23], where two process can decide differently, as long as one of them is faulty, then
+P t × ♦S is not the weakest for consensus for t ≥ n/2 in Et . Indeed, consider the class P< of failure detectors
+(given in [10]) and defined through the strong accuracy property of P and the following partial completeness
+property: if a process pi crashes, then eventually every correct process pj such that j > i permanently
+suspects pi . 5 There is an algorithm given in [10] that implements correct-restricted consensus with P < for
+any t. For t ≥ n/2, P< is not stronger than P t in Et (this is not completely trivial and we give the proof in
+the appendix A-6.2). For t ≥ n/2, P t × ♦S is thus not the weakest for consensus in Et (we generalize here
+the observation of [7] for t ∈ {n − 1, n}). In a sense, the equivalence we state in the paper between consensus
+in Et and ♦S plus a register resilient to t crashes does not hold for correct-restricted consensus, i.e., the latter
+does not always lead to implement a register in a message passing model (augmented with failure detectors).
+
+
+Acknowledgements
+Comments from Partha Dutta, Corine Hari, Idit Keidar, Petr Kouznetsov, and Bastian Pochon helped
+improve the quality of the presentation of this paper.
+
+
+References
+ [1] H. Attiya and J. Welch. Distributed Computing. Fundamentals, Simulations, and Advanced Topics. McGraw-Hill,
+     1998.
+
+ [2] K. Birman and R. van Renessee. Reliable Distributed Computing with the Isis Toolkit. IEEE Computer Society
+     Press, 1993.
+   4 Systems as in [8] that enforce perfect failure detection by explicitly crashing processes, make sure that these processes are
+
+suspected after they have crashed, i.e, they do not predict the future. It is not clear however how our results apply to systems
+that somehow predict failures by turning suspicions into exclusions from the group [2].
+   5 As with the failure detector class Ω , introduced in [22], P has a restricted completeness: some faulty process might never
+                                         i                       <
+be suspected. However, the two classes are different: with P< , completeness is restricted a priori: the only faulty process that
+might never be suspected (by any one) is pn . With Ωi , except when i = 1, any faulty process might never be suspected (by
+any one).
+
+
+
+
+                                                                9
+ [3] H. Attiya, A. Bar-Noy, and D. Dolev. Sharing Memory Robustly in Message Passing Systems. Journal of the
+     ACM, 42(1), January 1995.
+
+ [4] T. Chandra and S. Toueg. Unreliable Failure Detectors for Reliable Distributed Systems. Journal of the ACM,
+     43(2), March 1996.
+
+ [5] T. Chandra, V. Hadzilacos and S. Toueg. The Weakest Failure Detector for Solving Consensus. Journal of the
+     ACM, 43(4), July 1996.
+
+ [6] C. Dwork, N. Lynch and L. Stockmeyer. Consensus in the presence of partial synchrony. Journal of the ACM,
+     35(2), 1988.
+
+ [7] C. Delporte-Gallet, H. Fauconnier and R. Guerraoui. A Realistic Look at Failure Detectors. Proceedings of the
+     IEEE International Conference on Dependable Systems and Networks, Washington DC, June 2002.
+
+ [8] C. Fetzer. Enforcing Perfect Failure Detection. Proceedings of the IEEE International conference on Distributed
+     Computing Systems, Phoenix, April 2001.
+
+ [9] M. Fischer, N. Lynch and M. Paterson. Impossibility of Distributed Consensus with One Faulty Process. Journal
+     of the ACM, 32(2), 1985.
+
+[10] R. Guerraoui. Revisiting the Relationship Between the Atomic Commitment and Consensus Problems. Proceed-
+     ings of the International Workshop on Distributed Algorithms, Springer Verlag (LNCS 972), 1995.
+
+[11] R. Guerraoui and A. Schiper. Γ-Accurate Failure Detectors. Proceedings of the International Workshop on
+     Distributed Algorithms, Springer Verlag (LNCS 1151), 1996.
+
+[12] R. Guerraoui. On the Hardness of Failure Sensitive Agreement Problems. Information Processing Letters, 79,
+     2001.
+
+[13] V. Hadzilacos. On the Relationship Between the Atomic Commitment and Consensus Problems. Proceedings of
+     the International Workshop on Fault-Tolerant Distributed Computing, Springer Verlag (LNCS 448), 1986.
+
+[14] J. Halpern and A. Ricciardi. A Knowledge-Theoretic Analysis of Uniform Distributed Coordination and Failure
+     Detectors. Proceedings of the ACM Symposium on Principles of Distributed Computing, 1999.
+
+[15] P. Jayanti. Wait-free Computing. Proceedings of the International Workshop on Distributed Algorithms, Springer
+     Verlag (LNCS 972), 1995.
+
+[16] L. Lamport. Concurrent Reading and Writing. Communications of the ACM, 20(11), 1977.
+
+[17] L. Lamport. Time, clocks and the ordering of events in a distributed system. Communications of the ACM,
+     21(7), 1979.
+
+[18] L. Lamport. On Interprocess Communication (parts I and II). Distributed Computing, 1, 1986.
+
+[19] W-K. Lo and V. Hadzilacos. Using Failure Detectors to Solve Consensus in Asynchronous Shared-Memory
+     Systems. Proceedings of the International Workshop on Distributed Algorithms, Springer Verlag (LNCS 857),
+     1994.
+
+[20] N. Lynch. Distributed Algorithms. Morgan Kaufmann, 1996.
+
+[21] A. Mostéfaoui and M. Raynal. k-Set Agreement with Limited Accuracy Failure Detectors. Proceedings of the
+     ACM Symposium on Principles of Distributed Computing, 2000.
+
+[22] G. Neiger. Failure Detectors and the Wait-Free Hierarchy. Proceedings of the ACM Symposium on Principles
+     of Distributed Computing, 1995.
+
+[23] G. Neiger and S. Toueg. Simulating Synchronized Clocks and Common Knowledge in Distributed Systems. Journal
+     of the ACM, 40(2), April 1993.
+
+[24] F. Schneider. Replication Management using the State Machine Approach. Chapter in Distributed Systems,
+     Addison-Wesley, 1993.
+
+
+
+                                                        10
+Optional Appendix
+A-1       Preliminary
+Given a run R =< F, H, C, S, T >, for presentation simplicity, we assume that the time T is the set of
+positive integers. Given R =< F, H, C, S, T >, the partial run of R up to time τ is Rτ =< F, H 0 , C, S 0 , T 0 >
+such that T 0 = {1, . . . , τ }, H 0 , the partial history up to time τ , is the restriction to T 0 of the failure history
+H, and S 0 is the initial segment up to τ of S (S 0 = S[1]; . . . ; S[τ )). 6 Note that, if the failure detector is
+realistic, then Rτ0 =< F 0 , H 0 , C, S 0 , T 0 > is also a partial run if F and F 0 are identical up to time τ .
+     Most of the following impossibility proofs are based on standard partitioning arguments. In these argu-
+ments, we exhibit some indistinguishable runs. Intuitively, two partial runs R and R 0 are indistinguishable
+for a process p, that does not crash in R and R0 , if and only if (1) p takes steps at the same time in R and
+R0 , (2) failure detectors histories are the same for p in R and R 0 , and (3) p receives the same messages in R
+and R0 . In this case, at each time, the state of p are the same in R and R 0 .
+     Given a partial run up to time τ , Rτ =< F, H, C, S, T >, and a set of processes E, SdE will denote the
+restriction of S to E.
+     Let E0 and E1 be two sets of processes, H0 a function from E0 × {1, . . . , τ0 } to 2Π , and H1 a function
+from E1 × {1, . . . , τ1 } to 2Π . Given a failure detector D and a failure pattern F , we say that H0 and H1 are
+compatible if there exists a history G in D(F ) such that for all (p, τ ) ∈ E0 × {1, . . . , τ0 } G(p, τ ) = H0 (p, τ )
+and for all (p, τ ) ∈ E1 × {1, . . . , τ1 } G(p, τ ) = H1 (p, τ ). Intuitively, H0 and H1 are possible partial histories
+for processes in E0 and E1 and if they are compatible there exists an history that gives these two partial
+histories for processes in E0 and E1 .
+     Then, roughly speaking, the partitioning argument proceeds as follows. Let A and B = Π \ A be two
+sets of processes and R and R0 two partial runs up to time τ0 . If (1) up to time τ0 , the failure patterns of
+R and R0 are identical, (2) at time τ ≤ τ0 some process in A receives a message m from B in R, then at
+time τ , m has been sent in R0 , (3) at time τ ≤ τ0 some process in B receives a message m from A in R 0 ,
+then at time τ , m has been sent in R, and (4) the restriction to A of the partial history of R is compatible
+with the restriction to B of the partial history of R 0 , then there exists a run R00 such that R00 dA = RdA and
+R00 dB = R0 dB.
+     Note that if the failure detector is not realistic, condition (1) is not sufficient: we have to ensure that the
+whole failure patterns of R and R0 are the same.
+
+
+A-2       Proofs of Section 2
+Before proving the fact that the class of realistic failure detectors is closed under reduction, precise some
+definitions.
+    Consider environment Et , recall that algorithm A is a reduction algorithm of failure detector D into
+failure detector D 0 if and only if, given a failure pattern F ∈ Et and H any failure history in D(F ), A(H),
+the histories of outputs of A is a failure history in D 0 (F ). In fact, the reduction algorithm A using the failure
+detector D implements the failure detector AD defined as follows: for each failure pattern F , AD (F ) is the
+set {A(H)|H ∈ D(F )}. Remark that D 0  D if and only if for every failure patterns F , AD (F ) ⊆ D0 (F ).
+    The notion of reduction has been defined for the general class of failure detectors. The following propo-
+sitions prove that this notion can be restricted to the class of realistic failure detectors.
+Lemma 1 If D is a realistic failure detector and A is a reduction algorithm, then A D is a realistic failure
+detector.
+Proof. Consider F and F 0 two failure patterns identical up to time τ0 , and H ∈ AD (F ). Let R =<
+F, H0 , C, S, T > be the run of A that output H. As D is realistic there exists some H1 , an history in D(F 0 ),
+such that for all p and all τ ≤ τ0 H0 (p, τ ) = H1 (p, τ ). Then there exists a run R0 =< F 0 , H1 , C, S 0 , T > of
+A such that the partial run of R0 up to time τ0 and the partial run of R up to time τ0 are indistinguishable
+  6 Note that in such a partial run F is a failure pattern for the whole run: F (τ ) is defined for all integer τ .
+
+
+
+
+                                                                11
+and then output the same history up to time τ0 . Thus, if H 0 is the output of R0 , then for all τ ≤ τ0 , for all
+H(p, τ ) = H 0 (p, τ ).
+In the following, and only to the end of this section, we do not assume that the failure detectors are realistic.
+Let Real be the class of all realistic failure detectors.
+Proposition 2 Let D2 and D1 be two failure detectors (not necessary realistic). For all t, if D 2 t D1 then
+D2 ∩ Real t D1 ∩ Real
+Proof. Let A a reduction algorithm of D1 into D2 . As D1 ∩ Real ⊆ D1 , then AD1 ∩Real ⊆ D2 . From
+Lemma 1, AD1 ∩Real is realistic too and then AD1 ∩Real ⊆ D2 ∩ Real proving that D2 ∩ Real t D1 ∩ Real.
+
+
+
+A-3       Proofs of Section 3
+Proposition 3.2 is a general property that is not used elsewhere in the paper. For the sake of presentation
+we prove it here although its proof uses the Corollary 4.2 that will be proved later (Section A-4).
+                                                    0
+Proposition 3.2 ∀t, t0 ∈ [n/2, n − 1], t0 < t ⇒ P t ≺t P t .
+Proof. We prove first the following lemma:
+Lemma 3 If t ∈ [n/2, n − 1] then there is no algorithm implementing an atomic 1-writer–1-reader atomic
+register with P t−1 in Et environment.
+Proof of lemma. Assume by contradiction Lemma 3 is false. The proof uses a classical partition argument.
+    Let pw be the writer and pr the reader. As n ≤ 2t, then there is a set W of n − t processes containing
+pw and a set R of n − t processes containing pr such that W and R are disjoint sets. As t ≤ n − 1, these
+sets are not empty. In the proof, we assume that all processes not in W or in R are initially crashed.
+    Let v0 be the initial value of the register.
+    Consider the following runs:
+   • In α0 , only processes in W are alive, and pw writes v1 (v1 6= v0 ). The failure detectors of all processes
+     in W always suspect all processes in Π \ W . At time τ0 , the write operation completes.
+   • α1 is similar to α0 , except that all processes in R are alive, but do not take any step until time τ0 .
+     The failure detectors of all processes in W (respectively in R) suspect always all processes in Π \ W
+     (respectively in Π \ R). This is possible because, in α1 , we have 2(n − t) alive processes and therefore
+     at most n − t alive processes are suspected (remember that the failure detectors are in P t−1 ). For
+     processes of W , α1 and α0 are indistinguishable, and so at time τ0 , the write operation completes.
+   • α2 is similar to α1 , except that all processes in W and R do not take any step until time τ0 . The failure
+     detectors of all processes in W (respectively in R) always suspect all processes in Π \ W (respectively
+     in Π \ R). At time τ0 , all processes of W crash, then pr begins the read operation at time τ0 and the
+     read operation completes at time τ1 . Clearly the value returned by the read operation must be the
+     initial value v0 .
+   • In α3 all processes in W have the same behavior as in α1 until time τ0 . All messages sent between W
+     and R are delayed until after time τ1 . Processes in R have the same behavior as in α2 and the read
+     operation completes at time τ1 . By the definition of an atomic register, this read must return v1 , but
+     for processes in R, α3 is indistinguishable from α2 and the read return v0 . Contradiction.
+
+              0
+   Clearly P t t P t . In environment Et , we can implement a 1-writer–1-reader atomic register with Pt
+(Proposition 4.1) but by the previous lemma we can not implement this register with P t−1 .
+
+   Now we prove that, in environment Et , P t × ♦S is strictly weaker than S. Note that the proof of
+Proposition 3.3 uses the Theorem 5.2 that will be proved later (Section A-5) but, as one can easily verify,
+Proposition 3.3 will not be used elsewhere in the paper.
+
+
+                                                        12
+Proposition 3.3 ∀t ∈ [1, n − 2], P t × ♦S ≺t S.
+
+Recall that we consider here only realistic failure detectors.
+Proof. First, from Theorem 5.2, as P t × ♦S is the weakest realistic failure detector to solve consensus in
+Et , then we have P t × ♦S t S.
+     We prove now by contradiction that P t ×♦S is not stronger to S. Assume that A is a reduction algorithm
+that constructs S from P t × ♦S in Et .
+     Consider the following two cases:
+   1. case n ≤ 2t
+          • Consider the two following failure patterns F1 such that p1 , p2 , . . . , pn−t−1 are the only faulty
+            processes (and initially crash) and F F the failure free pattern. Let H1 be the history of failure
+            detector of P t , such that all processes in {p1 , . . . , pn−t−1 } are the only suspected processes. Let
+            K1 be the history of failure detector of ♦S, such that all processes except pn are the only suspected
+            processes. Both H1 and K1 are compatible with F F and F1 .
+            Note that, as n − 1 > t, then H1 contains always at least one process.
+              (a) Consider a run R10 of the reduction algorithm with failure pattern F1 and failure detector his-
+                  tory (H1 , K1 ). By hypothesis, the output of the emulated failure detector is in S. By the com-
+                  pleteness property of S, there exists a time τ1 after which all processes in {p1 , p2 , . . . , pn−t−1 }
+                  are suspected.7
+              (b) Consider now a similar run R1 but with failure pattern F F . For R1 , processes in {p1 , p2 ,
+                  . . . , pn−t−1 } take no steps until time τ1 , and processes in {pn−t , . . . , pn } take the same steps
+                  at exactly the same time as in R10 . Therefore all processes output the same history for the
+                  emulated failure detector until time τ1 as in R10 .
+          • Consider the following failure pattern F2 such that pn−t , . . . , p2(n−t−1) are the only faulty pro-
+            cesses and all the processes crash after time τ1 . Let H2 be the history of failure detector P t ,
+            identical to H1 until time τ1 and then all processes in {pn−t , . . . , p2(n−t−1) } are the only sus-
+            pected processes. Both H2 and K1 are compatible with F F and F2 .
+            Note that, as n − 1 > t, then H2 contains always at least one process.
+              (a) Consider the run R20 of the reduction algorithm with failure pattern F2 and the history
+                  (H2 , K1 ): R20 is identical to R1 until time τ1 . By the completeness property of S, there exists
+                  a time τ2 after which {pn−t−1+1 , . . . , p2(n−t−1) } are suspected.
+              (b) Consider now a similar run R2 but with failure pattern F F . For R2 , before time τ1 , processes
+                  take steps at exactly the same time as in R20 . Processes in {pn−t−1+1 , . . . , p2(n−t−1) } take no
+                  steps between τ1 and τ2 , and processes in {p1 , p2 , . . . , pn−t−1 } take the same steps at exactly
+                  the same time as in R20 . Therefore all processes output the same history for the emulated
+                  failure detector until time τ2 as in R20 .
+          • Consider the following failure pattern F3 such that p2(n−t−1)+1 , . . . , pn are the only faulty pro-
+            cesses and they all crash after time τ2 . As t < n − 1, these processes may be faulty. Let H3
+            be the history of failure detector P t , identical to H2 until time τ2 and then all processes in
+            {p2(n−t−1)+1 , . . . , pn } are the only suspected processes. Let K3 be the history of failure detector
+            ♦S, identical to K1 until τ2 , and then all processes except p1 are the only suspected processes.
+            Both H3 and K3 are compatible with F F and F3 .
+            Consider the run R3 of the reduction algorithm with failure pattern F3 and the history (H3 , K3 ):
+            R3 is identical to R2 until time τ2 . Therefore all processes output the same history for the
+            emulated failure detector until time τ2 as in R2 . In F3 , p2(n−t−1)+1 , . . . , pn are not correct. Before
+            time τ1 , some process suspects {p1 , p2 , . . . , pn−t−1 }, between τ1 and τ2 some process suspects
+            pn−t , . . . , p2(n−t−1) . Thus, R3 outputs history H in which all correct processes are suspected:
+            contradicting the fact that H is an history of S.
+    7 We abuse, here and after, of the language. More precisely, any process p in {p
+                                                                                     n−t , . . . , pn } has made at least one step in this
+run before time τ1 . In this step and the followings the output of the emulated failure detector for p include {p 1 , p2 , . . . , pn−t−1 }
+in its list of suspected processes.
+
+
+                                                                    13
+1  Every process p executes the following code:
+2    Initialization:
+3       r:=0
+4    Task 1:
+5       repeat forever
+6          send(ARE Y OU ALIV E, r) to all
+7          wait until receive (I AM ALIV E, r) from max(n − t, 1) processes
+8          Outputp :={q | no message (I AM ALIV E, r) from q received by p }
+9          /* Outputp is the output for p of the failure detector D */
+10         r:=r+1
+11   Task 2:
+12      upon receive (ARE Y OU ALIV E, x) from q
+13      send(I AM ALIV E, x) to q
+
+
+
+                               Figure 3: Implementation of P n−t−1 in environment Et
+
+
+    2. case 2t < n
+      We can implement P t in Et . We have only to show that ♦S is not stronger than S in Et .
+      The proof is identical to the previous proof except we consider dn/te sets: {p 1 , . . . , pt }, {pt+1 , . . . ,p2t },
+      . . . , {p(t−1)dn/te+1 , . . . , pn } instead of {p1 , . . . , pn−t+1 }, {pn−t−1+1 , . . . , p2(n−t−1) }, {p2(n−t−1)+1 , . . . ,
+      pn }. As t > 0, each of these sets contains at least one process. Furthermore, each of them has at most
+      t processes and these processes can be faulty.
+
+
+The following propositions are easier to derive:
+Proposition 3.4 ∀t ∈ [0, n − 1], P n−t−1 ≡t ⊥.
+Proof. Algorithm of Figure 3 implements a failure detector D in P n−t−1 within Et .
+   The completeness of D is clear. When p waits from max(n − t, 1) processes, it can miss at most t alive
+processes: |D(p, τ ) \ F (τ )| ≤ t. Therefore D ensures the (n − t − 1)-accuracy property.
+                                                     0
+Proposition 3.5 ∀t, t0 ∈ [0, dn/2e − 1], P t ≡t ⊥.
+
+Proof. Note that, if 2t < n, then t ≤ n − t − 1 and by Proposition 3.4 P n−t−1 can be implemented
+in Et . Moreover, from the (n − t − 1)-accuracy property, we have |P n−t−1 (p, τ ) \ F (τ )| ≤ t and then
+|P n−t−1 (p, τ ) \ F (τ )| ≤ n − (dn/2e − 1) − 1. Therefore a failure detector in P n−t−1 satisfies (dn/2e − 1)-
+                                                                              0
+accuracy property too and is clearly in P (dn/2e−1) . By Proposition 3.1, P t can be implemented for all t0 in
+[0, dn/2e − 1] within Et .
+
+
+A-4       Proofs of Section 4
+Proposition 4.1 With any failure detector of P t , Algorithm 1 implements a 1-reader–1-writer atomic reg-
+ister (for any reader or writer) in environment Et .
+
+   Consider e a write or a read operation, ebegin denotes the first event (Line 16 for a write operation,
+Line 24 for a read operation) and eend the last event (Line 18 for a write operation, Line 30 for a read
+operation).
+   For the reader and the writer, the end of the operation occurs after the receipt of some acknowledgment
+messages. If e is a write operation (respectively a read operation), then Q e is the set of processes from which
+the writer (resp. the reader) has received an acknowledgment message in Line 17 (resp. in Line 25) before
+completing e.
+   We have directly:
+
+                                                                14
+Lemma 4 For each process, the values of its last write variable are nondecreasing.
+Proof. Following from the algorithm.
+Lemma 5 For each read or write operation e (1) At most max(n − t − 1, 0) alive processes at time τ (e end )
+are not in Qe , (2) All processes in Qe were alive at time τ (ebegin ), and (3) Qe contains at least max(n − t, 1)
+processes.
+Proof. Follows from the properties of failure detector P t and from the algorithm.
+
+Lemma 6 Let e and e0 be any two write or read operations, such that τ (eend ) < τ (e0 begin ), then Qe ∩ Qe0 .
+
+Proof. Consider Lemma 5: By (2), all processes in Qe0 were alive at time τ (e0 begin ). By (3), at least
+max(n − t, 1) such processes are in Qe0 . As, by hypothesis, τ (eend ) < τ (e0 begin ), these processes were also
+alive at time τ (eend ). By (1), at most max(n − t − 1, 0) processes alive at time τ (eend ) are not in Qe and
+thus at least one process is in Qe ∩ Qe0 .
+    Then we can apply the previous lemmas to write and read operations:
+
+Lemma 7 Let w be a write operation and r a read operation, if τ (wend ) is less than τ (rbegin ), then the
+sequence number of w is less or equal to the value of the last write variable of the reader at the end of r.
+
+Proof. Consider Qw and Qr . By Lemma 6, at least one process, say p, belongs to Qw and Qr . Process p
+has written the value of the sequence number of w into its last write variable before time τ (w end ).
+From Lemma 4, as τ (wend ) < τ (rbegin ), p has sent during r to the reader an ACK READ message with a
+last write value larger or equal to the sequence number of w.
+                                                                                    0
+Lemma 8 If r and r 0 are two read operations such that τ (rend ) is less than τ (rbegin ), then the last write
+                                                                                 0
+value of the reader at the end of r is less or equal than the one at the end of r .
+Proof. Direct from Lemma 4.
+Proof of Proposition. Now we prove Proposition 4.1.
+   First, note that, as at most t processes have crashed, the writer and the reader are ensured to receive an
+acknowledgment message from at least max(n−t, 1) processes (an alive process can always receive a message
+from itself) and then, due to the completeness of P t the wait instructions (Line 17 and Line 25) terminate.
+Therefore, the write and read operations terminate if respectively the writer and the reader are correct.
+   As sequence numbers of write operation are strictly increasing and only the writer modifies this sequence
+number, we deduce from Lemma 7 that each read operation returns the value written by the most recent
+preceding write operation or a value written by a write operation that is concurrent with this read operation.
+   Consider r and r0 any two read operations such that r ends before the beginning of r 0 . By Lemma 8, if r
+and r0 returns respectively values from write operations w and w 0 , then either w = w0 or w ends before the
+beginning of w0 .
+   We use the fact that a N -writer–M -reader atomic register can be implemented from 1-writer–1-reader
+atomic registers in order to deduce the following corollary:
+Corollary 4.2 Any failure detector of P t implements a (n-writer–n-reader) register in Et .
+    We reuse the result of [19] that consensus can be implementable with registers and any failure detector
+of ♦S (in any environment) in order to deduce the following corollary:
+
+Corollary 4.3 Any failure detector of P t × ♦S implements consensus in Et .
+
+
+A-5       Proofs of Section 5
+Proposition 5.1 For any failure detector class D that implements a register in E t , we have: P t t D.
+
+
+
+
+                                                       15
+Proof. We prove that the reduction algorithm of Figure 2 gives P t .
+    Consider a write operation performed by writer p and let wbegin (resp. wend ) the event on p corresponding
+to the beginning (resp. to the end) of this write operation. As before, τ (wbegin ) and τ (wend ) are the time of
+occurrence of these events.
+    Define W as the set of processes that could have participated in the write operation. More precisely,
+Ew = {e : wbegin → e → wend } and W = {q ∈ Π | ∃e on process q ∈ Ew } where → is the causality relation
+of [17].
+    Clearly, at the end of a write operation of process p on register p, L[p] is equal to W . Therefore Output,
+the output of the emulated failure detector, is, from the end of this write until the next end of a write
+operation of p, the set Π \ W .
+In order to conclude the proof, we state the following Lemma:
+Lemma 9 (1) At most max(n − t − 1, 0) alive processes at time τ (wend ) are not in W , and (2) W contains
+no process that has crashed at time τ (wbegin ).
+Proof of Lemma.
+    Part (2) of the lemma is clear by the definition of W .
+    The proof of (1) uses a classical partitioning argument. Assume by contradiction that (1) is false. This
+means that there is a run α with a write operation w such that if t ≤ n − 1, at least n − t alive processes at
+time τ (wend ) are not in W , if t = n at least one alive process at time τ (wend ) are not in W . In all cases, at
+least one process is not in W . Assume without loss of generality that the register contains the value v 0 and
+v1 is the new value written in the register by w.
+    Let Pw be the strict causal past of Ew . More precisely, Pw = {x 6∈ Ew | ∃a ∈ Ew : x → a}. Now consider
+the following runs:
+   • α0 : α0 is similar to α, except that all events causally after Ew ∪Pw are delayed until after time τ (wend ).
+   • α1 : α1 is similar to α0 , but in α1 all steps causally after Pw are delayed until after time τ (wend ).
+     In particular no steps concerning the write operation are taken. At time τ (wend ), all processes in W
+     crash. Let q be any process not belonging to W . In α1 , q begins to read the register at time τ (rbegin )
+     just after time τ (wend ). As the register is atomic, and n − t processes are still alive, the read operation
+     of q has to return v0 . Let τ (rend ) the time of the end of the read operation by q.
+   • α2 : α2 is similar to α0 , but all processes of W crash at time τ (wend ). In α2 , q begins to read the
+     register at time τ (rbegin ). All messages between processes of W and of Π \ W are delayed until after
+     time τ (rend ). Due to the realism hypothesis, the output of failure detectors, are the same in α0 and α2
+     until time τ (wend ). Therefore all processes have the same behavior in α0 and α2 until time τ (wend ).
+     Then the write succeeds and by the properties of atomic register, all following reads must return v 1 .
+     In α2 , all processes of Π \ W are scheduled exactly as in α1 and the failure patterns of α2 and α1 are
+     the same, therefore the output of the failure detectors is the same. Then, as in α1 , the read operation
+     of q returns v0 in α2 , contradicting the properties of the atomic register.
+
+
+The proposition is a direct consequence of the Lemma.
+Remark: If the failure detector used to implement a register is not realistic, this result does not hold. For
+example, consider the following failure detector: since the beginning it gives to each process the identity of
+the same correct process. Implementing an atomic register is then trivial: this correct process maintains the
+register and, to implement a write operation, the writer sends only a write request to this correct process
+and waits until it receives an acknowledgment. Clearly, only the writer and this process participates in the
+write operation.
+    From Proposition 5.1 and Corollary 4.2 we deduce:
+Theorem 5.2 For any t, P t is the weakest realistic failure detector to implement an atomic register in
+environment Et
+As atomic register can not be implemented in asynchronous systems with at most t crashed processes for
+n ≤ 2t, we deduce:
+
+                                                        16
+Corollary 5.3 If n ≤ 2t then P t can not be implemented in asynchronous systems.
+Proposition 5.4 For any failure detector class D that implements consensus in E t , we have: P t × ♦S t D.
+   From Proposition 5.4 and Corollary 4.3, we deduce that:
+Theorem 5.5 For any t, P t ×♦S is the weakest failure detector class to implement consensus in environment
+Et .
+
+
+A-6       Proofs of Section 6
+A-6.1      Proofs of Section 6.1
+In this section we show first the impact of realism on our results. For this we prove that M is incomparable
+with P t , more precisely:
+Lemma 10 If n ≤ 2t, ¬(P t t M) (there is no reduction algorithm from M to P t ).
+    Proof. Recall the definition of failure detector M: for each process M outputs the exact list of faulty
+processes since time 0. Clearly this failure detector is not realistic. It can be easily proved that M enables
+to implement (uniform) consensus in every environment Et .
+    Assume by contradiction Lemma 10 is false. Let F be the set of n − t processes {p 1 , . . . , p(n−t) } and
+consider failure patterns for which the set of faulty processes is F . For these failure patterns, the output of
+M is always the same. Note that as n ≤ 2t in such failure patterns, less than t processes are faulty.
+    Consider:
+   • In α0 , all processes in F are initially crashed. By the completeness property of P t , there is a time τ
+     after which, in the output of the emulated failure detector all processes in F are suspected.
+   • In α1 , all processes in F crash after time τ . Moreover, processes in F do nothing until time τ . Each
+     process not in F takes steps at the same time in α0 and α1 . Until time τ , for processes in Π \ F , α0
+     and α1 are indistinguishable and so the output of the emulated failure detector is the same. In this
+     way, at time τ , n − t alive processes are suspected contradicting t-accuracy.
+
+
+From Lemma 10 and the fact that, there is trivially no reduction algorithm from P t to M, we deduce the
+following:
+Proposition 11 If n ≤ 2t, ¬(M t P t ) and ¬(M t P t ) ( M and P t are incomparable in Et ).
+
+A-6.2      Proof of Section 6.3
+Recall the definition of failure detector P< . This failure detector outputs at each process pi a list of suspected
+processes such that (1) no process is suspected before it crashes, (2) if a process p i crashes, then eventually
+every correct process pj such that j > i permanently suspects pi .
+Proposition 12 If n ≤ 2t, ¬(P t t P< ) (there is no reduction algorithm from P< to P t in Et ).
+Proof. We prove this by contradiction.
+   If t < n, let A be the set of processes pi such that 1 ≤ i ≤ t. If t = n, let A be the set of processes pi
+such that 1 ≤ i ≤ t − 1. Therefore | Π \ A |= max(n − t, 1). A max(n − t, 1) ≤ t, then all processes in Π \ A
+can crash.
+   Let F be a failure pattern where all processes of Π \ A are initially crash. Let F F be the failure free
+pattern. Let H be a history of P< in which processes of A do not suspect any process, processes of Π \ A
+suspect processes of Π \ A. Let H 0 be a history of P< in which processes do not suspect any process. H is
+a history of P< compatible with F and H1 is a history of P< compatible with F F . For processes of A, H
+and H1 are identical.
+   Now consider the following runs:
+
+                                                        17
+   • Consider first, the run α0 of the reduction algorithm with failure pattern F , and the history H. In the
+     reduction algorithm, due to the completeness property of P t there is a time τ such that the emulated
+     failure detector suspects all processes in Π \ A. By construction, the set Π \ A is not empty.
+   • Consider now a similar run α1 but with failure pattern F F , and the history H1 . For α1 , all processes
+     in Π \ A do not take any step before time τ . All processes in A have the same history for failure
+     detector P< than in α0 . Therefore, for these processes α0 and α1 are indistinguishable until time τ
+     and the emulated failure detector gives the processes in A the same output as in α0 , but they suspect
+     max(n − t, 1) alive processes contradicting the t-accuracy property of P t .
+
+
+Corollary 13 If 2t ≥ n, an atomic register can not be implemented with failure detector P < .
+
+
+
+
+                                                     18
+

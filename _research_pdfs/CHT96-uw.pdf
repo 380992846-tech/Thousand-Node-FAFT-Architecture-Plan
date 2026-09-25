@@ -1,0 +1,32 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
+        "http://www.w3.org/TR/html4/strict.dtd">
+    <html lang="en">
+    <head>
+       <meta name="viewport" content="width=device-width, initial-scale=1">
+       <title>Choose Identity Provider</title>
+       <style type='text/css' media='all'>
+        @import url('bootstrap.min.css');
+        @import url('cse-ds.css');
+       </style>
+       <link rel="shortcut icon" href="http://www.cs.washington.edu/favicon.ico">
+    </head>
+    <body class="html not-front no-sidebars page-node" >
+    <div class="page-wrapper">
+    <div class="header">
+    <div id="purple-header-bar"></div>
+    <h1><span>CSE/UW Login</span></h1> </div><form role="form" action="." method="POST" ><input type="hidden" name="target" value="ss%3Amem%3Aaa4ebba07272732c7ded250ba88efa29a47ddc51e0eba3a103d8e7615f645251"><div class='form-group container'><h2>Sign in to this resource with</h2><div class="row"><div class='col-sm-5 btn-div'><button type='submit' name='submit' class='btn btn-success btn-netid' value='csenetid'>CSE NetID</button></div> <div class='col-sm-5 btn-div'><button type='submit' name='submit' class='btn btn-success btn-netid' value='uwnetid'>UW NetID</button></div></div><p style="color:red;padding-top:10px">Users with CSE logins are strongly encouraged to use CSENetID only. Your UW NetID may not give you expected permissions.</p></div></form><div id="legalese-footer">
+      <p class="legalese">Computer Science &amp; Engineering   
+          University of Washington   Box 352350   Seattle, WA  98195-2350   
+          (206) 543-1695 voice, (206) 543-2969 FAX   </p>
+      <p class="legalese"><a href="http://www.washington.edu/online/privacy" 
+                             target="_blank">UW Privacy Policy</a> and 
+                             <a href="http://www.washington.edu/online/terms" 
+                                target="_blank">UW Site Use Agreement</a></p>
+      <p class="legalese">[comments to <em>
+              <a href="https://www.cs.washington.edu/htbin-post/unrestricted/mailto2.pl?to=support&amp;sub=Identity Provider Selection Page">
+                  support</a></em>]</p>
+    </div>
+    </div>
+    </body>
+    </html>
+    

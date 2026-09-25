@@ -1,0 +1,474 @@
+                                                Accepted for publication in ApJ Letters
+                                                Preprint typeset using LATEX style emulateapj v. 5/2/11
+
+
+
+
+                                                         APPROXIMATELY A THOUSAND ULTRA DIFFUSE GALAXIES IN THE COMA CLUSTER
+                                                                         Jin Koda1 , Masafumi Yagi2,3 , Hitomi Yamanoi2 , Yutaka Komiyama2,4
+                                                                                                Accepted for publication in ApJ Letters
+
+                                                                                                     ABSTRACT
+                                                          We report the discovery of 854 ultra diffuse galaxies (UDGs) in the Coma cluster using deep R band
+                                                       images, with partial B, i, and Hα band coverage, obtained with the Subaru telescope. Many of them
+                                                       (332) are Milky Way-sized with very large effective radii of re > 1.5 kpc. This study was motivated by
+                                                       the recent discovery of 47 UDGs by van Dokkum et al. (2015a); our discovery suggests > 1, 000 UDGs
+arXiv:1506.01712v1 [astro-ph.GA] 4 Jun 2015
+
+
+
+
+                                                       after accounting for the smaller Subaru field (4.1 degree2 ; about 1/2 of Dragonfly). The new Subaru
+                                                       UDGs show a distribution concentrated around the cluster center, strongly suggesting that the great
+                                                       majority are (likely longtime) cluster members. They are a passively evolving population, lying along
+                                                       the red sequence in the color-magnitude diagram with no signature of Hα emission. Star formation
+                                                       was, therefore, quenched in the past. They have exponential light profiles, effective radii re ∼ 800 pc-
+                                                       5 kpc, effective surface brightnesses µe (R) =25-28 mag arcsec−2 , and stellar masses ∼ 1 × 107 M -
+                                                       5 × 108 M . There is also a population of nucleated UDGs. Some MW-sized UDGs appear closer to
+                                                       the cluster center than previously reported; their survival in the strong tidal field, despite their large
+                                                       sizes, possibly indicates a large dark matter fraction protecting the diffuse stellar component. The
+                                                       indicated baryon fraction . 1% is less than the cosmic average, and thus the gas must have been
+                                                       removed (from the possibly massive dark halo). The UDG population is elevated in the Coma cluster
+                                                       compared to the field, indicating that the gas removal mechanism is related primarily to the cluster
+                                                       environment.
+                                                       Subject headings: galaxies: clusters: individual (Coma) – galaxies: evolution – galaxies: structure
+
+                                                                    1. INTRODUCTION                                   and low SBs, in clusters (e.g., Binggeli & Cameron 1991;
+                                                 This study is motivated by the discovery of 47 ul-                   Bothun et al. 1991; Ulmer et al. 1996, 2011; Adami et al.
+                                              tra diffuse galaxies (UDGs) in the Coma cluster by van                  2006b, 2009; Lieder et al. 2012; Ferrarese et al. 2012).
+                                              Dokkum et al. (2015a) using the Dragonfly Telescope Ar-                   Optical telescopes of larger aperture are advantageous
+                                              ray (Abraham & van Dokkum 2014, hereafter Dragon-                       for a resolved study of this population. Yamanoi et al.
+                                              fly). This unexpected discovery revealed a new popu-                    (2012) used the Subaru Prime Focus Camera (Suprime-
+                                              latoin of low surface brightness (SB) galaxies. Indeed,                 Cam; Miyazaki et al. 2002) on the Subaru telescope and
+                                                                                                                      derived a galaxy luminosity function down to MR ∼ −10
+                                              their central SBs are very low 24-26 mag arcsec−2 in g-
+                                                                                                                      in Coma. Their three 340 × 270 fields include nine Drag-
+                                              band and their median stellar mass is only ∼ 6 × 107 M ,
+                                                                                                                      onfly UDGs. All of the nine were easily found in their
+                                              despite their effective radii re = 1.5-4.6 kpc being as large
+                                                                                                                      catalog, being resolved spatially in the images. There-
+                                              as those of L∗ galaxies (e.g., ∼ 3.6 kpc for the Milky Way
+                                                                                                                      fore, Subaru imaging can identify this new galaxy pop-
+                                              (MW), calculated from Rix & Bovy 2013). van Dokkum
+                                                                                                                      ulation efficiently and permits an investigation of their
+                                              et al. (2015a) speculated that the UDGs probably have
+                                                                                                                      internal properties. Several archival Subaru images are
+                                              very high dark matter fractions as they have survived in
+                                                                                                                      available for the Coma cluster (Yagi et al. 2007; Yoshida
+                                              the strong tidal field of the cluster.
+                                                                                                                      et al. 2008; Yagi et al. 2010; Okabe et al. 2010, 2014). In
+                                                 Dragonfly is optimized to efficiently discover faint
+                                                                                                                      this Letter, we use the archival Subaru data and report
+                                              structures over a large field of view, but has relatively
+                                                                                                                      the discovery of 854 UDGs, implying ∼ 1000 UDGs after
+                                              poor spatial resolution with seeing and pixel scales of
+                                                                                                                      scaling for the Dragonfly field-of-view.
+                                              ∼ 600 and 2.800 , respectively. The above properties of
+                                                                                                                        We adopted m − M = 35.05 (Kavelaars et al. 2000)
+                                              the Dragonfly UDGs were derived after their discovery
+                                                                                                                      as the distance modulus of the Coma cluster, which cor-
+                                              from archival Canada France Hawaii Telescope imaging.
+                                                                                                                      responds to an angular diameter distance of 97.5 Mpc
+                                              Follow-up studies are needed to understand their nature
+                                                                                                                      (100 = 0.47 kpc) 5 . The full catalog of the Subaru UDGs
+                                              and origin, as well as their relationship to the cluster en-
+                                                                                                                      will be published in Yagi et al. (in preparation). We use
+                                              vironment (Boselli & Gavazzi 2014, for review) and to
+                                                                                                                      the AB-magnitude system in this work.
+                                              other more studied galaxy populations, such as dwarfs
+                                                                                                                                               2. DATA
+                                                jin.koda@stonybrook.edu
+                                                   1 Department of Physics and Astronomy, Stony Brook Univer-           The raw R band images from the Suprime-Cam were
+                                                sity, Stony Brook, NY 11794-3800                                      obtained from the Subaru data archive (Baba et al.
+                                                   2 Optical and Infrared Astronomy Division, National Astro-
+                                                                                                                      2002). Suprime-Cam has a mosaic of ten 2048 × 4096
+                                                nomical Observatory of Japan, 2-21-1 Osawa, Mitaka, Tokyo,            CCDs and covers a wide field of 340 ×270 with a pixel scale
+                                                181-8588, Japan
+                                                   3 Department of Advanced Sciences, Hosei University, 3-7-2,        of 0.20200 . An eighteen-pointing mosaic with Suprime-
+                                                Kajinocho, Koganei, Tokyo, 184-8584 Japan
+                                                   4 SOKENDAI (The Graduate University for Advanced Stud-               5 We adopted the Cosmological parameters of (h ,Ω ,
+                                                                                                                                                                        0 M
+                                                ies), Mitaka, Tokyo, 181-8588, Japan                                  Ωλ )=(0.71, 0.27,0.73) from Larson et al. (2011).
+2                                                                                                              Jin Koda
+
+
+
+                            (a)                                                                                                               (b)
+
+
+
+
+                                                                                                                                 29:00:00.0
+               29:00:00.0
+
+
+
+
+                                                                                                                                 30:00.0
+               30:00.0
+
+
+
+
+                                                                                                                                 28:00:00.0
+               28:00:00.0
+
+
+
+
+                                                                                                                   Declination
+ Declination
+
+
+
+
+                                                                                                                                 30:00.0
+               30:00.0
+
+
+
+
+                                                                                                                                 27:00:00.0
+               27:00:00.0
+
+
+
+
+                                  500 kpc                                                                                                           500 kpc
+
+
+
+
+                                      04:00.0   02:00.0   13:00:00.0          58:00.0   56:00.0   12:54:00.0                                             04:00.0   02:00.0   13:00:00.0          58:00.0   56:00.0   12:54:00.0
+                                                            Right ascension                                                                                                    Right ascension
+
+
+  Fig. 1.— The 2.86 deg ×2.90 deg (∼ 4.87 × 4.94 Mpc2 ) area centered on the Coma cluster, the same area as in Figure 1 of van Dokkum
+et al. (2015a). (a) Image from the Digitized Sky Survey. The white borders show the 18 fields covered in the Subaru R band (Okabe et al.
+2014), which have the total area of 4.1 degree2 , about 1/2 of the Dragonfly coverage. Red indicates the area analyzed by Yamanoi et al.
+(2012). Yellow outlines the area analyzed by Yagi et al. (2010) using the Subaru B, R, Hα, i bands. Cyan indicates the area in Figure 2.
+The center of the cluster (αJ2000 ,δJ2000 )=(12:59:42.8,+27:58:14) is marked with a green cross (White et al. 1993). (b) The same area as in
+(a), showing the distribution of the 854 Subaru UDGs (circles). The MW-sized UDGs, with large effective radii (> 1.5 kpc), are shown in
+blue. The Subaru field coverage in R is enclosed with the solid line. The 47 Dragonfly UDGs are indicated with red crosses.
+Cam was taken by Okabe et al. (2014) and covered about                                                                           (SDF) project (Kashikawa et al. 2004). We used only
+4.1 deg2 (Figure 1). The seeing was 0.6-0.800 , typically                                                                        a part of the raw SDF exposures taken in June 2008 to
+0.700 . Integration times for the 18 fields were not the                                                                         make the background noise comparable to that in the
+same, resulting in variations in background noise, i.e.,                                                                         Coma fields. The 1σ background noise in a 200 aperture
+28.3-28.7 mag arcsec−2 (1σ) in a 200 aperture (equivalent                                                                        is 28.6 mag arcsec−2 . For consistency we started from the
+to 30.0-30.4 mag arcsec−2 in a 1000 aperture, ∼ 1 mag                                                                            raw data and matched data reduction parameters.
+deeper than van Dokkum et al. 2015a). The very cen-
+                                                                                                                                                                       3. IDENTIFICATION
+tral field has a higher variation of 27.8 mag arcsec−2 since
+the field is contaminated by the outer envelope of bright                                                                           Our goal is to find UDGs in the Subaru images. Forty
+galaxies.                                                                                                                        of the 47 UDGs discovered by Dragonfly are within the
+   The data were reduced in a standard way (Yagi et al.                                                                          Subaru R band coverage based on their coordinates (van
+2002, 2010). We used self-sky flat images, subtracted sky                                                                        Dokkum et al. 2015a). All were detected significantly
+background locally in each small grid (256 × 256 pixel2 ;                                                                        (with the faintest one, DF27, off by 12.500 from the pub-
+51.700 × 51.700 ), used the WCSTools (Mink 2002) for as-                                                                         lished coordinate) and their structures were resolved in
+trometry, and applied a photometric calibration (Yagi                                                                            the Subaru images. The detection threshold was approx-
+et al. 2013) using the Sloan Digital Sky Survey (SDSS)-                                                                          imately 27.3 mag arcsec−2 in the R band. We describe
+III DR9 catalog (Ahn et al. 2012). The grid size for the                                                                         our selection procedure for the final catalog of 854 UDGs
+background subtraction was larger than the expected size                                                                         in the Coma cluster. We found no counterparts in the
+of UDGs (< 3000 ∼ 15 kpc). The Galactic extinction in                                                                            control field.
+R band varies from 0.016 to 0.031 mag across the 18-                                                                                We ran SExtractor (version 2.19.5; Bertin & Arnouts
+field mosaic (Schlafly & Finkbeiner 2011). We adopted                                                                            1996) on individual mosaic frames with a fixed de-
+the Galactic extinction value at the center of each field                                                                        tection threshold of 27.3 mag arcsec−2 in R. We re-
+and neglected variation within each field. The final pho-                                                                        moved a first set of spurious detections using SExtrac-
+tometric error is . 0.1 mag. More details of the data                                                                            tor’s ”FLAGS < 4” and ”PETRO RADIUS > 0”. This
+reduction procedure will be presented in Yagi et al. (in                                                                         initial catalog had 2,627,495 objects, including dupli-
+preparation). In addition, we used the Suprime-Cam B,                                                                            cates in the overlap regions of adjacent mosaic frames
+i, and Hα reduced images (see Figure 1) by Yagi et al.                                                                           (∼ 30 %). We used the Dragonfly UDGs as the fidu-
+(2010) and Yamanoi et al. (2012).                                                                                                cial set in adjusting parameters for selection of UDG
+   We also analyzed a control field for comparison. The                                                                          candidates, but could not use exactly the same selec-
+R band data of one Suprime-Cam pointing, 1/18 of the                                                                             tion criteria as van Dokkum et al. (2015a) due to the
+Coma field, were taken from the Subaru Deep Field                                                                                difference in image quality. We applied constraints on
+                                                                                                                                 R magnitude and size, ”18 < MAG AUTO < 26” and
+                                           Ultra Diffuse Galaxies in Coma Cluster                                                3
+
+
+
+
+ Fig. 2.— Subaru BRi color image of the ∼ 60 × 60 region (∼ 170 × 170 kpc2 region at d = 97.7 Mpc), shown in cyan in Figure 1a. The
+Dragonfly and Subaru UDGs are marked respectively with yellow and green circles with a diameter of 2000 (∼ 9.5 kpc).
+
+”FWHM(Gaussian) > 400 ” (i.e., all Dragonfly UDGs sat-                The final step was removal of spurious objects by vi-
+isfy this condition), which left 7,362 objects.                     sual inspection. Most spurious detections were due to
+   The reported effective radius of the Dragonfly UDGs              the crowding in the cluster, such as faint tidal tails and
+is re & 3.200 (using re from GALFIT; Peng et al. 2002).             galaxy blending, as well as distant edge-on disk galaxies,
+However, in the resolved Subaru images we found that an             artifacts at image edges, and optical ghosts. To minimize
+alternative constraint, SExtractor’s re & 1.500 , captures          human error, the four authors separately went through
+all the Dragonfly UDGs. We therefore used re > 1.500 and            all postage stamp images. After this step and removal of
+a mean SB of hµ(re )i > 24 to choose UDG candidates.                duplications based on their coordinates, 854 UDG candi-
+[Note that we found that re from SExtractor and GAL-                dates were left on which at least three of us agreed. The
+FIT were occasionally very inconsistent; we use SExtrac-            full catalog will be published by Yagi et al. (in prepara-
+tor’s re for identification and GALFIT’s re for studies             tion).
+of structural properties.] We excluded objects with high
+central concentrations (mostly high-z galaxies) by remov-                   4. ULTRA-DIFFUSE GALAXY CANDIDATES
+ing those whose mean SB within re deviates largely from               The 854 UDGs candidates from Subaru are visually
+the SB at re . This constraint, µe − hµ(re )i < 0.8, left           comparable to the Dragonfly UDGs. Figure 2 shows a
+1,779 candidates.                                                   sample 60 × 60 field, showing the Subaru (green circles)
+4                                                        Jin Koda
+
+and Dragonfly UDGs (yellow). Their low SBs are evident        µ0 (R) ranges around 23-26 mag arcsec−2 . These results
+compared to the surrounding galaxies, including ma-           are consistent with van Dokkum et al. (2015a) when the
+jor galaxies in the cluster and distant background ones.      difference in the adopted bands, SDSS g and Subaru R,
+Their large sizes are also clear when compared to the         is taken into account (roughly g − R ∼0.8 mag for the
+2000 diameter of the circles (∼ 9.5 kpc at d = 97.5 Mpc).     red-sequence in Coma).
+The greater number of detections, compared to Dragon-            The Subaru UDGs are likely an extension of normal
+fly, may be due to the superior seeing (less blending) and    and dwarf galaxy populations and are not, on their own,
+higher signal-to-noise ratio.                                 a distinct population. Figure 4(d) shows the properties
+   The majority of the 854 candidates are most likely         of the UDGs (crosses) with respect to normal galaxies
+UDGs in the Coma cluster. One of them has been                in Coma (circles; from Komiyama et al. 2002). The
+spectroscopically confirmed as a cluster member (van          apparent R magnitude of the UDGs is 18 to 24 mag, in-
+Dokkum et al. 2015b). The control SDF field has vir-          dicating an absolute magnitude of about -12 to -16 mag
+tually no counterparts – only thirteen were left after the    at the Coma distance. The smallest and faintest UDGs
+SExtractor-based selection, twelve of which were obvi-        (e.g., re < 1 kpc and MR < −12 in Figure 4c) over-
+ous image artifacts or tails of bright galaxies. The last     lap with the largest and brightest dwarf galaxies and
+one appeared to be a blend of multiple objects. Hence,        share some properties in common with them (e.g., the
+contamination by non-cluster members is rare and neg-         exponential profile, nucleated population; see Tolstoy
+ligible. Note, however, that some negligible number of        et al. 2009; McConnachie 2012; Boselli & Gavazzi 2014).
+contaminations might still exist. For example, the third      Dotted lines represent constant SBs (µe s) from 23 to 29
+object from the top in Figure 2 may be a background           mag arcsec−2 with a 1 mag arcsec−2 interval, assuming
+spiral galaxy. Despite this significantly increased sam-      an exponential profile. The average SB of the Subaru
+ple, the UDGs are still a minor population in the Coma        UDGs is distributed from about 25 mag arcsec−2 (i.e.,
+cluster (Yamanoi et al. 2012).                                a cut-off due to the selection) to 28 mag arcsec−2 (due
+   In the literature, we found that many of the Subaru        to the detection limit; this lower boundary is lower than
+UDGs had been cataloged albeit as more compact ob-            the pix-to-pix detection limit, because the UDGs are ex-
+jects; Adami et al. (2006a) found 248 of 309 that lay         tended).
+within their coverage, and Yamanoi et al. (2012) 232 of          The absolute magnitudes correspond to stellar masses
+240. Among them, only 17 were classified as low SB            of 1 × 107 M -5 × 108 M if we adopt a mass-to-light ratio
+galaxies (Adami et al. 2006b). Their large extents and        of M/LR ∼ 3. Note the M/LR varies by a factor of ∼ 2
+low SBs were revealed for the first time in this study. We    for ages of 4-12 Gyr and metallicities between 0.2-1.0
+note that eleven out of the 12 Dragonfly UDGs within          solar based on calculations using Starburst99 (Leitherer
+their field were also cataloged in Adami et al. (2006a),      et al. 1999), a single starburst, and a Kroupa initial mass
+but none were classified as low SB (Adami et al. 2006b).      function.
+             5. STRUCTURAL PARAMETERS                                 6. A PASSIVELY-EVOLVING POPULATION
+   The GALFIT package was used to measure the struc-            The UDGs are distributed widely over the entire area
+tural parameters of the Subaru UDGs. The fits were            of the cluster with a concentration toward its center (Fig-
+made with a single Sersic profile (Sersic 1968) with sky      ure 1b). This spatial correlation also supports the as-
+background fixed. We used SExtractor’s segmentation           sumption that the great majority are cluster members.
+images to mask surrounding objects. Seventy-nine of           Figure 1 nearly covers the virial radius of the cluster
+the 854 required additional manual masks to exclude a         (∼ 2.8 Mpc; ∼ 1.7 deg; Kubo et al. 2007), and reveals
+bright compact object(s) within their boundaries – inter-     their relatively symmetric distribution around the cen-
+estingly, sixty-seven of these appear to have compact nu-     ter with a potential elongation toward the south west
+clei at their centers. We judged the fits acceptable based    (roughly toward NGC 4839). This symmetric, wide-
+on the goodness-of-fit (χ2ν < 1; 75 objects were thus ex-     spread distribution may indicate their long history within
+cluded) and consistency between GALFIT and SExtrac-           the cluster.
+tor measurements (re from GALFIT and SExtractor con-            The UDGs closely follow the red-sequence of a
+sistent within a factor of 3; 11 removed). In this section,   passively-evolving galaxy population on the color-
+we use the sample of 768 objects with good GALFIT re-         magnitude diagram. 232 UDGs are in the catalog of Ya-
+sults, out of which 332 have GALFIT’s re > 1.5 kpc (i.e.,     manoi et al. (2012) with both B and R photometry. Fig-
+MW-sized UDGs as defined in van Dokkum et al. 2015a).         ure 5 shows their distribution (green). The comparison
+We refer to the former full set of galaxies as UDGs, and      data (red and blue) show other cluster member galaxies,
+the latter as MW-sized UDGs. Figure 3 shows some ex-          as well as background galaxies, and are also from Ya-
+amples of GALFIT results for the UDGs of lowest SB, of        manoi et al. (2012). The red-sequence is evident, and
+largest-size, and with a compact nucleus.                     the solid line is a fit by Yamanoi et al. (2012). Clearly,
+   Figure 4(a), (b), and (c) show histograms of Sersic in-    the UDGs lie along this red-sequence, and their B-R
+dex (n), axis ratio (b/a), and central SB (µ0 (R)). For       colors are around 0.8-1.0 mag. This is similar to the
+both UDGs and MW-sized UDGs, their average Ser-               trends found among dwarfs and low SB galaxies in clus-
+sic indices hni = 0.9-1.0 indicate an exponential pro-        ters (Adami et al. 2009; Ulmer et al. 2011; Lieder et al.
+file. The distributions of axis ratio, as well as its av-     2012).
+erage hb/ai = 0.7-0.8, are skewed toward a large value;         No significant Hα excess was found in UDGs. 217
+therefore, this UDG sample does not consist of randomly-      UDGs are within the Subaru Hα coverage (yellow in
+oriented thin-disk galaxies in a statistical sense (which     Figure 1a), which was designed to detect faint Hα emis-
+would skew their distribution toward a low b/a). The          sion around Coma member galaxies (Yagi et al. 2010).
+                                                             Ultra Diffuse Galaxies in Coma Cluster                                            5
+
+                             Largest Size                                  Lowest Surface Brightness           Nucleated
+
+
+
+
+     R-band
+
+
+
+
+     GALFIT
+
+
+
+
+     Residual
+
+ Fig. 3.— Examples of GALFIT results drawn from the groups of largest-size UDGs, lowest surface-brightness UDGs, and nucleated
+UDGs.
+
+
+
+                (a)
+                                                       All
+                                            Median : 0.83
+                                            Average: 0.88
+                                            Std.dev: 0.30
+
+                                               re>1.5kpc
+                                            Median : 0.91
+                                            Average: 0.99
+                                            Std.dev: 0.34
+                                                                      1
+
+                                                                          (d)
+
+
+
+                                                                    0.5
+                (b)
+
+
+
+
+                                                                                                                           29
+                             All
+
+
+
+
+                                                                                                                            m
+                  Median : 0.74
+                                                                          1.5 kpc
+
+
+
+
+                                                                                                                            ag
+                  Average: 0.72
+
+
+
+
+                                                                                                                                ar
+                                                                                                                                  cs
+                  Std.dev: 0.16
+
+
+
+
+                                                                                                                                    ec
+                                                                                                                                     -2
+                     re>1.5kpc                                        0
+                  Median : 0.71
+                  Average: 0.69
+                  Std.dev: 0.16
+
+                                                                          FWHM 1.5”
+                                                                                                                           25
+                                                                   -0.5                                                     m
+                                                                                                                            ag
+                                                                                                                                ar
+                                                                                                                                 cs
+                                                                                                                                  ec
+                                                                          FWHM 0.7”                                                  -
+                                                                                                                                     2
+                (c)
+                                                         All
+                                                                     -1
+                                               Median : 24.5                                       -20   -15                             -10
+                                               Average: 24.6
+                                                Std.dev: 0.9
+
+                                                  re>1.5kpc
+                                               Median : 24.3
+                                               Average: 24.3
+                                                Std.dev: 0.9
+
+
+
+
+  Fig. 4.— Structural properties of UDGs. (a) Histograms of Sersic index n, (b) axis ratio b/a, and (c) central SB µ0 (R) with their
+medians, averages, and standard deviations. Black lines are for all 854 UDGs, while blue are for 332 MW-sized UDGs alone. (d) Effective
+radius vs. R magnitude. The parameters of the UDGs (crosses; red for the Dragonfly UDGs) are derived with GALFIT. Normal galaxies
+(circles) –spestroscopically-confirmed Coma members (Mobasher et al. 2001) – are also plotted for comparison (from Komiyama et al.
+2002, with the conversion R(AB)-R(Vega)=0.21). Dotted, diagonal lines show constant SBs (µe s) from 23 to 29 mag arcsec−2 with a 1
+mag arcsec−2 interval for the case of an exponential profile (note µ0 = µe − 1.82 for n = 1). The gap between the normal galaxies and
+UDGs is due to selection effects. Horizontal lines show re of PSF with a FWHM of 1.5 arcsec (Komiyama et al. 2002) and a FWHM of
+0.7 arcsec (this study).
+6                                                                    Jin Koda
+
+Therefore, the UDGs are not forming stars at the cur-                     away on the sky. Eleven UDGs were found within a ra-
+rent epoch, as expected for passively-evolving galaxies.                  dius of 50 (∼ 141 kpc). These detections were, of course,
+                                                                          not complete due to the high background emission there,
+                         7. DISCUSSIONS                                   and their apparent proximity may result from a chance
+   We report the discovery of ∼ 1000 UDGs in the Coma                     coincidence along a line of sight. If any of them are
+cluster, about 40% of which are MW-sized. The new                         within ∼ 100-150 kpc from the core, an even larger DM
+UDG sample is by no means complete, but already                           mass than the estimate by van Dokkum et al. (2015a) is
+contains 10-20 times more than previously known (van                      necessary, and the baryon fraction within a tidal radius
+Dokkum et al. 2015a). None of the UDGs show a sig-                        should be . 1%. This is below the cosmic average, and
+nature of tidal distortions; this is our selection criteria,              therefore, the baryons must have been removed from the
+but indicates that this sample of UDGs are not likely                     possibly very deep DM potential.
+recently-disrupted tidal debris.                                            The possible removal of the gas, and quenching of
+   The UDG population, compared to brighter galaxies,                     star formation (SF), are consistent with their red color
+is elevated in the Coma cluster, although a small num-                    and clustering in Coma (indicating their longevity within
+ber of large, low-SB galaxies are known in the field (Dal-                the cluster). The red-sequence can be produced by a
+canton et al. 1997; Impey et al. 2001; Burkholder et al.                  metallicity-sequence if galaxies have been evolving pas-
+2001). f the UDG-to-brighter galaxy number ratio in                       sively since SF was quenched (Kodama & Arimoto 1997).
+Coma were common in the field, the expected UDG pop-                      Physical processes often suggested for the quench in-
+ulation would be implausibly large, & 105 within 100                      clude (see Boselli & Gavazzi 2014, for review): (a)
+Mpc of the MW. To obtain this rough estimate, we used,                    blow out of gas due to galactic winds from supernovae
+as a reference, galaxies in the SDSS (Ahn et al. 2012)                    or AGN activities (Dekel & Silk 1986; Arimoto & Yoshii
+within 16 < r < 17 mag (−19 < Mr < −18 in ab-                             1987), (b) ram-pressure stripping (Gunn & Gott 1972),
+solute magnitude) at the cluster’s redshift of 0.013-0.033                (c) tidal-interaction and harassment (Moore et al. 1996),
+(Mobasher et al. 2001). The number of reference galaxies                  and (d) starvation due to the cessation of gas infall (Lar-
+in the field was estimated from the luminosity function                   son et al. 1980). The elevated population in the cluster
+of Blanton et al. (2001). The estimated number in the                     indicates that environmentally-driven mechanisms, such
+field, & 105 , is crude, but seems too large compared to                  as (a), (b), and (c) are the most likely solutions [(a) may
+the small number discovered so far. The cluster environ-                  occur if SF is induced by (b) or (c).].
+ment must play a role in their formation and evolution.
+   van Dokkum et al. (2015a) speculated that the MW-
+sized UDGs might be a dark-matter (DM) dominated
+population in order for them to survive in the strong                       We thank Alessandro Boselli, Samuel Boissier, Jim
+tidal field around the cluster core. In fact, the Dragonfly               Barrett, and an anonymous referee for helpful comments.
+UDGs spatially avoided the central r ∼300 pc region as                    This research utilized facilities and resources provided
+if the ones there had been tidally disrupted; this appar-                 by the National Astronomical Observatory of Japan
+ent disruption was used to constrain the DM fraction (as                  (NAOJ), including the Subaru Telescope, the SMOKA
+large as & 98%; van Dokkum et al. 2015a). Surprisingly,                   data archive system, and computers at the Astronomy
+we found UDGs even closer to the core (Figure 1b), and                    Data Center. JK acknowledges support from NASA
+the closest one is MW-sized only about 30 (∼ 85 kpc)                      grant NNX14AF74G and NSF grant AST-1211680.
+                                                                 REFERENCES
+Abraham, R. G., & van Dokkum, P. G. 2014, PASP, 126, 55                   Kodama, T., & Arimoto, N. 1997, A&A, 320, 41
+Adami, C., Pelló, R., Ulmer, M. P., et al. 2009, A&A, 495, 407           Komiyama, Y., Sekiguchi, M., Kashikawa, N., et al. 2002, ApJS,
+Adami, C., Scheidegger, R., Ulmer, M., et al. 2006a, A&A, 459,              138, 265
+  679                                                                     Kubo, J. M., Stebbins, A., Annis, J., et al. 2007, ApJ, 671, 1466
+Adami, C., Picat, J. P., Savine, C., et al. 2006b, A&A, 451, 1159         Larson, D., Dunkley, J., Hinshaw, G., et al. 2011, ApJS, 192, 16
+Ahn, C. P., Alexandroff, R., Allende Prieto, C., et al. 2012, ApJS,       Larson, R. B., Tinsley, B. M., & Caldwell, C. N. 1980, ApJ, 237,
+  203, 21                                                                   692
+Arimoto, N., & Yoshii, Y. 1987, A&A, 173, 23                              Leitherer, C., Schaerer, D., Goldader, J. D., et al. 1999, ApJS,
+Baba, H., Yasuda, N., Ichikawa, S.-I., et al. 2002, Report of the           123, 3
+  National Astronomical Observatory of Japan, 6, 23                       Lieder, S., Lisker, T., Hilker, M., Misgeld, I., & Durrell, P. 2012,
+Bertin, E., & Arnouts, S. 1996, A&AS, 117, 393                              A&A, 538, A69
+Binggeli, B., & Cameron, L. M. 1991, A&A, 252, 27                         McConnachie, A. W. 2012, AJ, 144, 4
+Blanton, M. R., Dalcanton, J., Eisenstein, D., et al. 2001, AJ,           Mink, D. J. 2002, in Astronomical Society of the Pacific
+  121, 2358                                                                 Conference Series, Vol. 281, Astronomical Data Analysis
+Boselli, A., & Gavazzi, G. 2014, A&A Rev., 22, 74                           Software and Systems XI, ed. D. A. Bohlender, D. Durand, &
+Bothun, G. D., Impey, C. D., & Malin, D. F. 1991, ApJ, 376, 404             T. H. Handley, 169
+Burkholder, V., Impey, C., & Sprayberry, D. 2001, AJ, 122, 2318           Miyazaki, S., Komiyama, Y., Sekiguchi, M., et al. 2002, PASJ, 54,
+Dalcanton, J. J., Spergel, D. N., Gunn, J. E., Schmidt, M., &               833
+  Schneider, D. P. 1997, AJ, 114, 635                                     Mobasher, B., Bridges, T. J., Carter, D., et al. 2001, ApJS, 137,
+Dekel, A., & Silk, J. 1986, ApJ, 303, 39                                    279
+Ferrarese, L., Côté, P., Cuillandre, J.-C., et al. 2012, ApJS, 200, 4   Moore, B., Katz, N., Lake, G., Dressler, A., & Oemler, A. 1996,
+Gunn, J. E., & Gott, III, J. R. 1972, ApJ, 176, 1                           Nature, 379, 613
+Impey, C., Burkholder, V., & Sprayberry, D. 2001, AJ, 122, 2341           Okabe, N., Futamase, T., Kajisawa, M., & Kuroshima, R. 2014,
+Kashikawa, N., Shimasaku, K., Yasuda, N., et al. 2004, PASJ, 56,            ApJ, 784, 90
+  1011                                                                    Okabe, N., Okura, Y., & Futamase, T. 2010, ApJ, 713, 291
+Kavelaars, J. J., Harris, W. E., Hanes, D. A., Hesser, J. E., &           Peng, C. Y., Ho, L. C., Impey, C. D., & Rix, H.-W. 2002, AJ,
+  Pritchet, C. J. 2000, ApJ, 533, 125                                       124, 266
+                                             Ultra Diffuse Galaxies in Coma Cluster                                                 7
+
+
+
+
+  Fig. 5.— Color-magnitude diagram using B and R band photometry. The green points are 232 UDGs observed both in B and R with
+Subaru (the Dragonfly UDGs are circled), and the red and blue are red and blue galaxies taken from the Coma1 field of Yamanoi et al.
+(2012) which includes cluster members as well as background galaxies. Due to saturation, most giant galaxies are not included, but the
+red-sequence is evident. The UDGs clearly follow the red-sequence population of the Coma cluster.
+Rix, H.-W., & Bovy, J. 2013, A&A Rev., 21, 61                        van Dokkum, P. G., Abraham, R., Merritt, A., et al. 2015b, ApJ,
+Schlafly, E. F., & Finkbeiner, D. P. 2011, ApJ, 737, 103               798, L45
+Sersic, J. L. 1968, Atlas de galaxias australes                      White, S. D. M., Briel, U. G., & Henry, J. P. 1993, MNRAS, 261,
+Tolstoy, E., Hill, V., & Tosi, M. 2009, ARA&A, 47, 371                 L8
+Ulmer, M. P., Adami, C., Durret, F., Ilbert, O., & Guennou, L.       Yagi, M., Kashikawa, N., Sekiguchi, M., et al. 2002, AJ, 123, 66
+  2011, A&A, 528, A36                                                Yagi, M., Komiyama, Y., Yoshida, M., et al. 2007, ApJ, 660, 1209
+Ulmer, M. P., Bernstein, G. M., Martin, D. R., et al. 1996, AJ,      Yagi, M., Suzuki, N., Yamanoi, H., et al. 2013, PASJ, 65, 22
+  112, 2517                                                          Yagi, M., Yoshida, M., Komiyama, Y., et al. 2010, AJ, 140, 1814
+van Dokkum, P., Romanowsky, A., Abraham, R., et al. 2015a,           Yamanoi, H., Komiyama, Y., Yagi, M., et al. 2012, AJ, 144, 40
+  ArXiv e-prints                                                     Yoshida, M., Yagi, M., Komiyama, Y., et al. 2008, ApJ, 688, 918
+

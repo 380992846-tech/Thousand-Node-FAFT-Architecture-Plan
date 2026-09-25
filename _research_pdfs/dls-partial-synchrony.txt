@@ -1,0 +1,1656 @@
+          785
+   RD-Rli54      CONSENSUS IN THE PRESENCE OF PARTIAL SYNCHRONY               /
+
+
+
+        UEEEEEEEEEEmE
+I(PRELIMINARY                 YERSION)(U) MASSACHUSETTS INST OF TECH
+                 CAMBRIDGE LAB FOR COMPUTER SCIENCE..   C DMORK ET AL.
+  UNCLASSIFIED   OCT 84 MIT/LCS/TM-2?B NOO814-83-K-8i25       F/G 9/2    NL
+
+
+
+
+  EEEEEEEEEEEEEEI
+  EEEEEEEE
+                                                                 ..
+
+
+
+
+                                               161   L2.
+
+
+
+            >1111              332
+
+                                                                ,if
+                                                                -0
+                                                                "
+          lllllNB~all
+
+    MICROCOPY RESOLUTION   TEST CHART     .
+     NATIONALBUREAU OF STANOAROS-1963-A   I]
+
+
+
+
+                                                           ~y   .-
+
+i    11     '      ~       I
+                           LABOATOR FORMASSACHUSETTS
+                      LABORATORY    FOR     INSTITUrE OF
+                      COMPUTER SCIENCE      TECHNOLOGY
+
+
+                                                MIT/LCS/TM-270
+
+             0
+
+
+             In
+         I                       CONSENSUS IN
+                                            THE PRESENCE
+             Cl                      OF PARTIAL SYNCHRONY
+                                     -(PRELIMINARY VERSION)
+
+
+                                                 Cynthia Dwork
+                                                  Nancy Lynch
+                                               Larry Stockmeyer
+
+
+                                                  DTIC
+                              __           SELECTE
+                              8CL.            Q0JUN 12 985
+                                                           G
+                                                 October 1984
+
+
+
+                                545 TECHNOLOGY SQUARE, CAMBRIDGE, MASSACHUSETTS 02139
+
+
+                                         1o                                        8,,,,,                 5 15,030
+                                               ___u .. Un          "i'ited
+pr   r       -w   r   7   -                        .   *       :             -   .- ,,-   "v.,"',.,,,-.    -,-   ..   -.-..   ..   .-
+             %7                                            .
+
+
+
+
+           Unclassified
+ ';ECUPITY CLASSIFICATION OF THIS PAGE (When Data Entered)
+                                                                                                        READ INSTRUCTIONS
+                     REPORT DOCUMENTATION PAGE                                                       BEFORE COMPLETING FORM
+  1. REPORT NUMBER                                             2. GOJ T        S                  CIPIENT'S CATALOG NUMBER
+
+
+           MIT/LCS/TM-270
+ 4.    TITLE (and Subtitle)                                                               5. TYPE OF REPORT        a PERIOD COVERED
+                                                                                               Interim Research
+           Consensus in the Presence of Partial                                                October 1984
+           Synchrony (Preliminary Version)                                                     . PERFORMING ORG. REPORT NUMBER
+
+                                                                                               MIT/LCS/TM-270
+ 7.    AUTHOR(e)                                                                          S.    CONTRACT OR GRANT NUMBER(@)
+
+           Cynthia Dwork, Nancy Lynch and                                                       DARPA/DOD
+           Larry Stockmeyer                                                                     N00014-83-K-0125
+ 9.    PERFORMING ORGANIZATION NAME AND ADDRESS                                           I0.    PROGRAM ELEMENT. PROJECT, TASK
+                                                                                                 AREA 6 WORK UNIT NUMBERS
+           MIT Laboratory for Computer Science
+           545 Technology Square
+           Cambridge, MA 02139
+ I.    CONTR3LLING OFFICE NAME AND ADDRESS                                                Q.     REPORT DATE
+
+           DARPA/Dept. of Defense                                                              October 1984
+           1400 Wilson Boulevard                                                          I.     NUMBER OF PAGES
+
+           Arlington. VA 22209                                                                  28
+  14. MONITRING-AGENCY' NAME A ADDRESS(If different from Controlling Offlce)              IS.    SECURITY CLASS. (of thi, report)
+
+           ONR/Dept. of the Navy
+           Information Systems Program                                                         Unclassified
+                                                                                          IS&.    DECL ASSIFIC ATIONI DOWNGRADING
+           Arlington, VA 22217                                                                    SCHEDULE
+
+ IS.   DISTRIBUTION STATEMENT (of thls Report)
+
+
+
+           Approved for public release; distribution is unlimited.
+
+
+ 17. DISTRIBUTION STATEMENT (of the abstract entered In Block 20, ft dfiffrent from Report)
+
+
+           Unlimited
+
+ IS.SUPPLEMENTARY NOTES
+
+
+
+
+ 19.   KEY WORDS (Continue on reverse side If necessary and Identt y by block numb,)
+
+
+           Consensus, partial synchrony, Byzantine agreement,
+           fault-tolerance and distributed algorithms
+
+
+ 20.   ABSTRACT (Continue on rovere      sde If nececeaty and Identify by block number)
+
+
+  The problem of reaching agreement among separated processors is of fundamental importance tO
+distributed computing, and has provided a rich set of interesting mathematical problems. Previous work has
+shown that if communication and processing are synchronous there exist consensus protocols resilient to
+large numbers of failures. the exact number depending on the particular type of faulty behavior to be
+                                   !I                                                                                                         "-'
+D        FOM       1473       EDITION oF   NOV #5 IS OISOLETE                 Unlssfe
+                              D   0102.L-LF.A.6601                            Unclassified1
+                                                                          SECURITY CLASSIFICATION OF THIS PAGE (UWth Det            !Woredl
+
+
+
+
+                                                                              ".-
+  SECURITY CLASSIFICATION OF THIS PAGE (*bena Dote Entered)
+
+tolerated. InContrast it has been shown that if either communication or processing are asynchronous, then
+there isno consensus protocol resilient to even one failure of the weakest type. In this paper we define and
+study the consensus problem in practically motivated situations which lie between the completely
+synchronous and the completely asynchronous cases.                                                                 ..
+
+
+
+
+                                                                Unclassified
+                                                          SECURITY CLASSIFICATION OF THIS PAGE(Whai Date Euff.,Q
+                                                                                                                                                                                                  -       .o-oO.
+
+
+
+
+                                                                                                                                                                                                                                 .'....
+
+
+
+
+                        Consensus in the Presence of Partial Synchrony
+                                    (Preliminary Version)                                                                                                                                                                        ..
+
+
+
+                                                               Cynthia Dwork
+                                                  M.I.T., Laboratory for Computer Science                                                                                .,           *-
+
+
+                                                               Cambridge, MA                                                                             DT-    T
+
+
+
+                                                                     Nancy Lynch                                                                        Ju--
+                                                  M.I.T., Laboratory for Computer Science
+                                                                 Cambridge, MA                                                                          B.
+                                                                               and                                                                                                                                           '"
+                                                             Larry Stockmeyer                                                                                  .     -
+
+                                                        I.B.M. Research Laboratory                                                                  Dist       I.,
+                                                                 San Jose, CA./
+                                                                      July, 1984
+
+
+                                                                     ABSTRACT
+)The          problem of reaching agreement among separated processors is of fundamental importance to
+ distributed computing, and has provided a.rich set of interesting mathematical problems. Previous work has
+ shown that if communication and processing are synchronous there exist consensus protocols resilient to
+ large numbers of failures, the exact number depending on the particular type of faulty behavior to be
+ tolerated. In contrast it has been shown that if either communication or processing are asynchronous, then
+ there is no consensus protocol resilient to even one failure of the weakest type. In this paper we define9 and
+ sd    the consensus problem in practically motivated situations which lie between the completely
+ synchronous and the completely asynchronous cases.  'L          - , Z4...4r'#e .
+ Keywords:                 Consensus, pjrtial synchronyByzantine agreement;, fault.tolerance and distributed
+                           algorithms
+
+
+                           @1984 Massachusetts Institute of Technology, Cambridge, MA. 02139
+
+            This work was supported in part by the Office of Naval Research under Contract N00014.83-
+         K-0125, by the Office of Army Research under Contract DAAG29.84-K.0058, and by the National
+         Science Foundation under Grants MCS-8306854 and 8302391 -A01-DCR.
+
+
+
+
+                                                                 .   ..       ..       .     .    .       .   .   .        .    .   .       .   .   .
+'. .'..,...
+        '.     '. ',   ".C, :   -..   .   .   .   .-   ,.   ;,       .    .        .       . ,.       .   .           **       . . ...t...
+                                                                                                                                       .. ..                                                                             "..'.,
+                                                                                                                                        S                            -        o   %   .    ,* -       ,      .   %   -   %   °
+                   CONSENSUS IN THE PRESENCE OF PARTIAL SYNCHRONY
+
+                                         (Preliminary Version)
+
+
+                                             Cynthia Dwork
+                                    Laboratory for Computer Science
+                                                   MIT
+                                         Cambridge, MA 02139
+
+                                              Nancy Lynch
+                                    Laboratory for Computer Science
+                                                   MIT
+                                         Cambridge, MA 02139            .
+
+
+
+
+                                            Larry Stockmeyer
+                                         IBM Research Laboratory
+                                           San Jose, CA 95193
+1. INTRODUCTION
+
+
+
+  1.1. Background
+
+  The problem of reachirng agreement among separated processors is of fundamental importance to
+distributed computing, and has provided a rich set of interesting mathematical problems. (See IF)for
+a survey. Also see [GLPT,Sc,G,DLPSW,LMj, for example.) One version of this problem considers a
+                       *      -~           ..         .-
+
+
+
+collection of N processors, p,,    ***PN' which communicate by sending messages to one another.
+Initially each processor pi has a value vi drawn from some domain V of values, and the correct
+processors must all decide on the same value; moreover, if the initial values are all the same, say v,         .:
+
+
+
+then v must be the common decision. In addition, the consensus protocol should operate correctly if
+some of the processors are faulty, e.g., ciash (fail-stop faults), fail to send messages when they
+should (omission faults), or send erroneous messages (Byzantine faults).                                        .
+
+
+
+
+  Given assumptions about the properties of the message system and the processors and givenl the
+types of faults which can occur, one would like to know the maximum number of faults that can be
+tolerated; we call this number the resiliency of the system. For example, it might be assumed that
+thpre is a fixed bound Aon the time for messages to be delivered (communication is synchronous),
+and a fixed bound (0 on the rate at which one processor's clock can run faster than another's
+(processors are synchronous), and that these bounds are known a priori and can be "built into" the
+protocol. In this case, N-resilient consensus protocols exist for Byzantine failures with authentication
+[LSP,DSJ and, therefore, also for fail-stop and omission failures; in other words, any number of faults             -
+
+
+can be tolerated. For Byzantine faults without authentication, t-resilient consensus is possible iff N>    '
+                                                                                    771
+
+
+
+   3t ILSP,L I].
+
+     Recent work has shown that the existence of both bounds A and (Pis necessary to achieve any
+   resiliency, even under the weakest type of faults. Dolev, Dwork and Slockmeyer [DDS). building on
+   earlier work of Fischer, Lynch and Paterson IFLPI, prove that either if a fixed upper bound A on            ~
+   message delivery time does not exist (communication isasynchronous) or if afixed upper bound '0 on
+   relative processor speeds does not exist (processors are asynchronous), then there is no consensus
+   protocol resilient to even one fail-stop fault.
+
+     In this paper, we define and study the consensus problem in practically motivated situations which
+   lie between the completely synchronous and the completely asynchronous cases.
+
+
+     1.2. Pa3rtially Synchronous Communication
+
+     We first consider the case in which processors are synchronous (4)exists and is known a priori) anid
+   communication lies "between" synchronous and asynchronous. There are several natural ways in
+   which communication might be partially synchronous.
+
+    One reasonable situation could be that-an upper bound Aon message delivery time exists but we do
+   not know what it isa priori. On the one hand, the impossibility results of [FLP,DDS] do not apply since
+   communication is, in fact, synchronous. On the other hand, participating processors in the known
+  consensus protocols need to know A in order to know how long to wait during each round of
+  message exchange (we are assuming a lower bound on processor step time). Of course, it is possible
+* to pick some arbitrary A to use in designing the protocol, and say that whenever a message takes
+  longer than this A,then either the sender or the receiver is considered to be faulty. This is not an
+  acceptable solution to the problem since if we picked A too small, all the processors could soon be
+  considered faulty, and by definition the decisions of faulty processors do not have to be consistent
+  with the decision of any other processor. Whatwe would like isa protocol that does not haveA "built
+  In". Such a protocol would operate correctly whenever it is executed in a system where some fixed
+  upper bound Aexists. It should also be mentioned that we do not assume any probability distribution
+   on message transmission time which would allow Ato be estimated by doing experiments.
+
+    Another situation could be that we know A, but the message system is sometimes unreliable,
+   delivering messages late or not at all. As noted above, we do not want to consider a late or lost
+   message as a fault. However, without any further constraint on the message system. this "unreliable"
+   message system is at least as bad as a completely asynchronous one, and the impossiblity results of
+   (ODSJ apply. The additional constraint is that there is a sufficiently large number L such that if at any
+
+
+                                                        9-   9   ~
+                                                                 -   .9V *   *.*,         -
+        *                                           2
+
+time during the execution, the message system respects the upper bound Afor L units of time, then
+all correct processors will reach a common decision sometime before the end of this "reliable
+interval". Moreover, the protocol never produces an inconsistent decision (two correct processors
+deciding differently) during the "unreliable period" when Adoes not hold.
+
+  The same argument as in the previous case shows one problem with treating lost or delayed
+messages in the same way as processor faults. There is also another problem with this idea. In
+typical systems, the loss or delay of a message is a much more likely event than a processor failure.
+Treating undesirable message behavior as processor faults tends to lead to adrastic overestimate of
+processor faults. Since consensus protocols introduce expensive mechanisms to cope with each
+additional processor fault, it seems better to separate consideration of the two kinds of events, and to
+try to use less costly mechanisms to cope with undesirable message behavior.
+
+  Athird situation we consider isa technical variant on the second, which strengthens it in two ways.
+In this model, messages are never lost and A must hold from some point on after some finite
+"unreliable period". We prove that this model isequivalent to the first model, in which Aexists but is
+unknown.
+
+  For succinctness, we say that communication is partially synchronous if one of these three
+situations holds: A exists but is not known a priori, or A is known but has to actually hold only for aZ.
+sufficiently long period, or Aisknown and has to hold from some point on.
+
+ Our results determine precisely the maximum resiliency possible in cases where communication is
+partially synchronous, for four interesting fault models. For fail-stop or omission faults, we show that
+t-resilient consensus is possible iff N > 2t. For Byzantine faults with authentication, we show that
+t-resilieiL consensus is possible iff N>31. Also, for Byzantine faults without authentication, we show
+that t-resilient consensus is possible iff N> 3t. (The lower bound follows immediately from the result
+for the completely synchronous case in [LSPJ.). For the first three types of faults, the number of bits of
+communication required is a polynomial in N, t, and either (1)GST (the global stabilization time, or
+time when the messages start observing their required bound) for the models in which A holds
+eventually or sufficiently long, or (2)A for the model in which A isunknown. On the other hand, our
+algorithm for the unauthenticated Byzantine case uses an exponential amount of communication. We
+also have a t-resilien' consensus protocol for Byzantine faults without authentication, which uses a
+polynomial amount of communication, but which requires N > 4t. (We do not know whether it is
+possible to obtain such aprotocol for 31 < N :5 4t.)
+
+ Table I bhows the maximum resiliency in various cases and compares our results with previous
+work. Ineach case, the table gives the smallest value of Nfor which there is a t1-resilient protocol (t >
+
+
+
+
+                                                                      .~~   ~   ~~           .
+                                                  3
+
+
+1). Except where indicated (by "exp") the algorithms require communication polynomial in N, t, and
+either GST or A.
+   Failure mode          Synchronous          Asynchronous          Partially                                          -"
+
+
+                                                                   Synchronous
+
+    Fail-stop                   t                     00                 2t+1
+
+    Omiss ion                   t                     00                 2t+l
+
+ Byzantine with
+ Authentication                 t                     00                 3t+1
+
+Byzantine without                                                  3t+1 (exp)
+ Authentication              3t+1                     00        3t < N < 4t+1
+
+
+                    Table 1: Smallest number of processors N (N> 2)for which
+                        there exists a t-resilient consensus protocol (t > 1).
+
+  It is interesting to note that for fail-stop, omission and Byzantine faults with authentication, the
+maximum resiliency for the partially synchronous case lies strictly between the maximum resiliency
+for the synchronous and asynchronous cases. It is also interesting to note that in the partially
+synchronous case, authentication does not improve resiliency. Results in the synchronous column
+are due to [LSP,DS,DFFLS], while those in the asynchronous column are due to [FLP,DDS].
+
+ Of the new results, the more interesting and difficult are the protocols and associated upper                    L..'
+bounds. Our protocols use variations on a common method: a processor p tries to get other
+processors to change to some value v which p has found to be "acceptable"; p decides v if it receives
+sufficiently many acknowledgements from others that they have changed their value to v, so that a                 2.":
+value different from v will never be found acceptable at a later time. This general method and similar            .-
+
+methods have already appeared in the literature, (cf. Skeen [Sk], Bracha and Toueg [BT]). Reischuk
+(R] and Pinter [P] have also obtained consensus results which treat message and processor faults
+separately.
+
+  1.3. Partially Synchronous Communication and Processors                                                         k
+
+ It is easy to extend the models described in 1.2 to allow processors, as well as communication, to be
+partially synchronous. That is, 0 (the upper bound on relative processor speed) can exist but be
+unknown, or 40 can be known b~it actually hold only for a sufficiently long period, or lb can be known
+and actually have to hold from some point onward. We obtain results which completely characterize
+the resiliency in cases where both communication and processors are partially synchronous, for all
+
+
+
+
+                                    h.   .. . .. ." '" " "'" ' ' " " '        .""." ."
+                                                                            "''      ''"".               "".. .....
+                                                    4
+
+
+four of the classes of faults. In such cases, we assume that communication and processors possess
+the same type of partial synchrony, that is, either both 4) and A are unknown, or both hold during the
+same sufficiently long period, or both hold from some point on.
+
+  Surprisingly, the bounds we obtain are exactly the same as for the case where communication alone
+is partially synchronous. In the earlier case, the fact that 4 was known impliod that each processor
+could maintain a local time that was guaranteed to be closely synchronized with the clocks of other
+processors. In this case, no such notion of time is available. We give two new protocols allowing
+processors to simulate distributed'clocks. (These are fault-tolerant variations on the clock used by
+Lamport in [L21.) One uses 2t + 1 processors and tolerates t fail-stop, omission, or authenticated
+Byzantine faults, while the other uses 3t + i processors and tolerates t unauthenticated Byzantine
+faults. When the appropriate clock is combined with each of our protocols for the preceding case,
+the result is a new protocol for the new case.
+
+  1.4. Partially Synchronous Processors
+
+  In complete analogy to our treatment of partial communication synchrony, it is easy to define
+models where processors are partially synchronous and communication is completely synchronous
+(A exists and is known a priori). In Table 2 we summarize our results about N, the smallest number of
+processors for which t-resiliency is possible for each cf the four fault models.
+Fail-stop:                N     t
+
+Omission:                 t < N < 2t + 1
+
+Byzantine with            N = 3t + I
+Authentication:           2t < N < 2t + I for the
+                          case of "weak unanimity" [F]
+
+Byzantine without         N = 3t + 1 (exponential communication)
+Authentication:           3t < N < 4t + I (polynomial communication)
+                Table 2: The smallest number of processors N for which t-resiliency
+                   is possible in the model with synchronous communication and
+                                   partially synchronous processors.
+
+ Technical Remarks:
+
+ Except where we have indicated otherwise, all of our protocols use only a polynomial amount of
+communication, that is, the number of bits of communication sent before all correct processors make
+a decision is polynomial in N, , and either GST or 10 and A, depending on the particular model of
+partial synchrony.
+
+ Our protocols assume that an atomic step of a processor is to either receive a set of messages or
+
+
+                                                                                                         ,' - --
+                                    •              5
+
+
+send a message to a single processor, but not both; there is no atomic receive/send operation nor an
+atomic broadcast operation. We adopt this rathur weak definitioti of a processor's atomic step in this
+paper because it is realistic in practice and seems consistent with assumptions made in much of the
+previous work on distributed agreement. However, our lower bound arguments are still valid if a
+processor can receive and broadcast to all processors in a single atomic step.
+
+  The strong unanimity condition requires that if all initial values are the same, say v, then v must be
+the common decision. Weak unanimity requires this condition to hold only if no processor is faulty.
+Unless noted otherwise, our consiensus protocols achieve strong unanimity, and our lower bounds
+hold even for weak unanimity.
+
+  Our consensus protocols are designed for an arbitrary value domain V, whereas our lower bounds
+hold even for the case IVI   2.
+
+  The remainder of this paper is organized as follows. Section 2 contains definitions. Section 3
+contains our results for the model in which processors are synchronous and communication is
+partially synchronous. The distributed clocks are defined in Section 4, where we also discuss how to
+combine our results of Section 3 with the clocks to produce protocols for the model in which both
+processors and communication are partially synchronous.
+
+  The results for the model in which communication is synchronous and processing is partially
+synchronous are omitted here for lack of space, as are the proofs of some of the results in Sections 3
+and 4. All of the omitted material appears in [DLS], the complete version of the paper.
+
+  2. DEFINITIONS
+
+
+2.1. Model of Computation
+
+  Our formal model of computation is based on the models of [FLP,DDS]. Here we review the basic
+features of the model informally. The communication system is modeled as a collection of N sets of
+messages, called butters, one for each processor. The buffer of p, represents messages which have
+been sent to p, but not yet received. Each processor follows a deterministic protocol involving the
+receipt and sending of messages. Each processor p,can perform one of the following instructions in
+each step of its protocol:
+
+  Send(m,p) - places message m in p,'s buffer;
+Receive(p) -removes some (possibly empty) set S of messages from p,'s buffer and delivers them to
+
+pi.
+
+
+
+                                                                                                           L
+                                                                 6
+
+
+  In the Send(m~p) instruction, pi can be any processor, i.e., the communication network is
+completely connected. A processor's state is determined by the contents of its memory, including
+any special registers (e.g., program counter). A processor's protocol is specified by a state transition
+diagram; the number of states can be infinite. The instruction to be executed next depends on the
+current state, and the execution causes a state transition. For a Receive instruction, the next state
+depends on the set S of delivered messages. The initial state of a processor pi is determined by its
+initial value v in V. At some point in its computation, a processor can irreversibly decide on a value in
+V.
+
+  For subsequent definitions, it is useful to imagine that there is a "real-time clock" outside the
+system that measures time in discrete steps. At each tick of real time, some processors each take one
+step of their protocols. A run of the system is described by specifying for each real-time step: (1) the
+processors which take steps, (2) the instruction which each processor executes, and (3) for each
+Receive instruction, the set of messages delivered. Runs can be finite or infinite. Given an infinite run
+R,the message m is lost (in run R) if m is sent by some Send(m,p), p. executes infinitely many Receive
+instructions in R, and m is never delivered by any Receive(pi).
+
+  2.2. Failures
+
+  A processor executes correctly if it always performs instructions of its protocol (transition diagram)
+correctly. A processor is correct in run R if it executes correctly in R and, if R is infinite, it takes
+infinitely many steps in R.We consider four types of increasingly destructive faulty behavior.
+
+  Fail-stop: The processor executes correctly but can stop at any time. Once stopped it cannot
+restart.
+
+  Omission: The processor executes correctly except that Send(m,p.) might not place m in p,'s buffer.
+
+  Authenticated Byzantine: The processor exihibits arbitrary behavior. However, messages can be
+signed with the name of the sending processor in such a way that this signature cannot be forged by
+any other processor.
+
+ Byzantine: The processor exhibits arbitrary behavior, and there is no mechanism for signatures.
+However, we assume that the receiver of a message knows the identity of the sender.
+
+ 2.3. Partial Synchrony
+
+ Let I = ft
+          I,t2 I be an interval of real time and let R be a run. We say that the communication bound A
+holds in I fo, run R provided that if message in is placed in p s buffer by some Send(m.p) at a time s
+in I, and if p.executes a Receive(pr) at a time             in I with s >s     + A, then m must be delivered to pj at
+                                                                         22S
+
+
+
+
+      .................. .. ........                .
+                                                                     .                       . . .                            ....
+              ,-"   i=   ." i   i   ""
+                                     l   •m   a"-       n   nl       i             I           .   |..
+                                                                                                     .   .   .   .   .   ..
+e sor earlier. This says intuitively that A is an Lipper bound on miessage transmission timre in the
+ rvaI 1.The processor bound 41 hol&z in I fcn I? pruvided that in any contiguous subintuival of I
+Rtaining (1)steps, every correct processor takes at least one step. This implies that no correct
+cessor can run more than q)times slower than another in the interval 1.
+
+he following conditions, which define varying degrees of communication synchrony, place
+istraints on the kinds of runs that are allowed.
+
+1)delta ;s known: there is a fixed A which holds in [1 ,00) for every run R; this is the usual definition
+;ynchronous communication.
+
+ ?delta ;s unknown: for every run R there is a A which holds in [1 ,0).
+
+3)delta holds eventually: there is a fixed A such that, for every run R, there is a time tO such that A
+Ids in [tO,OC), and no messages are lost in R.
+
+41)delta holds sufficiently long: there is a fixed A and sufficiently large L such that, for every run R,
+?re is a time tO such that A holds in [tO,tO + LI.
+
+f (2), (3), or (4) hold, we say that communication is partially synchronous. In (3) and (4), t0 is called
+ global stabilization time (GST). In (4), L will in general depend on A, <0 and N. By replacing A by 4*
+ove, (1) defines synchronous processors, and (2)-(4) define three types of portially synchronous
+)cessors.
+
+,'ix any of the four possible fault models. In [OLS] we show results that can be paraphrased as (4)
+(3), (3)   .>(2)   and (2) -)(3).   Thus, in a sense, (2) and (3) are equivalent, in that the existence of a
+nsensus protocol in one of these models implies the existence of a consensus protocol in the other,
+           ...
+             . . . model.
+Me (4) is a weaker        . However,
+                    . . eey.unR         . strengthens
+                                      this
+                              . . . .hreisa&. ..  hih our  results,o....since all our protocols work for
+                                                       odsin[
+
+ (4) variant, while all
+                     3) our   her bounds
+                            lower
+                         dltahods   isa fied worksuh
+                                   venualy:       for the   (3) and (2) variants.
+                                                        tatforevey       rn  R thr   is a tim   tOsc   ht      .
+
+
+
+
+.4. Correctness of a Consensus Protocol
+
+iven assunmptions A about processor and communication synchrony, given a fault mode F, and
+en a number N of processors and an integer t with 0 < t < N, correctness of a t-resilient
+isensus protocol is defined as follows.
+
+or any st C containing at least N-t processors and any run R satisfying A and in which the
+cessors in C are correct and the behavior of the processors not in C is allowed by the fault mode F,
+protocol achieves:
+                                                    21
+
+
+ Each processor p, repeatedly cycles through all N processors, broadcasting, in different cycles,
+ cks and claims     The private clock of p, is stured ini a local variable ci. Procebsur p, Updates its
+)rivate clock every time it executes a receiving clock maintenance operation by considering all the
+icks and claims it has received and updating its private clock according to the definition of the private
+:Iock given above (thus, the private clock is updated every fourth step that pi takes). The following
+wo programs describe the tick and claim broadcasting procedures.              A processor begins the        -.
+
+listributed clock protocol by setting ci to 0 and calling TICK(O), where TICK(b) is the prococol shown
+n Figure 1. Note that the value of ci may change during an execution of TICK(b), but the claim is
+nade onl/ for a (b + 1)-tick. This is consistent with our definition of what it means to have broadcast a
+b + 1)-tic,.
+rICK(b):
+
+while < 14do
+begin
+
+ send (c; + 1)-tick to p.;
+end;
+call CLAIM(b).
+
+  LAIM(b):
+send (b + 1)-claim to all processors;
+if ci > b then call TICK(ci); else call CLAIM(b).
+                                        Figure 1: Procedure TICK
+
+ The proofs of Lemmas 18 and 19 are fairly straightforward from the definitions and the protocol.
+.emma 20 is proved by a simple induction, using Lemma 19.
+      Lemma 18: For all s > 0 and for all i such that pi is correct, c,(s) <C(s). I
+      Lemma 19: For all s > 0 the largest tick sent by a correct processor at step s has size at
+    most C(s) + 1. I
+      Lemma 20: For all s,x > 0, C(s + x) < C(s) + x. I
+
+ The above lemmas are independent of both communication and processor synchrony.
+
+ The next few lemmas discuss the behavior of the clocks during the reliable interval I                =
+
+GST,GST + L. Lemma 21 says that the private clocks increase at most a constant factor more slowly           L
+han real time. Lemma 23 has two parts. The first says that the master clock exceeds Ih, value of the
+)rivate clocks by at most an additive constant. This, together with Lemma 18, bounds the difference
+)etween ar y two private clocks at any instant of real time. The second part of Lemma 23 says that, at           .-
+
+east durinq the reliable interval, the master clock runs at a rate at most a a constant factor more
+lowly than real time. Let D = A + 44. Note that if a message is sent to a correct processor p at step
+                                                            20
+
+
+  4.1. A Disiibuted Clock for Byzantine Faults without Authentication
+
+  Throughout this section we assume that N > 3t + 1. The term step refers to a real-time step;
+real-time steps are numbered 0, 1, 2... Processors participate in our distributed clock protocols by
+sending ticks to one another. For convenience, we define a master clock whose value at any step s
+depends on the past global behavior of the system and is a function of the ticks that have been sent
+before s. Even approximating the value of the master clock requires global information about what
+ticks have been sent to which processors. We therefore introduce a second type of message, called a
+claim, in which processors make atsertions about the ticks they have sent.
+
+  An i-tick is the message "i". A >i-&,ick is a j-tick for any j > i. We say p has broadcast an i-tick if it
+has sent a > i-tick to all N processors.
+
+  An i-claim is the message "I have broadcast an i-tick". A >i-claim is a j-claim for any j> i. We say p
+has broadcast an i-claim if it has sent a >i-claim to all N processors.
+
+  We adopt the convention that all processors have exchanged ticks and claims of size 0 before step
+0. These messages are not actually sent, but they are considered to have been sent and received.
+
+  The master clock, C: N -     N, is defined at any real-time step s by
+
+  C(s)    =   maximum j such that t-+ 1 correct processors have broadcast a j-tick by the beginning of         -- -
+
+step s.
+
+  Since all processors are assumed by convention to have broadcast a 0-tick before step 0, C(O)= 0.
+
+  For each processor p, the private clock, ci: N -4 N, is defined by
+
+ c1(s) = maximum j such that at the beginning of step s p, has received either (1) 2t + 1 >-claims or
+(2) messages from t + 1 processors, where each message is either a :O + 1)-tick or a >( + 1)-claim.
+
+ Since p, is assumed to have received O-claims from all N processors by step 0, c1(O) = 0.
+
+ Let p be a correct processor. In sending ticks, pi's goal is to increment the master clock, so ideally
+we would like pi to send a (C(s) + 1)-tick at step s. However, knowing C(s) requires global information.
+Instead, p. uses c., its view of C, to compute its next tick, sending a (ci(s) + 1)-tick at step s. We will
+show in Lemma 18 that ci(s) < C(s), so pi will never force the master clock to skip a value. We will
+also show that "soon" after GST the value of the master clock exceeds those of the private clocks by
+only a constant amount, so during the reliable interval pi will not be pushing the master clock far
+ahead of the private clocks of the other processors.
+
+
+
+
+                              -----------------------   -        ----   ----     ---        ---
+                                                    19
+
+
+processors are synchronous with some ,I) > 1, and this provides an alternate way of handling the case
+
+
+
+
+  4. PARTIALLY SYNCHRONOUS COMMUNICATION AND PROCESSORS
+
+  In this section we show that the protocols of the previous section can be modified to work, with the
+same resiliencies, in models where both communication and processors are partially synchronous.
+Moreover, algorithms 1, 2, and 3 will still use a polynomial amount of communication. We describe
+the modified protocols in detail for the case where 4) and A both hold sufficiently long: that is, there
+are fixed ,onstants tO and A, such that for any run, there is a time GST such that both to and A hold in
+the interval [GST,GST + L] for a sufficiently large L depending polynomially on N, 0. and A.         As
+described in Remark 2 at the end of the previous section, the protocols can be modified for the model
+where both 0 and A are unknown by letting the "built in" 0 and A increase as time progresses.
+
+  In the previous section, the processors had a common notion of time which allowed time to be
+divided into phases.     If 40 does not always hold, no such common notion of time is available.
+Therefore, the first step is to describe a protocol which gives the processors some approximately
+common notion of time, at least during the reliable interval [GST,GST + LI. We call such a protocol a
+distributed clock. Each processor has a private (software) clock. Before GST, the private clocks of
+correct processors could be very far apart. However, during the reliable interval (GST,GST+ 1_ there
+are two correctness conditions which the private clocks of all correct processors must satisfy: within
+some constant amount of real time after GST (1) the private clocks must grow at a rate within some
+constant factor of real time, and (2) at any real time the difference in the values of any two private
+clocks is bounded above by an additive constant known to the processors. The three "constants"
+here depend polynomially on N, 4b and A.
+
+ Once we have defined the distributed clocks, the protocols of the previous section are modified by
+letting each processor use its private clock to determine which round (and therefore, which phase) it
+is in. For convenience, processors alternate receiving and sending operations. Alternate pairs of
+receive-send operations are used to maintain the distributed clock, with the other receive-send pairs
+being used by the consensus protocol. We first describe what happens during the clock maintenance
+steps for tro different distributed clocks. The first handles Byzantine faults without authentication
+and requires N > 3t + 1. The second handles Byzantine faults with authentication and requires N >
+2t + 1. (In [DLS] we define another distributed clock which handles only fail-stop faults, but is
+N.resilient. This clock is not needed for the results presented in this paper.)
+
+                                                                                                           4°
+                                                  18
+
+
+other processors should accept a "Decide v" message at any time. For Algorithm 1 (fail-stop and
+omission faults) a processor can decide v when it receives any "Decide v" message. For Algorithms 2
+and 3 (Byzantine faults), a processor can decide v when it receives t + 1 "Decide v" messages from
+different sources. Easy arguments show that the modified algorithms are still correct and that all        -
+
+correct processors make a decision within O(t) rounds after GST, and these arguments are left to the
+reader. These modifications also give termination conditions for the processors, in models where no
+messages are lost. For fail-stop or omission faults, a processor can terminate after it broadcasts a
+"Decide v" message.      For Byzantine faults, a processor can terminate after it has broadcast a
+"Decide v" message and has received "Decide v" messages from 2t other processors. In the model
+where messages can be lost before GST, it is not hard to argue that in any consensus protocol
+resilient to one fail-stop fault, at least one correct processor must continue sending messages
+forever. The argument is similar to Theorems 5 and 10.
+
+ 2. We have described our algorithms for the model in which delta holds sufficiently long. We can
+then apply the model reductions mentioned at the beginning of section 2 to show that the same
+resiliency is possible in the model where delta is unknown. Although this is theoretically convenient,
+it may not give the most efficient protocols for the model where delta is unknown. An alternative is to
+modify the algorithms. Instead of using a fixed A to determine the length R of a round, A is increased        -
+                                                           Lh/NJ
+as time progresses. For example, one might use A = 2               during phase number h. If A' is the
+"actual" A that holds in the particular run that the the algorithm is executing, then the effective GST
+
+(the time when the increasing A reaches the actual A will be polynomial in N and A').
+
+ 3. If tb> 1, we can again imagine that the processors have internal clocks, but that the clocks drift
+apart at a rate bounded above by 0. One approach to designing a protocol for this model is to use
+one cf wle clock synchronization algorithms of [HSS, DHS, LL]. There are clock synchronization
+algorithms resilient to several Byzantine failures, even without authentication, and which have two
+properties: (1) the clocks of correct processors never differ by more than a fixed additive constant,
+and (2) the clocks of correct processors never run slower or faster than real time by more than some
+fixed multiplicative constant. Property (1) permits time to be divided into rounds so that no two
+correct processors are in different rounds at the same real time.       Property (2) ensures that the
+algorithms run no slower than some constant times real time. Together, these two properties allow us
+to run the consensus protocols of this section, with processors reading their internal (private) clocks
+instead of a shared clock.
+
+ In Section 4 we show that the resiliency achieved by the protocols of this section can also be
+achieved ofboth processors and communication are partially synchronous. Of course. these stronger
+results imply that the same resiliency is achievable if communication is partially synchronous and
+                                                   17
+
+
+        Proof: It is clear that at least t + 1 correct processors lock v at phase k. Assume that the
+      second conclusion is false. As before, let I he the first phase at which one of th locks on v
+      set at phase k is released without immediately being replaced by another, higher-
+      numbered lock on v.
+
+         Therefore, some correct processor received a valid message (w,h) during lock release
+      phase I,where w # v and k < h < I. Since (w,h) is valid, at least N-2t > t + 1 processors
+      said that they sent a message (lock w,h) at phase h. Therefore. at least one correct
+      processor j actually sent (lock w,h). If h = k,then j wotld have sent both (lock w.k) and
+      (lock v,k), which is impossible. Therefore, k < h < I. Since j sent (lock w,h), j heard during
+      phase h that N-t processors (namely, the set that owns phase h) found w to be acceptable             V
+      at phase h. But since at leadt t + 1 correct processors have v locked at least through the
+      first round of trying phase I, this is impossible. I
+        Lemma 16: Immediately after any lock release phase which occurs after GST, the set of
+      values locked by correct processors contains at most one value.
+        Pr oof: Say that processor i has a lock on v with associated phase h and processor ihas
+      a lock on w with associated phase h' where v :tw. Say that h' > h. During the lock release
+      phase, i will receive the. message (w,h') from j. Since j received the message (lock w,h')
+      from at least N-t processors during trying phase h' and since at least N-2t of these are             -
+      correct. i will determine that (w,h') is valid. Therefore i will release the lock on v. I
+        Theorem 17: Assume the model with Byzantine faults without authentication, where the
+      processors are synchronous with P = 1 and communication is partially synchronous (delta
+      holds sufficiently long). Assume N > 3t + 1. Then Algorithm 4 achieves strong unanimity
+      for an arbitrary value domain.
+        Proof: The argument that disagreement cannot be reached is similar to before.
+
+        Next, we argue eventual agreement. Consider any trying phase, k, belonging to a set S
+      consisting entirely of correct processors. Assume i is the distinguished processor at
+      phase k. We claim that processor i will reach a decision at trying phase k (if it has not done
+      so already). By Lemma 16, it follows as in previous proofs that a proper, acceptable value
+      will be found for processor i to propose. Moreover, since all processors in S are correct, it
+      is obvious that the entire trying phase k will complete successfully, and processor i will
+      make a decision at the end. I
+
+ Our lower bound is tight for the case of unauthenticated Byzantine faults with no further restrictions.
+If we consider the problem with the requirement that communication be bounded by a polynomial, or
+that time be bounded by something linear in N after GST, then we do not know how to close the gap.
+ Remarks
+
+
+  1. Algorithms 1, 2 and 3 have the property that all correct processors make a decision within O(N)
+rounds after GST. The time to reach agreement after GST can be improved to O(t) rounds by some
+simple modifications. The bound O(t) is optimal to within a constant factor since (H, FLa] show that
+t + 1 rounds are necessary even in case communication and processors are both synchronous and
+failures are fail-stop. A modification to all the algorithms is to have a processor broadcast the
+message "Decide v" whenever it decides v. This message is not tagged with a phase number, and
+                                                            16
+
+                processors must tell all other processors that N 2t processors found v to be acceptable
+                and proper so that all the correct processors will acknowledge the proposal. Thus, the
+                proposed value will be decided upon by processor i at trying phase k. 1.
+
+            The second protocol of this sectin.n uses only N > 3t + 1 processors, but the amount of
+        commtnication and the time to reach a decision after GST grows roughly like N' in the worst case.
+
+
+            Algorithm 4: N > 3t + 1
+
+            Instead of rotating processors in"successive phases, we rotate pairs (S,i), where S is a size N- t
+        subset of the set of processors and i is a distinguished processor in that set. Each phase k is owned
+        by the corresponding S, and the distinguished processor i plays the role of the coordinator.
+
+            Processing is again divided into alternating trying and lock release phases. We first describe the
+        processing during a particular trying phase k. Assume that phase k is owned by the set S of N-t
+        processors and that i is the distinguished processor. Each trying phase has four rounds. During the
+        first round each processor in S broadcasts a list of all its acceptable values which are also in its
+        PROPER set, in the form (list, k). Based on this information, processor i attempts to choose a value to
+        propose. In order for processor i to propose v, it must have heard that all processors in S find v to be
+        acceptable and proper. As before, ambiguities are resolved arbitrarily. During the second round,
+        processor i broadcasts a message (propose v,k). If a processor j in S receives a message (propose
+        v,k) from i and if heard from all processors in S during the first round that v is acceptable and proper,
+        then I broadcasts (lock v,k) during the third round. If a processor in S receives (lock v,k) messages
+        from all in S. then it locks v and sends an acknowledgement to processor i. If processor i receives
+        acknowledgemnts from all in S, then i decides v. After deciding, processor i continues to participate in
+        the algc,,,nm.
+                 .,l
+
+
+            Each lock release phase has three rounds. During the first round, processors broadcast messages
+        of the form (v,h) indicating that the sender has a lock on v at associated phase h. If a processor
+        receives a message (v,h), then during the next two rounds it checks if (v,h) is valid by determining the
+        set S of processors that owns phase h, and asking each processor in S whether it sent a message
+        (lock v,h) at phase h. If at least N.2t processors in S respond affirmatively by the end of the third round
+        then (v,h) is valid; otherwise it is not valid. If a processor has a lock on v with associated phase h and
+        it receives a valid message (w,h') with w * v and h' > h, then it releases the lock on v.
+                  Lemma 15: Suppose that some correct processor decides v at phase k, and k is the
+                smallest numbered phase at which a decision is made by a correct processor. Then at
+                least t + 1 correct processors lock v at phase k. Moreover, each of the correct processors
+                that locks v at phase k will, from that time onward, always have a lock on v with associated
+                phase number at least k.
+
+
+
+
+,-.   ...   .                                                                                   .%
+                                              15                                                   9
+
+
+  Lemma 12: Suppose that some correct processor decides v at phase k, and k is the
+smallest numbered phase at which a dpcision is made by a correct proee;nr Then at
+least 2t + I correct processors lock v at phase k. Moreover, each of the correct
+processors that locks v at phase k will, from that time onward, always have a lock on v with
+associated phase number at least k.
+  Proof: It is clear that at least 2t + 1 correct processors lock v at phase k. As.ume that            -
+the second conclusion is false. Then let I be the first phase at which one of the locks on v
+set at phase k is released without immediately being replaced by another, higher
+numbered lock on v.
+
+   Then the lock is released during lock release phase I, when it is learned that at least t + 1
+prccessors have locks on values w # v with associated phases h, where k < h <
+I. Therefore, at      t one correct processor, say j, has such a lock. Lemma 11 implies that
+no correct processor has a lock on any w * v with associated phase k. Therefore, the
+correct processor i has a lock on w * v with associated phase h, where k < h < I. In order
+for i to place this lock on w, at least N-3t processors each claim that at least N-2t
+processors find w acceptable at the first round of phase h. Since N.3t > t + 1, at least one
+correct processor makes this claim, so at least N-2t processors actually find w acceptable.
+Since 2t + 1 correct processors have v locked at least through the first round of I, this is
+imr ossible. I
+  Lemma 13: Immediately after any lock release phase which occurs completely in the
+interval [GST,GST + L] either no value is locked or there exists some locked value v such
+that at most t correct processors hold locks on values other than v.
+  Proof: Straightforward from the'lock release rule. (Consider some v whose lock is from
+the earliest phase from which any lock persists.) I
+  Theorem 14: Assume the model with Byzantine faults without authentication, where the
+processors are synchronous with * = 1 and communication is partially synchronous (A                ,;
+
+holds sufficiently long). Assume N > 4t + 1. Then Algorithm 3 achieves strong unanimity
+for an arbitrary value domain.                                                                         .,-
+  Proof: The proof that disagreement cannot be reached follows easily from Lemma 12 as
+in the proof of Algorithm 1.
+
+  Next, we argue eventual agreement. Consider any trying phase, k, belonging to a correct
+processor, i, which is executed after a lock release phase, both occurring during
+[GST,GST + ]. We claim that processor i will reach a decision at trying phase k (if it has
+not done so already). There are two cases. If some value v is locked at the beginning of
+trying phase k, then by Lemma 13, there is some locked value v such that at most t correct
+processors have values other than v locked'at the start of trying phase k. Therefore, v is
+acceptable to at least N.2t > 2t + 1 correct processors. Thus, by the beginning of trying
+phase k, these 2t + 1 correct processors have communicated to all correct processors that
+v is *groper,so every correct processor will have v in its PROPER set. In the second case,
+no value is locked, so all values are acceptable. If there are at least t + 1 processors with
+the same initial value v, then v is in the PROPER set of each correct processor at the
+beginning of trying phase k. On the other hand, if this is not the case, then all values in the
+valu,3 set are in the PROPER set of all correct processors at the beginning of trying phase
+k. It follows in either casd that a proper, acceptable value will be found for processor i to
+propose.
+
+  Moreover, any value v which is proposed by processor i must have had N - 2t processors
+tell i that N - 2t processors found v to be acceptable and proper. Then at least N. t                  ..-
+
+
+
+
+                                                   . ...................   .......   ......                  _
+                                                                     14
+
+
+               Both algorithms are designed for the model in which A holds sufficiently long and for arbitrary value
+              domains.
+
+               In both algorithms, the processors' PROPER sets are handled exactly as in Algorithm 2.
+
+
+                Algorithm 3: N > 4t + 1
+
+               Processing is again divided into alternating trying and lock release phases, with phases numbered
+              as before. Now, however, the trying phases are of length 4R.
+
+               As before, at various times during the algorithm, processors may lock values. In algorithm 3, only a
+              phase number is associated with every lock. As before, a value v is acceptable to p if p does not have
+              a lock on any value other than v.
+
+               We now describe the processing during a particular trying phase k. Let s denote the time of the
+              beginning of the first round in phase k, and assume k               i mod N. At time s, each processor
+              broadcasts a list of all its acceptable values which are also in its PROPER set, in the form (list, k). At
+              time s + R, each processor p broadcasts a vector which says, for each processor q, which values q
+              sent to p at the preceding round. At time s + 2R, processor i attempts to choose a value to propose.
+              In order for processor i to propose v, it must have heard that each of at least N -2t processors claims
+              that at least N -2t processors find value v acceptable and proper at phase k. As before, ambiguities
+              are resolved arbitrarily. Processor i then broadcasts a message (lock v,k).
+
+                If any processor receives a (lock v,k) message by time s + 3R, and also has heard that each of at
+              least N - 3t processors claims that at least N -2t processors find value v acceptable and proper at
+              phase k            ,.cks v, associating the phase number k with the lock, and sends an acknowledgement to
+                                ';
+              processor i. Release of other locks on v is handled as before.
+
+                If processor i receives acknowledgements from at least 3t + 1 processors, then processor i decides
+              v. After deciding v, processor i continues to participate in the algorithm.
+
+               Lock release phase k begins at time s + 4R. At time s + 4R, processors broadcast messages of the
+              form (v,h), indicating that the sender has a lock on v with associated phase h. If any processor has a
+              lock on some value v with associated phase h, and receives t + 1 messages indicating that t + 1
+          distinct processors all have locks of the form (w,h') with w * v and h' > h,then the processor                   .   -
+
+              releases its lock on v. (The values of w and h' need not be the same in all of these locks.)
+                      Lemma 11: It is impossible for two distinct values to acquire locks by correct
+                    processors at the same trying phase, if that phase belongs to a correct processor.
+                      Proof: The proof is similar to previous proofs and is left to the complete paper. I
+
+
+
+
+. ...   ---       =..i...-.........inll                                                     |]
+                                                                                                            13
+                                                                                                                                                                                                                           h'. -   =
+
+
+                   handles each one similarly. The entire mnessage E,(Iock vk.proof) is said to be a valid lock on v at
+                   phase k.
+
+                        Ifprocessor i receives acknowledgements from at least 2t + 1 processors, then processor i decides
+                   v. After deciding v, processor i continues to participate in the algorithm.
+
+                       Lock release phase k begins at time s + 3R. At time s + 3R, processors broadcast messages of the
+                   form E(Iock v,hproof), indicating that the sender has a lock on v with associated phase h and the                                                                                                       L
+                   given associated proof, and processor i sent the message at phase h which caused the lock to be
+                   placed. Itany processor has a lock on some value v with associated phase h, and receives a properly
+                   signed mt.ssage El(lock w,h',proof') with w * v and h' > h, then the processor releases its lock on v.
+
+                        The proofs for Lemmas 6 through 8 and of Theorem 9 are analogous to the proofs of the
+                   correspooding results for Algorithm 1.
+                           Le3mma 6: It is impossible for two distinct values to acquire valid locks at the same trying
+                         ph ,se, if that phase belongs to a correct processor. I
+                           Lemma 7: Suppose that some correct processor decides v at phase k, and k is the
+                         smallest numbered phase at which a decision is made by a correct processor. Then at
+                         least t + 1 correct processors lock v at phase k. Moreover, each of the correct processors
+                         that locks v at phase k will, from that time onward, always have a lock on v with associated
+                         phase number at least k. I
+                           Lemma 8: Immediately after any lock release phase which occurs completely in the
+                         interval [GST,GST + LI the set of values locked by correct processors contains at most one
+                         value. I
+                           Theorem 9: Assume the model with Byzantine faults and authentication where the
+                         processors are synchronous with 4 = 1 and communication is partially synchronous (delta
+                         holds sufficiently long). Assume N > 3t + 1. Then Algorithm 2 achieves strong unanimity
+                                     for an arbitrary value domain. I
+
+                       The following lower bound result again applies in the case of w, ak unanimity and a binary value
+                   domain.
+                                       Theorem 10: Assume the model with Byzantine faults and authentication, where the
+                                     processors are synchronous and communication is partially synchronous (delta holds
+                                     eventually and no messages are lost). Assume N < 3t. Then there is no t-resilient
+                                     consensus protocol which achieves weak unanimity for binary values. I
+
+
+
+                       3.3. Byzantine Faults without Authentication
+
+                     Here, we will describe two protocols. The first, simpler, protocol, is t-resilient and uses 4t + 1
+                   processor.;. It uses a polynomial amount of communication. The second protocol needs only 3t + I
+                   processors, thereby achieving the maximum possible resiliency (as implied by the lower bound result
+                   of the previous section), but it uses more than a polynomial amount of communication.
+
+
+
+
+:, ..-. .    ...................
+            .-., . .--,.,.:   ,...     , . * .....   *.: *-.. ***,.
+                                                          -. .....    .      .       ... .
+                                                                          ',',,:'-.,.,,      ..   - ... .- , . ... ,, . - .",
+                                                                                                                           .......
+                                                                                                                          .-         ,, ,-. ,.   . . . ,..      . . , .: ,.
+                                                                                                                                                             . .".            .. ...,   . . -, . ,   ,,,   .   . ,,,.     ,
+                                                                                                                                                                                                                        .,,,..
+                                                                    12
+
+
+Byzantine faults with authentication.
+
+
+ Algorithm 2: N > 3t       1
+
+ Initially, each processor's PROPER set contains just its own initial value. Each processor attaches
+its PROPER set and its initial value to every message it sends. If a processor p ever receives 2t + 1
+initial values from different processors, among which there are not t + 1 with the same value, then p
+puts all of V (the total value domain) into its set PROPER. (Of course, p would actually just set a bit
+indicating that PROPER contains all of V.) When a processor p receives claims from at least t + 1
+other processors that a particular value v is in their PROPER sets, then p puts v into its own PROPER
+set. It is not difficult to check that each PROPER set for a correct processor indeed contains only
+proper values.
+
+ Processing is again divided into alternating trying and lock release phases, with phases numbered
+as before and of the same length as before.
+
+ As before, at various times during the algorithm, processors may lock values. In algorithm 2, not
+only is a phase number associated with every lock, but also a proof of acceptability of the locked
+value, in the form of a set of signed messages, sent by N - t processors, saying that the locked value is
+accept, bie and in their PROPER sets at the beginning of the given phase. As before, a value v is
+acceptable to p if p does not have a lock on any value other than v.
+
+ We now describe the processing during a particular trying phase k. Let s denote the time of the
+beginning of the first round in phase k, and assume k - i mod N. At time s, each processor
+(including i) sends a list of all its acceptable values which are also in its PROPER set to processor i, in
+the form E.(list, k), where E is an authentication function. At time s + R, processor i attompts to
+
+choose a value to propose.. In order for processor i to propose v, it must have heard that at least N - t
+processors find value v acceptable and proper at phase k. Again, if there is more than one possible
+value which processor i might propose, then it will choose one arbitrarily.             Processor i then
+broadcasts a message E.(Iock v,k,proof), where the proof consists of the set of signed messages
+E.(Iist,k) received from the N - t processors which found v acceptable and proper.
+
+ If any processor receives a E.(Iock v,k,proof) message by time s + 2R, it decodes the proof to check
+that N.t processors find v acceptable and proper at phase k. If the proof is valid, it locks v, associating
+the phase number k and the message E(Iock v,k,proof) with the lock, and sends an acknowledgement
+to processor i. In this case, any earlier lock on v is released. (Any locks on other values are not
+released at this time.) If the processor should receive such messages for more than one value v, it
+
+
+
+
+                                    _............................
+                                 K                                                               11
+
+
+
+                                         correct processor i decides v at phase k, and this is the smallest numbered phase at which
+                                         a decision is made. Then Lemma 2 ini: es that at all times after phase k. at iP.ast t 4 1
+                                         processors have v locked. In consequence, at no later phase can any value other than v
+                                         ever be acceptable to N - t processors, so no processor will ever decide any value other
+                                         than v.
+
+                                           Next, we argue eventual agreement. Consider any trying phase, k, belonging to a correct
+                                         processor, i, which is executed after a lock release phase, both occurring during
+                                         [GST,GST + L1. We claim that processor i will reach a decision at trying phase k (it it has
+                                         not done so already). By Lemma 3, there is at most one value locked by correct
+                                         prccessors at the start of trying phase k. If there is such a value, v. then sufficient
+                                         communication has occurred by the beginning of trying phase k so that v is in the PROPER
+                                         set of each correct processor. Moreover, any initial value of a correct processor is in the
+                                         PROPER set of each correct processor at the beginning of trying phase k. It follows that a
+                                         proper, acceptable value will be found for processor i to propose. and that the proposed
+                                         value will be decided upon by processor i at trying phase k. I
+
+                                 The foll3wing lower bound shows that the resiliency of Theorem 4 cannot be improved, even for
+                             weak unanimity and a binary value domain.
+                                    Theorem 5: Assume the model with fail-stop or omission faults. where the processors
+                                  are synchronous and communication is partially synchronous (A holds eventually and no
+                                  messages are lost). Assume N < 2t. Then there is no t-resilient consensus protocol which
+                                  achieves weak unanimity for binary values.
+                                    Proof: Assume the contrary, that there is an algorithm immune to fail-stop faults
+                                  satisfying the required properties. We will derive a contradiction.
+
+                                           Divide the processors into two groups, P and 0, each with at least I and at most t
+"   -                                    processors. First consider the following situation A: all initial values are 0, the processors
+                                         in 0 are initially dead and all messages sent from processors in P to processors in P are
+                                         delivered in exactly time 1. By t-resiliency, the processors in P must reach a decision; ,;.y
+                                         that this occurs after time tA. The decision must be 0. For if it were 1, we could modify the                                           ,..
+                                         situation to one where the processors in 0 are alive, but all messages sent from 0 to P take
+                                         more than time tA to be delivered. Irn the modified situation, the processors in P still decide
+                                         1, contradicting weak unanimity.
+
+                                          Consider situation B: all initial values are 1, the processors in P are initially dead, and
+                                         messages sent from 0 to 0 are deliverbd in exactly time 1. By a similar argument, the
+                                         processors in 0 decide 1 after ta steps for some finite t9 .
+
+                                           Consider situation C (for Contradiction): processors in P have initial values 0, processors
+                                         in 0 have initial values 1, all processors are alive, messages sent from P to P or from 0 to 0
+                                         are delivered in exactly time 1, and messages sent from P to 0 or from Q to P take more
+                                         than max(tAtB) steps to be delivered. The processors in group P (resp., group Q) act
+                                         exactly as they do in situation A (resp., situation B). This yields a contradiction. I
+
+
+
+                                 3.2. Byzantine Faults with Authentication
+
+                                 The second algorithm achieves strong. unanimity for an arbitrary value set V, in the case of
+
+
+
+
+        •-,-.-.   ..   ,.   ..       .   ,-   .'.   .   ...   .   %..   -.   -.   _   ....   ,   ...   **-. ***.*   ,   -   ,,-   -   ,,'.\   ,.   ,   '   .   ,,   ,   ,   ,,         . -
+                                                    10
+
+
+possible value which processor i might propose; in this case, processor i will choose one arbitrarily.
+Processor i then broadcasts a message (lock v,k).
+
+  If any processor receives a (lock v,k) message by time s + 2R, it locks v, associating the phase
+number k with the lock, and sends an acknowledgement to processor i (in the form of an (ack, k)
+message). In this case, any earlier lock on v is released. (Any locks on other values are not released
+at this time.)
+
+  If processor i receives acknowledgements from at least t + 1 processors by time s + 3R, then
+processor i decides v. After deciding v, processor i continues to participate in the algorithm.
+
+  Lock release phase k begins at time s + 3R. At time s + 3R, processors broadcast messages of the
+form (v,h), indicating that the sender has a lock on v with associated phase h. If any processor has a
+lock on some value v with associated phase h, and receives a message (w,h') with w * v and h' > h,
+then the processor releases its lock on v.
+          Lemma 1: It is impossible for two distinct values to acquire locks with the same
+      associated phase.
+          Proof: In order for two values v and w to acquire a lock at trying phase k, the processor
+      to which phase k belongs must send conflicting (lock v,k) and (lock w,k) messages, which
+       it will never do in this fault model.. I
+         Lemma 2: Suppose that some processor decides v at phase k, and k is the smallest
+       numbered phase at which a decision is made. Then at least t + 1 processors lock v at
+       phase k. Moreover, each of the processors that locks v at phase k will, from that time
+       onward, always have a lock on v with associated phase number at least k.
+         Proof: It is clear that at least t + 1 processors lock v at phase k. Assume that the
+       second conclusion is false. Then let I be the first phase at which one of the locks on v set
+       at phase k is released without immediately being replaced by another, higher-numbered
+       lock on v.
+
+          In this case the lock is released during lock release phase I, when it is learned that some
+       processor has a lock on some w * v with associated phase h, where k < h < I. Lemma
+       1 implies that no processor has a lock on any w * v with associated phase k. Therefore,
+       some processor has a lock on w with associated phase h, where k < h < I. Thus, it must be
+       that w is found acceptable to at least N -t processors at the first round of some phase
+       numbered h, k < h < 1,which means that at least N - t processors do not have v locked at
+       the beginning of that phase. Since t + 1 processors have v locked at least through the
+       first round of I, this is impossible. I
+         Lemma 3: Immediately after any lock release phase which occurs completely In the
+       interval [GST,GST + L] the set of values locked by processors contains at most one value.
+         Proof: Straightforward from the lock relc.se rule. I
+         Theorem 4: Assume the model with fail-stop or omission faults, where the processors
+       are synchronous with b = 1 and communication is partially synchronous (A holds
+       sufficiently long). Assume N > 2t + 1. Then Algorithm 1 achieves strong unanimity for an
+       arbilrary value domain.
+         Proof: First, we show that disagreement cannot be reached. Suppose that some
+
+
+
+
+                                                                                                         Wi
+                                                               9
+
+
+         imagine that communication during one phase is independent of communication during any other
+         phase.
+
+           To argue that our protocols achieve strong unanimity, we use the notion of a proper value defined
+         as follows: if all processors start with the same value v, then v is the only proper value;, if there are at
+         least two different initial values, then ail values in V are proper. In all protocols, each processor will
+         maintain a local variable PROPER, which contains a set of values which the processor knows to be
+         proper. Processors will always piggyback their current PROPER sets on all messages. The way of
+         updating the PROPER sets will vaty from algorithm to algorithm.
+
+          The first algorithm is used for either fail-stop or omission faults. It achieves strong unanimity for an
+         arbitrary value domain V.
+
+
+          Algorithm 1: N > 2t + 1
+
+            Initially, each processor's set PROPER contains just its own initial value. Each processor attaches
+         its current value of PROPER to every message that it sends. Whenever a processor p receives a
+         PROPER set from another processor that contains a particular value, v, then p puts v into its own
+         PROPER set. It iseasy to check that each PROPER set always contains only proper values.
+
+          Processing is divided into alternating trying and lock release phases, with pairs of corresponding
+         phases being numbered by consecutive integers starting with 1,where each trying phase is of length
+         3R and each lock release phase isof length R.We say that trying phase i mod N belongs to processor
+
+
+           At various times during the algorithm, a processor may lock a value v. Aphase number is associated
+         with every lock. If p locks v with associated phase number k =_i mod N, it means that p thinks that
+         processor i might decide v at phase k. Processor p only releases a lock if it learns that its supposition
+         was false. Avalue v isacceptable to p if p does not have a lock on any value other than v.
+
+            We now describe the processing during a particular trying phase k. Let s denote the time of the
+         beginning of the first round in phase k, and assume k _=i mod N.At time s. each processor (including
+         i) sends a list of all its acceptable values which are also in its PROPER set to processor i (in the form
+         of a (list, k) message). (if V is very large or infinite, it is more efficient to send a list of proper values
+         and a list of unacceptable values. Given these lists, the proper acceptable values are easily
+         deduced.) At time s + R,processor i attempts to choose avalue to propose. In order for processor IL
+         to propose v, it must have heard that at least N - t processors (possibly including itself) find value v
+         acceptable and proper at the beginning of phase k. It is possible that there might be more than one
+
+
+
+
+                             a                  *-                     .*.   4                                            .,-.
+*   a-       z:.                         *'.
+    -                             ~.     -   1-Z -
+                                        C-V,.%.-                               77
+
+
+
+
+                                                            8
+
+         Consistency. No two different processors in Cdecide differently.
+
+         Eventual Agreement. If R isinfinite then every processor in C makes a decision.
+
+         Unanimity. There are two types:
+
+*        Strong Unanimity: if all initial values are v then it any processor in Cdecides, then it decides v.
+
+         Weak Unanimity: if all initial values are v and C contains all processors, then if any processor
+    decides, then it decides v.
+
+
+         3. PARTIALLY SYNCHRONOUS COMMUNICATION AND SYNCHRONOUS PROCESSORS
+
+          In this section we assume that processors are synchronous and communication is partially
+        synchronous. Throughout most of this section we assume that the processor bound 0 = 1 to simplify
+        the exposition of the main ideas. Remarks at the end of the section then indicate several ways to
+        extend the results to the case (b> 1. Since processors operate in lock-step synchrony, it is useful to
+        imagine that each (correct) processor has a clock which is perfectly synchronized with the clocks of
+    other correct processors. Initially, the clock is0, and a processor increments its clock by 1every time
+    it takes a step. The assumption 4b = 1implies that the clocks of all correct processors are exactly the
+    same at any real time step.
+
+         The next three subsections give consensus protocols and lower bounds for the four types of faults.
+
+
+         3.1 Fail-Stop and Omission Faults
+
+         The conseqnsus protocols in the following three subsections are all designed for the model in which
+        A holds sufficiently long, and they handle arbitrary value domains V.In case i = 1,as noted above,
+    we can imagine that all (correct) processors have access to a common clock. Time, as measured by
+    this clock, is divided into phases, and phases are subdivided into rounds of message exchange of
+                     Th nuberA =N + A+ 1is chosen large enough to allow processors to "broadcast"
+             lengh Aeac.
+    a message to all N processors (including themselves), and for all these messages to be received.
+    Since our model does not have an atomic broadcast operation, this isdone by sending the message
+    to all processors, one at a time. Of course, our algorithms must allow for the possibility that a faulty
+    processor could fail in the middle of a "broadcast", and for the possibility that messages sent before
+    GST could be lost or arrive late: It will be seen that these possibilities do not affect the correctness of
+    our algorithms. A processor always attaches a phase identifier (number) to messages, and any
+    message sent during a phase h which arrives late during some phase h' > h is ignored. Thus, one can
+                                                         22
+
+
+s > GST and s i- D is in I, then p will receive the message by step s + D: the message will be delivered
+by step s + A and within 4(0 more steps p will execute a receiving clock maintenance operation.
+        Lemma 21: Let s and j be such that s > GST, s+ 16NW + D is in I, and c,(s) > j for all
+      correct pi. Then ci(s + 16N1) + D) j> j - 1 for all correct pi. I
+        Lemma 22: Let T = C(GST). Then C(GST + 52N + 4D) _ T + 2. I
+        Lemma 23: Let so be the minimum s such that C(s) = C(GST) + 2 (so exists by Lemma
+      22).
+
+            (1) For all x in I such that x > so+ D and for all correct processors i, ci(x) > C(x)-D-1.
+
+            (2) For ally _ s o such thaty + 32N4l + 3D is in IC(y + 32N0 + 3D)          C(y) + 1. I
+
+     Lemmas 18, 20, 21, and 23 yield the correctness conditions which must be satisfied by the private
+clocks of all correct processors. Specifically, Lemma 21 says that the private clocks do not grow too
+slowly, while Lemmas 18 and 20 say they do not grow too quickly. That is, within a constant amount
+of time after GST the private clocks grow within a constant factor of real time. As pointed out above,
+Lemmas 18 and 2311l) say that soon after GST the private clocks of any two correct processors differ
+by at most a known, additive constant, at least during the reliable interval.
+
+
+     4.2. A Distributed Clock for Byzantine Faults with Authentication
+
+     The new clock is very similar to the one just described. We only explain the differences. Here we
+assume N > 2t + 1.
+
+     An i-claim is a signed message "I have broadcast an i-tick". A >i.claim is a i-claim for any i > i. For
+i> 1, an i-tick is the message "<i,i-proof>" -where a 1-proof is the empty string and where an i-proof (i
+> 1) is a list of t + 1 > (i.1).claims each signed by a different processor.
+
+     A >i-tick is a j-tick for any j > i. The definitions of broadcast an i-tick and broadcast an i-claim are
+the same as before.
+
+     The master clock C: N     -   N is defined by
+
+     C(s) = maximum j such that some correct processor has broadcast a j-tick by the beginning of step
+S.
+
+
+     The private clock ci: N   -   N is defined by
+
+     c,(s) = maximum j such that p, has received t + 1 >-claims (from different sources), either directly,
+or indirectly as part of a tick, by the beginning of step s.
+
+     The definition of the clock protocol is the same as before with the addition that whenever a
+                                                                  23
+
+
+          processor sends a (b + 1)-claim in the procedure CLAIM(b), it attaches the largest size tick which it
+          can construct (this will always be a >(b + I)-tick). A correct processor will ignore any leceived i-claim
+          if it does not come with an attached >j-tick.
+                    Lemma 24: Lemmas 18, 19, 20, 21, 22, and 23 hold for the authenticated Byzantine
+                  clock. I
+
+             In addition, we need one more lemma to support our claim of a polynomial amount of
+         communication. The proof is immediate from the definitions.
+               Lemma 25: Any tick or claim sent by a correct processor at step s can be represented
+             by O(t log(C(s))) bits. I
+
+
+
+             4.3. Using the Clocks
+
+             As desc:ibed above, alternate pairs of receive-send operations are used to maintain a distributed
+         clock, and the other receive-send pairs are used to run one of the protocols of Section 3.              For
+         Algorithm 1 (fail-stop and omission faults) we use the authenticated Byzantine clock, simplified
+         appropriately because the signatures are not needed and because we cannot assume the
+         authentication capablity. Note that the consensus protocol and the distributed clock protocol have
+         the same constraint on the number of processors, N >                      2t + 1.   For Algorithms 3 and 4
+         (unauthenticated Byzantine faults), we use the unauthenticated Byzantine clock. For Algorithm 2
+         (authenticated Byzantine faults) either clock could be used. For all four algorithms L, the length of
+         the reliable period, is somewhat larg.: r in we new model.
+
+            Processing is divided into alternating rounds and waiting periods of length R and W respectively.
+         Specifically, R = 4NO + A + 44) is the time required for N processors to broadcast a message and for
+         this message to be received, and W       =   52N      + 4(A + 40) is the maximum difference between the
+         private clocks of any two correct processors during [GST + sl, GST + L, where s1 = 52N4' + 5(A + 44b)
+         (see Lemmas 18, 22, and 23). When runningthe consensus protocol, a processor uses its private                                  L
+         clock to determine its current phase and round.                In addition to labelling messages with phase
+         numbers, processors label messages with round numbers. During any given round, only messages
+         labelled with the same round number are accepted; other messages are ignored. During any given
+        waiting period, only messages from either of the two adjacent rounds are accepted. No messages are
+        sent during waiting periods.
+
+            For all four of the consensus protocols, the proofs that no two correct processors decide differently
+        are identical to the proofs given in Section 3, since at no point in those proofs did we use the fact that
+        different processors are executing the same phase at the same real time. For example, in Algorithm
+
+
+
+
+..   .*.....=,=,.=j   a.        m~j ..    .,,     .ll i   l   MII ...         ..     .       .....              ~      ..   .   .   .
+    ?.7.
+
+                                                                               24
+
+
+                    1, if a processor i decides v at its phase k, then at least t + 1 processors lock v at their phase k, and
+                    one argues as in Lemma 2 that these locks will never be released at any higher numbered phase.
+
+                      To argue eventual agreement after GST. note that by choice of W no two correct processors are
+                    simultaneously executing different rounds at the same time x, for any x in the interval [GST + s2t
+                    GST + LI. Further, any message labelled with a given round, say k, and sent to a correct processor
+
+                    during [GST + s ,GST + L-13, will be received and accepted before that processor begins round k + 1.
+                    We now choose the lengths TT and TR of phases large enough so that all required communication
+                    during a phase will have time to tomplete, at least for all phases which take place entirely within
+                    [GST + s,,GST + L].
+                            Theorem 26: Assume the model where communication and processors are both
+                          partially synchronous (delta and phi both hold sufficiently long). If Algorithms 1, 2, 3 and 4
+                          are modified as decribed above, Theorems 4, 9, 14, 17 still hold. U
+
+                      Our claims that the modified algorithms 1, 2 and 3 use a polynomial amount of communication and
+                    that agreement is reached within a polynomial amount of real time after GST follow from the fact that
+                    the master clock, during IGST + si ,GST + LI, is running at a rate no slower than 1/(32N°¢ + 3(A + 440))
+                    times real time (see Lemma 23).
+
+                      The results for the case in which processors are partially synchronous and communication is
+                    synchronous are deferred to the complete paper.
+
+
+                      Acknowledgment.       Joe Halpern asked whether the impossibility results of [FLP,DDS] would
+                    continue to hold in case the parameters 4 or A exist but are not known a priori, and this led to the
+                    formulation of the version of partial synchrony where b or A are unknown.
+
+                      REFERENCES
+
+                      [BT] Bracha, G., and Toueg, S., "Resilient copsensus protocols," Proc. 2nd PODC, 1983, pp. 12.26.
+
+                      [D] Dolev, D., personal communication.
+                                   -..                                                                                                                            '
+
+                      [DDJ Do(ev, D., Owork, C., and Stockmeyer, L., "On the minimal synchronism needed for
+                    distributed consensus," Proc. 24th Symp. on Foundations of Computer Science, 1983, pp. 393-402.
+
+                      [DFFLSJ Dolev, D., Fischer, M.J., Fowler, R., Lynch, N.A., and Strong, H.R., "Efficient Byzantine
+                    agreement without authentication," Information and Control (to appear); see also IBM Research
+                    Report RJ3428 (1982).
+
+                      [DHSI Dolev, D., Halpern, J., and Strong, H. R., "On the possibility and impossibility of achieving
+
+
+
+
+                                 • •. o.    .   .   .   .   .   . . . . .. .            .;   '~~~.. ......
+                                                                                                       ....   '.......    .
+                                                                                                                         .... ..   :   ,-.-. .   '.9:   -/   ,_
+"A-- r.'    ;.,
+           """    ""-,,     .,<.;
+                          ' ":  " :'
+                                   ,, :"':
+                                        ,. ',""
+                                              ::"'; '::. :'              :'"'       '        .     .                               .     .
+                                                         25
+
+
+      clock synchronization," Proc. 16th ACM Symp. on Theory of Computing, 1984.
+
+        IDLPSWI Dolev, D., Lynch, N., Pinter, S., Stark, E. and Weihl, W., 'Reaching approximate                 L
+                                                                                                                       ..
+      agreement in the presence of faults," Proceedings of 3rd Annual IEEE Symposium on Reliability in
+      Distributed Software and Database Systems, 1983.
+
+       [DLS] Dwork, C., Lynch, N., Stockmeyer, L., "Consensus in the Presence of Partial Synchrony," in
+      preparation.
+
+       [DS] Dolev, D. and Strong, H. R., "Authenticated algorithms for Byzantine agreement," SIAM
+      J. Computing 12 (1983). pp. 656-666.
+
+       [F] Fischer, M., "The consensus problem in unreliable distributed systems (a brief survey)," Report
+      YALEU/OCS/RR-273, Yale University, June, 1983.
+
+       [FLa] Fischer, M. and Lamport, L., "Byzantine Generals and Transaction Commit Protocols," SRI
+     Technical Report, Op. 62.
+
+       [FL] Fischer, M. and Lynch, N., "A lower bound for the time to assure interactive consistency," Info.
+     Proc. Lett. 14, 4(1982), pp. 183-186.                                                                           "
+
+       [FLP] Fischer, M., Lynch, N. A. and Paterson, M., "Impossibility of distributed consensus with one
+     faulty process," Proc. of 2nd Symposium on Principles of Database Systems, Atlanta, GA, 1983.
+
+       [G] Garcia-Molina, H., Pittelli, F., and Davidson, S., "is Byzantine agreement useful in a distributed
+     database?" Manuscript.
+
+       [GLPT] Gray, J.N., Lorie, R.A., Putzulo, G.R., and Traiger, I.L., "Notes on Database Operating
+     Systems," Operating Systems: An Advanced Course, Vol. 60, Lecture Notes in Computer Science,
+     Springer.Verlag, N.Y., 1978, pp. 393.481.
+
+       [H] Hadzilacos V., "A Lower Bound for Byzantine Agreement with Fail-stop Processors," TR.21-83,
+     Harvard University, 1983.
+
+       [HSSJ Halpern J., Simons, B., and Strong, H. R., "An efficient fault-tolerant algorithm for clock        r
+     synchronization," Report, RJ 4094, IBM Research Division, San Jose, CA, Nov., 1983,
+
+      [L1] Lamport, L., "The weak Byzantine generals problem," J.ACM 30 (1983), pp. 668-676.
+
+      [L2] Lamport, L., "Time, clocks, and the ordering of events in a distributed system," CACM 21, No.        i"
+*2   7, (1978), pp. 558.584.
+
+
+
+                     *                                                                                           ."°
+                                                    26
+
+  [LL] Lundelius, J., and Lynch, N. "A New Fault-Tolerant Algorithm kw Clock Synchronization"
+These Proceedings.
+
+  [LMJ Lamport,. L., and Melliar-Smith, P.M., "Synchronizing clocks in the presence of faults,"
+Technical Report, SRI International, March, 1982.
+
+  [LSP] Lamport, L., Shostak, R., and Pease, M., "The Byzantine generals problem," ACM Trans. on
+Programming Languages and Systems 4 (1982), pp. 382.401...
+
+  [PJ Pinter, S., "Distributed corriputation systems:    modelling, verification and algorithms," PhD
+Thesis, Boston University, 1984.
+
+  JR] Reischuk, R., "A new solution for the Byzantine generals problem," IBM Report RJ3673,
+
+November, 1982.
+
+  [Sc] Schneider, F.B.,      "Byzantine generals in action:     implementing fail-stop processors,"
+Manuscript, August, 1983.
+
+ [Sk] Skeen, 0., "A quorum based commit protocol," Report TR 82-483, Dept. of Computer Science,
+
+Cornell Univ., Feb., 1982.
+
+
+
+
+                                                                                                        SoI
+                  OFFICIAL DISTRIBUTION LIST
+                              1984
+
+Direc tar                                       2 Copies
+Information Processing Techniques Office
+Defense Advanced Research Projects Agency
+1400 Wilson Boulevard
+Arlington, VA 22209
+
+Office of Naval Research                        2 Copies
+800 North Quincy Street
+Arlington, VA 22217
+Attn: D.c. R. Grafton, Code 433
+
+Director, Code 2627                             6 Copies
+Naval Research Laboratory
+Washington, DC 20375
+
+Defense Technical Information Center           12 Copies
+Cameron Station
+Alexandria, VA 22314
+
+National Science Foundation                     2 Copies
+off ice of Computing Activities
+1800 G. Street, N.W.
+Washington, DC 20550
+Attn: Program Director
+
+Dr. E.B. Royce, Code 38                         1 Copy
+Head, Research Department
+Naval Weapons Center
+China Lake, CA 93555
+
+Dr. G. Hopper, USNR                             1 Copy
+NAVDAC-OOH
+Department of the Navy
+Washington, DC 20374
+-.   -~~~-           .   -   -   7   -
+
+
+
+
+     FILMED
+              7-85
+
+
+
+
+             DTIC
+                                                                                                                     9-.
+
+
+
+
+                                                                                                                           -.   V
+
+
+
+
+                                                                                                                           p
+                                                                                                                           L
+
+           FILMED                                                                            .
+
+
+
+
+                                                                                                                           C
+
+
+                                 7-85
+
+
+
+
+                    DTIC
+                    mm.~iim~m~rnmii.h mm
+                                             A    A-.   A*..*   -   A~ A*7%~~~*
+                                                                                           - .-..
+                                                                                                          *   r-.
+                                                                                                                           H
+~**'**A~
+           ~   A.                      .1I~Ii~I   ~A7J* ~           h~. h7.ib~b~b~                                  A.
+                                                                                     A-A   A*    A~   ~       A '               *A~
+
