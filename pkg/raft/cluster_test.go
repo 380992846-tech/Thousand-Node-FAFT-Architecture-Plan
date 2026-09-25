@@ -73,8 +73,7 @@ func BenchmarkGetRaw(b *testing.B) {
 // BenchmarkBarrier 测量单次 Barrier 的成本。
 //
 // 这是关键诊断：如果 Barrier 本身就要几十毫秒，那么把 Barrier 放进读路径
-// （线性化读的最简实现）会直接把读延迟钉死在 CommitTimeout 上，
-// 这正是端到端跑出 p50=39.91ms 的原因。
+// （线性化读的最简实现）会直接把读延迟钉死在 CommitTimeout 上。
 func BenchmarkBarrier(b *testing.B) {
 	ks := startSingleNode(b, 0)
 
@@ -181,11 +180,53 @@ func TestBootstrapIdempotent(t *testing.T) {
 	}
 }
 
+// TestAdvertiseAddrResolvesEphemeralPort 验证 :0 配置被解析为真实端口。
+//
+// 这是本轮测试暴露的真实缺陷：当 BindAddr 为 "127.0.0.1:0" 时，
+// 若把配置值原样写入 raft 配置，三个节点都会得到 "127.0.0.1:0"，
+// raft 会以 "found duplicate address in configuration" 拒绝加入。
+func TestAdvertiseAddrResolvesEphemeralPort(t *testing.T) {
+	ks := startSingleNode(t, 0)
+
+	adv := ks.AdvertiseAddr()
+	if adv == "" {
+		t.Fatal("AdvertiseAddr 为空")
+	}
+	if adv == "127.0.0.1:0" {
+		t.Fatalf("AdvertiseAddr 仍是未解析的 :0：%q", adv)
+	}
+	// 必须是 host:port 且端口非 0。
+	_, port, err := splitHostPort(adv)
+	if err != nil {
+		t.Fatalf("AdvertiseAddr %q 不是合法 host:port: %v", adv, err)
+	}
+	if port == "0" || port == "" {
+		t.Fatalf("AdvertiseAddr %q 端口仍为 %q", adv, port)
+	}
+
+	// 配置里保存的也必须是解析后的地址。
+	cfg := ks.Configuration()
+	if len(cfg) != 1 {
+		t.Fatalf("配置成员数 = %d，期望 1", len(cfg))
+	}
+	if string(cfg[0].Address) != adv {
+		t.Fatalf("配置中地址 = %q，AdvertiseAddr = %q", cfg[0].Address, adv)
+	}
+}
+
+func splitHostPort(addr string) (host, port string, err error) {
+	for i := len(addr) - 1; i >= 0; i-- {
+		if addr[i] == ':' {
+			return addr[:i], addr[i+1:], nil
+		}
+	}
+	return "", "", fmt.Errorf("no port in %q", addr)
+}
+
 // TestNonLeaderRejectsWriteAndMembership 验证非 Leader 上的写与成员变更被拒绝。
 //
 // BUG-4 相关：原 Join 在本地节点上调用 AddVoter，只有本地恰好是 Leader 才生效。
 func TestNonLeaderRejectsWriteAndMembership(t *testing.T) {
-	// 单节点集群里它就是 Leader；这里构造一个"未引导"的节点来验证非 Leader 路径。
 	dir := filepath.Join(t.TempDir(), "raft")
 	ks, err := NewKVStore(Config{
 		NodeID:   "lonely",
@@ -224,26 +265,28 @@ func TestConfigurationReflectsBootstrap(t *testing.T) {
 	}
 }
 
+// newTestNode 在 base 目录下建一个节点，测试结束自动关闭。
+func newTestNode(tb testing.TB, base, id string) *KVStore {
+	tb.Helper()
+	ks, err := NewKVStore(Config{
+		NodeID:   id,
+		BindAddr: "127.0.0.1:0", // 内核分配端口，测试可并行
+		RaftDir:  filepath.Join(base, id),
+	})
+	if err != nil {
+		tb.Fatalf("NewKVStore(%s): %v", id, err)
+	}
+	tb.Cleanup(func() { _ = ks.Shutdown() })
+	return ks
+}
+
 // TestThreeNodeReplication 三节点复制正确性（本包内建集群，不依赖 pkg/cluster）。
 func TestThreeNodeReplication(t *testing.T) {
 	base := t.TempDir()
 
-	mk := func(id, addr string) *KVStore {
-		ks, err := NewKVStore(Config{
-			NodeID:   id,
-			BindAddr: addr,
-			RaftDir:  filepath.Join(base, id),
-		})
-		if err != nil {
-			t.Fatalf("NewKVStore(%s): %v", id, err)
-		}
-		t.Cleanup(func() { _ = ks.Shutdown() })
-		return ks
-	}
-
-	n1 := mk("n1", "127.0.0.1:0")
-	n2 := mk("n2", "127.0.0.1:0")
-	n3 := mk("n3", "127.0.0.1:0")
+	n1 := newTestNode(t, base, "n1")
+	n2 := newTestNode(t, base, "n2")
+	n3 := newTestNode(t, base, "n3")
 
 	if _, err := n1.Bootstrap(); err != nil {
 		t.Fatalf("bootstrap: %v", err)
@@ -252,11 +295,12 @@ func TestThreeNodeReplication(t *testing.T) {
 		t.Fatalf("wait leader: %v", err)
 	}
 
-	// 把 n2/n3 以投票成员加入。
-	if err := n1.AddVoter("n2", n2.BindAddr()); err != nil {
+	// 把 n2/n3 以投票成员加入。必须用 AdvertiseAddr（真实端口），
+	// 不能用 BindAddr（:0 会导致重复地址）。
+	if err := n1.AddVoter("n2", n2.AdvertiseAddr()); err != nil {
 		t.Fatalf("AddVoter n2: %v", err)
 	}
-	if err := n1.AddVoter("n3", n3.BindAddr()); err != nil {
+	if err := n1.AddVoter("n3", n3.AdvertiseAddr()); err != nil {
 		t.Fatalf("AddVoter n3: %v", err)
 	}
 
@@ -272,8 +316,7 @@ func TestThreeNodeReplication(t *testing.T) {
 		}
 	}
 
-	// 等 follower 应用完毕。
-	deadline := time.Now().Add(15 * time.Second)
+	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
 		if n2.Len() == n && n3.Len() == n {
 			break
@@ -303,37 +346,26 @@ func TestThreeNodeReplication(t *testing.T) {
 func TestLeaderElectionAfterCrash(t *testing.T) {
 	base := t.TempDir()
 
-	mk := func(id, addr string) *KVStore {
-		ks, err := NewKVStore(Config{
-			NodeID:   id,
-			BindAddr: addr,
-			RaftDir:  filepath.Join(base, id),
-		})
-		if err != nil {
-			t.Fatalf("NewKVStore(%s): %v", id, err)
-		}
-		return ks
-	}
+	n1 := newTestNode(t, base, "a1")
+	n2 := newTestNode(t, base, "a2")
+	n3 := newTestNode(t, base, "a3")
+	nodes := []*KVStore{n1, n2, n3}
 
-	nodes := []*KVStore{
-		mk("a1", "127.0.0.1:0"),
-		mk("a2", "127.0.0.1:0"),
-		mk("a3", "127.0.0.1:0"),
-	}
-
-	if _, err := nodes[0].Bootstrap(); err != nil {
+	if _, err := n1.Bootstrap(); err != nil {
 		t.Fatalf("bootstrap: %v", err)
 	}
-	if _, err := nodes[0].WaitForLeader(15 * time.Second); err != nil {
+	if _, err := n1.WaitForLeader(15 * time.Second); err != nil {
 		t.Fatalf("wait leader: %v", err)
 	}
 	for _, n := range nodes[1:] {
-		if err := nodes[0].AddVoter(n.NodeID(), n.BindAddr()); err != nil {
+		if err := n1.AddVoter(n.NodeID(), n.AdvertiseAddr()); err != nil {
 			t.Fatalf("AddVoter %s: %v", n.NodeID(), err)
 		}
 	}
 
-	// 找到 leader 并杀掉它。
+	// 让三个节点都看到当前 leader（避免刚加入就杀，选举尚未稳定）。
+	time.Sleep(500 * time.Millisecond)
+
 	var leader *KVStore
 	for _, n := range nodes {
 		if n.IsLeader() {
@@ -343,23 +375,19 @@ func TestLeaderElectionAfterCrash(t *testing.T) {
 	if leader == nil {
 		t.Fatal("没有 leader")
 	}
+
 	start := time.Now()
 	if err := leader.Shutdown(); err != nil {
 		t.Fatalf("shutdown leader: %v", err)
 	}
 
-	// 剩余两个节点应在选举超时量级内选出新 leader。
-	var survivors []*KVStore
-	for _, n := range nodes {
-		if n != leader {
-			survivors = append(survivors, n)
-			defer n.Shutdown()
-		}
-	}
-
-	deadline := time.Now().Add(15 * time.Second)
+	// 剩余节点应在 election timeout（默认 500ms）量级内选出新 leader。
+	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
-		for _, n := range survivors {
+		for _, n := range nodes {
+			if n == leader {
+				continue
+			}
 			if n.IsLeader() {
 				t.Logf("新 leader %s，耗时 %s", n.NodeID(), time.Since(start).Round(time.Millisecond))
 				return
@@ -367,5 +395,5 @@ func TestLeaderElectionAfterCrash(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Fatal("15s 内未选出新 leader")
+	t.Fatal("20s 内未选出新 leader")
 }

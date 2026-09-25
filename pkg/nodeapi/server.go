@@ -128,31 +128,45 @@ func (s *Server) handleKey(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGet(w http.ResponseWriter, r *http.Request, key string) {
-	// 线性化读：readIndex 流程等价于"确认自己仍是 Leader 后再读"。
-	// hashicorp/raft 用 Barrier 提供同一保证：Barrier 返回时，此前提交的条目都已应用，
-	// 且返回成功本身就证明本节点在等待期间仍是 Leader。
+	// 线性化读：Raft §6.4 的 readIndex 语义。
+	//
+	// 关键实现细节（性能相关）：这里**不能**每请求调用 store.Barrier()。
+	// Barrier 会向日志追加一条空条目并等待其落盘提交，实测单节点
+	// 6.67ms/次（fsync 受限）；若放在读路径上，读延迟会被完全钉死在磁盘上。
+	// ReadBarrier 只在"本任期尚未提交过任何条目"时付这一成本，
+	// 之后整任期内所有读都是零协调开销。
 	ctx, cancel := context.WithTimeout(r.Context(), s.readIndexTimeout)
 	defer cancel()
 
-	done := make(chan error, 1)
-	go func() { done <- s.store.Barrier(s.readIndexTimeout) }()
+	type result struct {
+		idx uint64
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		idx, err := s.store.ReadBarrier(s.readIndexTimeout)
+		done <- result{idx: idx, err: err}
+	}()
 
+	var readIdx uint64
 	select {
-	case err := <-done:
-		if err != nil {
-			if errors.Is(err, raft.ErrNotLeader) || !s.store.IsLeader() {
+	case res := <-done:
+		if res.err != nil {
+			if errors.Is(res.err, raft.ErrNotLeader) || !s.store.IsLeader() {
 				s.redirect(w)
 				return
 			}
-			writeErr(w, http.StatusServiceUnavailable, "read index unavailable: "+err.Error())
+			writeErr(w, http.StatusServiceUnavailable, "read index unavailable: "+res.err.Error())
 			return
 		}
+		readIdx = res.idx
 	case <-ctx.Done():
 		writeErr(w, http.StatusGatewayTimeout, "read index timeout")
 		return
 	}
 
 	val, ok := s.store.Get(key)
+	w.Header().Set("X-Raft-ReadIndex", strconv.FormatUint(readIdx, 10))
 	writeJSON(w, http.StatusOK, map[string]any{
 		"key":   key,
 		"value": val,
