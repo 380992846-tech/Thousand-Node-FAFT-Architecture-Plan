@@ -317,7 +317,9 @@ func (c *Config) withDefaults() Config {
 		out.ElectionTimeout = 500 * time.Millisecond
 	}
 	if out.LeaderLeaseTimeout == 0 {
-		out.LeaderLeaseTimeout = 250 * time.Millisecond
+		// Raft 的 leader lease 必须在 heartbeat 超时之前失效，否则 leader 会
+		// 在自己已经不再是 leader 之后仍以为持有租约。取 heartbeat 的一半。
+		out.LeaderLeaseTimeout = out.HeartbeatTimeout / 2
 	}
 	if out.CommitTimeout == 0 {
 		out.CommitTimeout = 20 * time.Millisecond
@@ -339,6 +341,18 @@ func (c *Config) withDefaults() Config {
 	}
 	if out.LogOutput == nil {
 		out.LogOutput = os.Stderr
+	}
+	// 强制不变量：election >= heartbeat >= leaderLease。
+	// 原实现在这里没有约束，用户可以配出"选举超时小于心跳超时"的组合，
+	// 结果是 follower 在 leader 还没来得及发心跳时就反复发起选举。
+	if out.ElectionTimeout < out.HeartbeatTimeout {
+		out.ElectionTimeout = out.HeartbeatTimeout
+	}
+	if out.LeaderLeaseTimeout > out.HeartbeatTimeout {
+		out.LeaderLeaseTimeout = out.HeartbeatTimeout / 2
+	}
+	if out.CommitTimeout > out.HeartbeatTimeout {
+		out.CommitTimeout = out.HeartbeatTimeout / 5
 	}
 	return out
 }
