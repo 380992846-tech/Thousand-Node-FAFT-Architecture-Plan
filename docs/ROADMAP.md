@@ -123,16 +123,22 @@
 用法：
 
 ```powershell
-pwsh -File scripts\bootstrap-go.ps1   # 一次性：装工具链 + 建联接
-pwsh -File build.ps1 tools            # 查看环境
-pwsh -File build.ps1 build            # go build -p 1 ./...
-pwsh -File build.ps1 vet
-pwsh -File build.ps1 test
-pwsh -File build.ps1 race             # 需要 C 编译器（当前缺失，见 V1）
-pwsh -File build.ps1 bench
+powershell -File scripts\bootstrap-go.ps1   # 一次性：装工具链 + 建联接
+powershell -File build.ps1 tools            # 查看环境
+powershell -File build.ps1 build            # go build -p 1 ./...
+powershell -File build.ps1 vet
+powershell -File build.ps1 test
+powershell -File build.ps1 race             # 需要 C 编译器（当前缺失，见 V1）
+powershell -File build.ps1 bench
 ```
 
-**注意**：编辑本仓库的 UTF-8 源文件时**不要用 PowerShell 的
+**注意 1（脚本编写）**：本仓库的 `.ps1` 脚本必须兼容 **Windows PowerShell 5.1**
+（本机默认 shell，没有 PowerShell 7）。踩过的三个语法坑：
+数组操作数不能在一条表达式里隐式拼接、函数参数名不能以 `args` 开头、
+**注释里不能出现反引号**（它是行续接符，在注释中会吞掉下一行并导致
+"Unexpected token '}'" 语法错）。详见 `build.ps1` 顶部注释。
+
+**注意 2（编辑源文件）**：编辑本仓库的 UTF-8 源文件时**不要用 PowerShell 的
 `Get-Content`/`Set-Content` 做替换** —— 它会把 UTF-8 当 GBK 读入再写回，
 产生乱码并把多行合并（本次开发中实际发生过两次）。
 请使用支持 UTF-8 的编辑器。
@@ -143,10 +149,10 @@ pwsh -File build.ps1 bench
 
 ```powershell
 # 1. 构建
-pwsh -File build.ps1 build
+powershell -File build.ps1 build
 
 # 2. 全量测试（含三副本复制、leader 故障重选）
-pwsh -File build.ps1 test
+powershell -File build.ps1 test
 
 # 3. 性能基准（分离状态机 / Raft 往返 / Barrier 成本）
 go test -p 1 -run '^$' -bench . -benchmem ./pkg/raft

@@ -1,15 +1,15 @@
-# scripts/git-push.ps1 — 把本地提交推到 GitHub（网络恢复后跑这个）
+﻿# scripts/git-push.ps1 — 把本地提交推到 GitHub（网络恢复后跑这个）
 #
 # 为什么单独写个脚本：
 #   本机 git 没有配置 credential helper，直接 push 会报
 #   "could not read Username for 'https://github.com'"。
 #   凭据其实存在 Windows 凭据管理器里（LegacyGeneric:target=git:https://github.com），
-#   但需要显式指定用户名才能命中。本脚本用 `git credential fill` 取出凭据，
+#   但需要显式指定用户名才能命中。本脚本用 git credential fill 取出凭据，
 #   通过 http.extraHeader 传递（凭据不写入 remote URL、不进 reflog、不落盘）。
 #
 # 用法：
-#   pwsh -File scripts\git-push.ps1
-#   pwsh -File scripts\git-push.ps1 -Message "自定义提交信息"   # 先提交再推
+#   powershell -File scripts\git-push.ps1
+#   powershell -File scripts\git-push.ps1 -Message "自定义提交信息"   # 先提交再推
 #
 # 网络不稳时它不会破坏本地状态：push 失败时本地提交依然完整。
 

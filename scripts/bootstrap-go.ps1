@@ -1,16 +1,20 @@
-# scripts/bootstrap-go.ps1 — 安装便携 Go 工具链并创建 ASCII 构建联接
+﻿# scripts/bootstrap-go.ps1 — 安装便携 Go 工具链并创建 ASCII 构建联接
 #
 # 本机原本没有 Go。本脚本做三件事，全部可逆、不改系统环境变量：
 #
 #   1. 下载官方 Go 压缩包到 D:\dsh-work\go（纯 ASCII 路径，刻意避开项目目录）
 #   2. 在 D:\dsh-work\raft1000 创建指向本仓库的目录联接（junction）
-#   3. 写入 .build 输出目录并自检一次 `go version`
+#   3. 写入 .build 输出目录并自检一次 go version
+#
+# 注意：本文件的注释里不能出现反引号 —— 它是 PowerShell 的行续接符，
+# 出现在注释中会把下一行吞掉并导致语法错误。代码中的续行反引号、
+# 以及字符串里的换行转义序列是合法的，必须保留。
 #
 # 为什么要这么做，见 build.ps1 顶部的"三个坑"说明。
 #
 # 用法：
-#   pwsh -File scripts/bootstrap-go.ps1
-#   pwsh -File scripts/bootstrap-go.ps1 -Version go1.24.6 -Force
+#   powershell -File scripts/bootstrap-go.ps1
+#   powershell -File scripts/bootstrap-go.ps1 -Version go1.24.6 -Force
 
 param(
   [string]$Version = 'go1.24.6',
@@ -120,8 +124,8 @@ if ($p.ExitCode -ne 0) {
 
 Write-Host ""
 Info "完成。现在可以运行："
-Write-Host "    pwsh -File build.ps1 build"
-Write-Host "    pwsh -File build.ps1 test"
-Write-Host "    pwsh -File build.ps1 bench"
+Write-Host "    powershell -File build.ps1 build"
+Write-Host "    powershell -File build.ps1 test"
+Write-Host "    powershell -File build.ps1 bench"
 Write-Host ""
 Warn "注意：所有 go 命令必须带 -p 1，否则会随机 0xc0000005 崩溃（详见 build.ps1 注释）。"
