@@ -268,23 +268,25 @@ func FormatTradeoff(pts []TradeoffPoint) string {
 // 模型：每个故障域以概率 p 独立整体失效。quorum 覆盖 d 个域时，
 // 只要有 d - tol 个域在线就能形成 quorum，因此
 //
-//	P[可用] = P[最多 tol 个域同时失效]
+//	P[可用] = P[最多 tol 个域失效] = P[至少 d-tol 个域在线]
 //
-// 注意这是**独立失效**假设；相关失效见 CorrelatedAvailability。
-// 在两个独立假设之间做对比本身就是论文的一个消融实验。
+// 与 AvailabilityAtReplicaLevel 的关系：在"每个域放一个副本、且域失效率
+// 等于副本失效率"的等价设定下，两者必须给出相同结果。测试
+// TestAvailabilityBoundConsistency 对这个恒等式做逐点校验。
+//
+// 实现上委托给 binomTail（failure.go）而非自己求和：
+// 同一段数学只保留一份实现，避免"修了一处漏了另一处"。
+// 参数 tol 是**容错度**（允许失效的域数），等价于要求至少 d-tol 个域在线，
+// 因此对应 binomTail 的 k = d-tol+1（见 AvailabilityAtReplicaLevel 的推导）。
 func AvailabilityBound(domainsInQuorum, tol int, p float64) float64 {
-	if p <= 0 {
+	if tol < 0 {
+		tol = 0
+	}
+	if tol >= domainsInQuorum {
+		// 允许全部域失效 => 必然可用（退化配置，仅用于边界检查）。
 		return 1
 	}
-	if p >= 1 {
-		return 0
-	}
-	// P[最多 tol 个失效] = Σ_{i=0}^{tol} C(d,i) p^i (1-p)^(d-i)
-	sum := 0.0
-	for i := 0; i <= tol && i <= domainsInQuorum; i++ {
-		sum += binom(domainsInQuorum, i) * math.Pow(p, float64(i)) * math.Pow(1-p, float64(domainsInQuorum-i))
-	}
-	return sum
+	return AvailabilityAtReplicaLevel(domainsInQuorum, domainsInQuorum-tol, p)
 }
 
 func binom(n, k int) float64 {
@@ -304,42 +306,33 @@ func binom(n, k int) float64 {
 // 因此无法区分"需要 6/1000 在线"与"需要 995/1000 在线"这两种天差地别的配置。
 // 必须回到副本粒度，用二项式尾部概率才能看出 Flexible Paxos 的真实代价。
 //
-// 模型：n 个副本各自以概率 p 独立失效（把域级相关性留给
-// CorrelatedAvailability 处理），quorum 大小为 q 时可用性为
+// 参数语义（这里连续踩过两次方向错误，务必看清）：
 //
-//	P[可用] = P[至少 q 个副本在线] = Σ_{i=q}^{n} C(n,i)(1-p)^i p^(n-i)
+//	n  副本总数
+//	q  形成 quorum 所需的**最少在线副本数**
+//	p  单个副本的**失效**概率（不是存活概率）
 //
-// 数值稳定性：n 很大时 (1-p)^n 会下溢，因此用对数域计算。
+// 令 X = 失效副本数 ~ Binomial(n, p)，存活副本数 = n - X。
+// "至少 q 个在线" 等价于 "至多 n-q 个失效"，即 P[X <= n-q]。
+//
+// 直接写 1 - binomTail(n, n-q+1, p) 在结果接近 1 时会因灾难性抵消而损失精度，
+// 因此改用等价形式：以存活概率 (1-p) 为参数的尾部
+//
+//	P[至少 q 个存活] = binomTail(n, q, 1-p)
+//
+// 两式的等价性由 P[X>=q] (X~Bin(n,1-p)) = P[Y<=n-q] (Y~Bin(n,p)) 保证。
+//
+// ⚠️ 两次踩过的坑（供后续维护者参考）：
+//   1. 写成 binomTail(n, q, p) —— 把 q 当成"失效数下界"，
+//      结果数据路径与控制路径的可用性完全颠倒
+//      （n=5,p=0.01,q=5 时该给 (1-p)^5=0.951，却算出 p^5=1e-10）。
+//   2. 写成 binomTail(n, n-q+1, p) —— 给的是 P[X>=n-q+1]，
+//      即"最多 q-1 个在线"，恰好是想要的反面
+//      （n=10,q=1 时应为 1-p^10，却算出 p^10）。
+// 由于 ComputeControlCost 是论文核心对比表的数据来源，这两次错误都会让
+// "|Q2| 缩小提升数据可用性、摧毁控制可用性"这个核心论断方向相反。
 func AvailabilityAtReplicaLevel(n, q int, p float64) float64 {
-	if q <= 0 {
-		return 1
-	}
-	if p <= 0 {
-		return 1
-	}
-	if q > n {
-		return 0
-	}
-	if p >= 1 {
-		return 0
-	}
-
-	logP := math.Log(p)
-	log1mP := math.Log(1 - p)
-	logSum := math.Inf(-1)
-	for i := q; i <= n; i++ {
-		// log C(n,i) + i*log(1-p) + (n-i)*log(p)
-		lt := logBinom(n, i) + float64(i)*log1mP + float64(n-i)*logP
-		logSum = logAdd(logSum, lt)
-	}
-	if math.IsInf(logSum, -1) {
-		return 0
-	}
-	v := math.Exp(logSum)
-	if v > 1 {
-		return 1
-	}
-	return v
+	return survivalProbability(n, q, p)
 }
 
 func logBinom(n, k int) float64 {
