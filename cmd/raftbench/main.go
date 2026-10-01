@@ -216,6 +216,9 @@ type buildOpts struct {
 	sigma   float64
 	seed    int64
 	payload int
+	// mae = MaxAppendEntries：每条 AppendEntries 最多带多少条日志。
+	// 0 表示用上游默认（64）。它决定复制追赶速度的上限 ≈ mae/delay。
+	mae int
 }
 
 func buildCluster(o buildOpts) (*cluster, error) {
@@ -268,7 +271,7 @@ func buildCluster(o buildOpts) (*cluster, error) {
 	configuration := fraft.Configuration{Servers: servers}
 
 	for _, nd := range cl.nodes {
-		cfg := newConfig(nd.id, q1, q2)
+		cfg := newConfig(nd.id, q1, q2, o.mae)
 		if err := fraft.BootstrapCluster(cfg, nd.store, nd.store, nd.snaps, nd.trans, configuration); err != nil {
 			cl.shutdown()
 			return nil, fmt.Errorf("引导 %s 失败: %w", nd.id, err)
@@ -277,7 +280,7 @@ func buildCluster(o buildOpts) (*cluster, error) {
 
 	// 4. 启动。
 	for _, nd := range cl.nodes {
-		cfg := newConfig(nd.id, q1, q2)
+		cfg := newConfig(nd.id, q1, q2, o.mae)
 		r, err := fraft.NewRaft(cfg, nd.fsm, nd.store, nd.store, nd.snaps, nd.trans)
 		if err != nil {
 			cl.shutdown()
@@ -288,7 +291,7 @@ func buildCluster(o buildOpts) (*cluster, error) {
 	return cl, nil
 }
 
-func newConfig(id fraft.ServerID, q1, q2 int) *fraft.Config {
+func newConfig(id fraft.ServerID, q1, q2, mae int) *fraft.Config {
 	cfg := fraft.DefaultConfig()
 	cfg.LocalID = id
 	cfg.HeartbeatTimeout = 50 * time.Millisecond
@@ -302,6 +305,15 @@ func newConfig(id fraft.ServerID, q1, q2 int) *fraft.Config {
 	cfg.LogLevel = "ERROR"
 	cfg.DataQuorumSize = q2
 	cfg.ElectionQuorumSize = q1
+	if mae > 0 {
+		// 每条 AppendEntries 最多携带多少条日志。上游默认 64。
+		//
+		// 这个值决定**复制的追赶速度上限**：每次都带满 mae 条，
+		// 每条 RPC 的往返是 delay，所以单个 follower 的复制吞吐上限
+		// ≈ mae / delay。|Q2| 变小让 leader 可以不等 follower，
+		// 但它产生日志的速度一旦超过这个上限，差额就只能在 leader 上堆积。
+		cfg.MaxAppendEntries = mae
+	}
 	return cfg
 }
 
@@ -363,6 +375,18 @@ type result struct {
 
 	// GCPercent 本轮的 GC 触发阈值（见 -gogc）。影响内存占用，不影响对照公平性。
 	GCPercent int `json:"gc_percent"`
+
+	// MaxAppendEntries 生效值（0 时是上游默认 64）。
+	MaxAppendEntries int `json:"max_append_entries"`
+
+	// ReplicationCeilingOps 单个 follower 的复制追赶速度上限估计 ≈ mae / 注入延迟。
+	// 注入延迟为 0 时该估计无意义（返回 0）。
+	//
+	// 这个数是本组实验最有用的一条"可行性条件"：|Q2| 变小把 leader 从
+	// 等待 follower 中解放出来，但 follower 仍要以某个速率收日志。
+	// 一旦 leader 的产生速率超过这个上限，差额就只能在 leader 上堆积，
+	// 表现为 runs[].replication_gap_entries 一路上涨。
+	ReplicationCeilingOps float64 `json:"replication_ceiling_ops_per_sec"`
 
 	// 各轮实测 p50 的最小值，用于判断延迟是否真的高过时钟地板。
 	ObservedP50Ms float64 `json:"observed_p50_ms"`
@@ -426,6 +450,8 @@ func main() {
 	settle := flag.Duration("settle", 60*time.Second, "测量结束后等各节点追平的最长时间（|Q2| 变小时 follower 会明显落后）")
 	gogc := flag.Int("gogc", 400, "GC 触发百分比。InmemStore 不截断日志，一轮测量会留下几十万个活跃 Log；"+
 		"默认 GOGC=100 会让 GC 频繁扫描它们，把噪声打进吞吐。设 -1 关闭 GC（内存换稳定）")
+	mae := flag.Int("mae", 0, "MaxAppendEntries：每条 AppendEntries 最多带几条日志（0 = 上游默认 64）。"+
+		"它决定单个 follower 的复制追赶上限 ≈ mae/注入延迟")
 	flag.Parse()
 
 	// 本机噪声本来就大（同一段忙循环十次测量差 ±40%），再叠加 GC 就是双重噪声。
@@ -448,19 +474,19 @@ func main() {
 	switch *mode {
 	case "bench":
 		res, err = runBench(benchOpts{
-			buildOpts: buildOpts{n: *n, q1: *q1, q2: *q2, delay: *delay, sigma: *sigma, seed: *seed, payload: *payload},
+			buildOpts: buildOpts{n: *n, q1: *q1, q2: *q2, delay: *delay, sigma: *sigma, seed: *seed, payload: *payload, mae: *mae},
 			label:     *label, ops: *ops, conc: *conc, warmup: *warmup, repeat: *repeat,
 			duration: *duration, timeout: *timeout, electTimeout: *electTimeout,
 			settle: *settle, dump: *dump, clockFloor: floor, gogc: *gogc,
 		})
 	case "avail":
 		res, err = runAvail(availOpts{
-			buildOpts: buildOpts{n: *n, q1: *q1, q2: *q2, delay: *delay, sigma: *sigma, seed: *seed, payload: *payload},
+			buildOpts: buildOpts{n: *n, q1: *q1, q2: *q2, delay: *delay, sigma: *sigma, seed: *seed, payload: *payload, mae: *mae},
 			label:     *label, trials: *trials, kill: *kill, electTimeout: *electTimeout, clockFloor: floor,
 		})
 	case "lag":
 		res, err = runLag(lagOpts{
-			buildOpts:    buildOpts{n: *n, q1: *q1, q2: *q2, delay: *delay, sigma: *sigma, seed: *seed, payload: *payload},
+			buildOpts:    buildOpts{n: *n, q1: *q1, q2: *q2, delay: *delay, sigma: *sigma, seed: *seed, payload: *payload, mae: *mae},
 			label:        *label,
 			samples:      *lagOps,
 			timeout:      *timeout,
@@ -484,7 +510,7 @@ func main() {
 		err = runSweep(sweepOpts{
 			out: *out, n: *n, ops: *ops, conc: *conc, payload: *payload, warmup: *warmup,
 			repeat: *repeat, duration: *duration, timeout: *timeout, electTimeout: *electTimeout,
-			seed: *seed, sigma: *sigma, delays: ds, clockFloor: floor, settle: *settle, gogc: *gogc,
+			seed: *seed, sigma: *sigma, delays: ds, clockFloor: floor, settle: *settle, gogc: *gogc, mae: *mae,
 		})
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "sweep 失败:", err)
@@ -746,6 +772,17 @@ func assembleResult(cl *cluster, runs []runStats, o benchOpts) *result {
 		GCPercent:           o.gogc,
 		Runs:                runs,
 	}
+	// MaxAppendEntries 生效值：未设时是上游默认 64。
+	res.MaxAppendEntries = o.mae
+	if res.MaxAppendEntries <= 0 {
+		res.MaxAppendEntries = 64
+	}
+	// 单个 follower 的复制追赶上限 ≈ mae / 延迟（延迟为 0 时无意义）。
+	// 这不是精确模型（还取决于 pipeline 深度、批次是否装满），
+	// 但量级对得上就足够判断"leader 是否跑赢了复制"。
+	if o.delay > 0 {
+		res.ReplicationCeilingOps = float64(res.MaxAppendEntries) / o.delay.Seconds()
+	}
 	if res.Label == "" {
 		res.Label = fmt.Sprintf("raftbench-n%d-q1%d-q2%d-d%v", o.n, cl.q1, cl.q2, o.delay)
 	}
@@ -804,6 +841,26 @@ func assembleResult(cl *cluster, runs []runStats, o benchOpts) *result {
 		res.Notes = append(res.Notes,
 			"本轮注入延迟为 0：这是**纯内存介质**的对照组。介质里没有网络等待，"+
 				"因此 |Q2| 变小应当几乎没有收益 —— 这正是用来证伪「收益来自实现差异」的对照条件。")
+	}
+	// 复制可行性检查：|Q2| 变小的收益只在复制跟得上时才成立。
+	if res.ReplicationCeilingOps > 0 && len(runs) > 0 {
+		gapMax := uint64(0)
+		for _, r := range runs {
+			if r.ReplicationGapMax > gapMax {
+				gapMax = r.ReplicationGapMax
+			}
+		}
+		res.Notes = append(res.Notes,
+			fmt.Sprintf("复制追赶上限估计 = MaxAppendEntries(%d) / 注入延迟(%v) ≈ %.0f ops/s（单个 follower）。"+
+				"本轮实测吞吐 %.0f ops/s，窗口末最大落后 %d 条。",
+				res.MaxAppendEntries, o.delay, res.ReplicationCeilingOps, res.Throughput, gapMax))
+		if res.Throughput > res.ReplicationCeilingOps {
+			res.Notes = append(res.Notes,
+				fmt.Sprintf("⚠️ 实测吞吐超过复制追赶上限：**落后量会无界累积**。"+
+					"这不是「更快」，是「欠债」—— 差额全压在 leader 的日志上。"+
+					"要让 |Q2| 的收益真正成立，需要提高 -mae（批更多）或降低目标速率。"),
+			)
+		}
 	}
 	if len(runs) > 0 {
 		lo, hi := 1.0, 0.0
@@ -1164,6 +1221,7 @@ type sweepOpts struct {
 	clockFloor   time.Duration
 	settle       time.Duration
 	gogc         int
+	mae          int
 }
 
 // configs 生成满足 |Q1|+|Q2| > n 的 (Q1,Q2) 组合。
@@ -1210,7 +1268,7 @@ func runSweep(o sweepOpts) error {
 		progress("=== 注入延迟 %v ===", d)
 		for _, cfg := range cfgs {
 			r, err := runBench(benchOpts{
-				buildOpts:    buildOpts{n: o.n, q1: cfg[0], q2: cfg[1], delay: d, sigma: o.sigma, seed: o.seed, payload: o.payload},
+				buildOpts:    buildOpts{n: o.n, q1: cfg[0], q2: cfg[1], delay: d, sigma: o.sigma, seed: o.seed, payload: o.payload, mae: o.mae},
 				ops:          o.ops,
 				conc:         o.conc,
 				warmup:       o.warmup,

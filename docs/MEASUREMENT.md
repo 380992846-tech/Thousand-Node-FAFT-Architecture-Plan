@@ -334,6 +334,49 @@ n=9 时 0.06），不增加关键路径长度。
 （§4.1 的时钟跳变与 ±40% 的忙循环波动），不是 GC。
 所以本机数字的上限就是"报区间 + 看单调趋势"。
 
+### 5.6 `|Q2|` 变小的**可行性条件**：`MaxAppendEntries`
+
+§5.3 发现 `|Q2|=1` 时 leader 的复制落后量会无界累积。这一节把它从"警告"
+变成**可操作的设计规则**。
+
+控制手段是 `Config.MaxAppendEntries`（每条 `AppendEntries` 最多携带多少条
+日志，上游默认 **64**）。直觉是：每次带得多，所需的 RPC 次数就少，
+follower 就越容易跟上。
+
+实验：n=5、`|Q2|=1`、`|Q1|=5`、注入延迟 5ms、512 并发、每轮 2s、4 轮。
+落后量 = `runs[].replication_gap_entries`。
+
+| MaxAppendEntries | 简单上限估计 `mae/delay` | 实测吞吐 | 4 轮窗口末落后量 | 形态 |
+|---|---|---|---|---|
+| **64**（上游默认） | 12,800 | 150,090 | 11,430 / 18,310 / 36,614 / 43,206 | **单调增长** |
+| 128 | 25,600 | 166,462 | 4,444 / 2,448 / 36,169 / 28,041 | 不稳定 |
+| **256** | 51,200 | 174,201 | 2,827 / 2,399 / 3,350 / 3,978 | **稳定有界** |
+| 512 | 102,400 | 171,540 | 2,297 / 3,560 / 2,555 / 3,165 | 稳定有界 |
+| 1024 | 204,800 | 166,383 | 2,750 / 2,275 / 2,478 / 3,283 | 稳定有界 |
+
+**结论**：
+
+1. **吞吐几乎不变**（150k–174k，落在噪声内）—— 也就是说
+   把 `MaxAppendEntries` 从 64 提到 256 是**零成本**的。
+2. **落后量差 10 倍以上**，而且形态完全不同：默认值下是**单调增长**
+   （欠债越滚越大），提到 256 之后变成**稳定有界**（约 2.5k–4k 条）。
+3. 转折点在 128 与 256 之间。
+
+> **所以「`|Q2|` 变小换吞吐」的正确表述是**：
+> 收益成立的前提是**复制仍能跟上**；而"能不能跟上"是一个**可调**的量 ——
+> 把 `MaxAppendEntries` 提到目标速率所需的水位即可，代价为零。
+> 这一条应当作为 FAFT 求解器的一条**约束**写进可行性判断：
+> 选了小的 `|Q2|`，就必须同时选够 `MaxAppendEntries`（或接受受控的落后上界）。
+>
+> 上游默认 64 在这个速率下**不够** —— 这是一个真实的、可复现的部署陷阱。
+
+**关于 `mae/delay` 这个简单模型**：它假设每个 RTT 只有一条 RPC 在途，
+所以是**保守下界**。实测转折点（256，估计上限 51k）低于实测吞吐（174k），
+说明实际有效在途深度约 3–4（受 `inmemPipeline` 的 `doneCh`/`inprogressCh`/
+`consumerCh` 三个容量 16 的 channel 与串行 `decodeResponses` 限制）。
+论文里不应把 `mae/delay` 当精确容量模型用；它的价值在于**指出控制变量**。
+
+
 ---
 
 ## 6. 复现命令
@@ -347,7 +390,13 @@ powershell -ExecutionPolicy Bypass -File scripts\run-raftbench.ps1
 
 # 单独跑一组
 bin\raftbench.exe -mode bench -n 5 -q1 3 -q2 3 -delay 2ms `
-    -ops 200000 -warmup 2000 -concurrency 512 -repeat 3 -duration 2s
+    -ops 200000 -warmup 2000 -concurrency 512 -repeat 5 -duration 2s
+
+# §5.6 的可行性条件扫描（|Q2|=1 时 MaxAppendEntries 的转折点）
+foreach ($mae in 64,128,256,512,1024) {
+  bin\raftbench.exe -mode bench -n 5 -q1 5 -q2 1 -delay 5ms -mae $mae `
+      -ops 200000 -warmup 2000 -concurrency 512 -repeat 4 -duration 2s
+}
 
 # FAFT 的解析结果（ANALYSIS 级）
 go run ./cmd/faftbench cost
@@ -381,4 +430,4 @@ go run ./cmd/kvbench -spec 2x3 -duration 10s -warmup 3s -concurrency 32
 | 跨分片（Multi-Raft）下的 quorum 几何 | raftbench 是单分片；FAFT 的核心主张是分片间共享故障域，端到端部分只有 2 分片 |
 | 客户端视角的尾延迟在故障切换期间 | 只测了稳态窗口 |
 | 分区（asymmetric partition）下的行为 | 注入的是延迟，不是分区 |
-| `\|Q2\|` 变小的**故障恢复时长** | 已测「提交瞬间有几个副本有数据」（§5.3），但没测「leader 挂掉后新 leader 要多久补齐」；§5.3 的数据可以直接用作该问题分析的输入 |
+| `MaxAppendEntries` 转折点的**解析**模型 | §5.6 给出了实测转折点（128↔256）与控制变量，但精确容量模型还缺 —— `mae/delay` 是保守下界，实测有效在途深度约 3–4，这个数依赖具体实现（`inmemPipeline` 的三个 cap=16 channel），不能外推到其他实现 |

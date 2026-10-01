@@ -138,16 +138,18 @@ func EvidenceManifest() []Claim {
 				"必须报区间与趋势方向",
 		},
 		{
-			Statement: "|Q2| 小于多数时 leader 的日志会**无界**领先于复制：" +
-				"|Q2|=1 时 2s 窗口末落后 3.4 万–9.6 万条，|Q2|>=多数时只有千条量级",
+			Statement: "|Q2| 变小的可行性条件是可调且零成本的：把 MaxAppendEntries 从上游默认 64 " +
+				"提到 256，落后量从单调增长（1.1 万→4.3 万条）变成稳定有界（约 2.5k–4k 条），" +
+				"而吞吐不变（150k–174k ops/s，落在噪声内）",
 			Evidence: EvidenceMeasured,
-			Where:    "cmd/raftbench -> results/raftbench-sweep-n5.json 的 runs[].replication_gap_entries",
-			CanClaim: "|Q2| 变小的收益**有前提**：复制必须跟得上。" +
-				"复制循环每次 AppendEntries 最多带 MaxAppendEntries（默认 64）条，" +
-				"跟不上 leader 产生日志的速度时，多出来的只能在 leader 上堆积",
-			CannotClaim: "具体到某个生产配置的堆积速率 —— 本机是 in-memory 日志，" +
-				"真实磁盘下 leader 自身会被 fsync 拖慢，堆积会更慢；" +
-				"但「收益有前提」这一定性结论不依赖介质",
+			Where:    "cmd/raftbench -mae -> results/raftbench-mae-*.json（MEASUREMENT.md §5.6）",
+			CanClaim: "「小 |Q2| 的收益有前提」这条限制是**可消除**的：" +
+				"控制变量是 MaxAppendEntries，实测转折点在 128 与 256 之间，" +
+				"提高它不牺牲吞吐。因此 FAFT 求解器应把它作为一条约束" +
+				"（选了小的 |Q2| 就必须同时选够 MaxAppendEntries）",
+			CannotClaim: "精确的容量模型 —— 简单估计 MaxAppendEntries/延迟 是保守下界" +
+				"（它假设每 RTT 只有一条 RPC 在途）；实测有效在途深度约 3–4，" +
+				"而这个数依赖 inmemPipeline 的实现细节，不能外推到其他实现",
 		},
 		{
 			Statement: "|Q2| 就是「Apply 返回成功那一刻日志所在副本数」的严格下界：" +
