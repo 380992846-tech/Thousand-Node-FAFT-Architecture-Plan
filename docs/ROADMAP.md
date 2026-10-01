@@ -24,7 +24,9 @@
 - `POST /join` —— 由 Leader 处理成员入组（修复 BUG-4 的错误语义）
 - `GET /healthz`、`GET /raft/stats`、`/metrics`
 
-### 1.3 性能优化（读延迟降约 10 倍）
+### 1.3 性能优化
+
+#### 1.3.1 读路径：readIndex 语义（读延迟降约 10 倍）
 
 | 指标 | 优化前 | 优化后 |
 |---|---|---|
@@ -35,6 +37,45 @@
 手段：实现 Raft §6.4 的 readIndex 语义（`ReadBarrier`），
 避免在每个读请求上做一次会落盘的 `Barrier`。
 **不引入任何时钟假设** —— 这是唯一零时钟假设的线性化读路径。
+
+#### 1.3.2 写路径：批处理（put p50 降约 5.6 倍）
+
+**问题定位**（用基准把瓶颈从"提交超时"里分离出来）：
+
+```
+BenchmarkGetRaw                 578 ns/op      ← 状态机本身极快
+BenchmarkSet              5,447,163 ns/op
+BenchmarkBarrier          6,672,332 ns/op
+BenchmarkBarrierVsCommitTimeout: commit=1ms/5ms/20ms → 5.72/6.46/5.87 ms
+```
+
+`CommitTimeout` 从 1ms 调到 20ms 数字纹丝不动 ⇒ **瓶颈是 fsync，不是提交超时**。
+用 `pkg/model` 复算：`b=1, t_fsync≈5.4ms → 185 ops/s`，与实测 ~184 ops/s 一致。
+
+**手段**：把多条客户端命令装进**一条 Raft 日志条目**（`opBatch`），
+每批只付一次 fsync。实测摊薄倍数 **9.9 命令/fsync**。
+
+**关键设计决定 —— 孤条目快路径**：若单条命令也硬等攒批窗口，
+轻载下每条写要多付一个窗口的延迟而摊薄为零。实测（batch=8, wait=2ms, 串行）：
+
+| 配置 | 串行延迟 |
+|---|---|
+| 关闭批处理 | 8.09 ms/op |
+| 开启批处理（无快路径） | **11.47 ms/op** ← 纯倒贴 |
+| 开启批处理（有快路径） | 8.40 ms/op（与基线同量级） |
+
+**端到端实测**（2 分片 × 3 副本，32 并发，读占比 0.1，10s）：
+
+| 指标 | 批处理前 | 批处理后 |
+|---|---|---|
+| put p50 | 99.24 ms | **17.72 ms** |
+| put p99 | 223.52 ms | **22.92 ms** |
+| throughput | ~2,014 ops/s | 2,105 ops/s |
+
+**诚实说明**：批处理的收益来自**并发摊薄**，不是无条件加速。
+串行场景不应期待收益（实测同量级）。此外本机 fsync 波动较大
+（同一配置不同轮次 4.6~8.1 ms/op），因此**绝对数字不可跨轮次比较**，
+只能看同一轮内的相对关系。跨机器可比数据必须固定环境后重测。
 
 ### 1.4 实验基础设施
 
@@ -63,32 +104,55 @@
 
 ### P0 · 阻塞论文的问题
 
-| # | 任务 | 为什么阻塞 | 预估 |
-|---|---|---|---|
-| 1 | **写路径批处理** | 实测 `put p50 = 99.24ms`，受单批 fsync 限制。写密集场景的数字目前没有可比性 | 1–2 周 |
-| 2 | **相关故障下的联合优化** | 当前 `pkg/faft` 只做独立域失效假设。而实测表明相关失效**主导**可用性 | 2–3 周 |
-| 3 | **离散事件模拟器** | RQ3 需要外推到 1000 节点，必须有校准曲线与偏离点披露 | 3–4 周 |
-| 4 | **Baseline 重实现** | FlexiRaft (CIDR'23) / Orca (PVLDB'26) / TiKV PD 启发式。无论文代码则需重实现并披露差距 | 4–6 周 |
+| # | 任务 | 状态 |
+|---|---|---|
+| 1 | ~~写路径批处理~~ | ✅ **已完成**（见 §1.3.2）。put p50 99.24ms → 17.72ms |
+| 2 | 相关故障下的**联合优化** | 🟡 **模型已完成**（`IndependentFailure` / `CorrelatedFailure` / `HierarchicalFailure` + `QuorumAvailability`）。**尚未接入 `Solve()` 作为优化目标** —— 当前求解器仍按域覆盖贪心，未以相关故障下的 quorum 可用性为准则 |
+| 3 | **离散事件模拟器** | ❌ 未开始。RQ3 需要外推到 1000 节点，必须有校准曲线与偏离点披露 |
+| 4 | **Baseline 重实现** | ❌ 未开始。FlexiRaft (CIDR'23) / Orca (PVLDB'26) / TiKV PD 启发式 |
+| 5 | 真实 etcd 端到端 | ❌ 未开始（见 V2） |
 
 ### P1 · 论文需要
 
 | # | 任务 | 说明 |
 |---|---|---|
-| 5 | 分片分裂 / 合并 | 目前 `SplitKeySpace` 只在启动时静态切分 |
-| 6 | Leader 均衡调度 | Leader 分布依赖随机选举，无均衡 |
-| 7 | 热点检测 | TiKV 的 `balance-hot-region` 无对应实现 |
-| 8 | 真实多机实验 | 至少 5 机 × 3 域的跨域 RTT 数据 |
-| 9 | `pkg/bench` / `pkg/model` / `pkg/faft` 单元测试 | 目前 `[no test files]`，而它们的输出会进论文表格 |
+| 6 | 分片分裂 / 合并 | 目前 `SplitKeySpace` 只在启动时静态切分 |
+| 7 | Leader 均衡调度 | Leader 分布依赖随机选举，无均衡 |
+| 8 | 热点检测 | TiKV 的 `balance-hot-region` 无对应实现 |
+| 9 | 真实多机实验 | 至少 5 机 × 3 域的跨域 RTT 数据 |
+| 10 | ~~`pkg/bench` / `pkg/model` / `pkg/faft` 单元测试~~ | ✅ **已完成**。补测试过程中查出 6 处真实缺陷（见下） |
 
 ### P2 · 工程完善
 
 | # | 任务 |
 |---|---|
-| 10 | read-index 批量合并（当前每个读 goroutine 一次原子读） |
-| 11 | 路由层统计接入 Prometheus（当前只有 JSON 端点） |
-| 12 | 优雅下线 / drain 流程 |
-| 13 | `scripts/*.sh` 在 Windows 下无验证，需重写或标注 |
-| 14 | 架构决策记录（ADR） |
+| 11 | read-index 批量合并（当前每个读 goroutine 一次原子读） |
+| 12 | 路由层统计接入 Prometheus（当前只有 JSON 端点） |
+| 13 | 优雅下线 / drain 流程 |
+| 14 | `scripts/*.sh` 在 Windows 下无验证，需重写或标注 |
+| 15 | 架构决策记录（ADR） |
+
+### 补测试过程中查出的真实缺陷（6 处）
+
+这些缺陷此前都不会被现有测试发现，因为那些包根本没有测试。
+
+| # | 位置 | 缺陷 | 影响 |
+|---|---|---|---|
+| 1 | `pkg/bench/histogram.go` | `Percentile` 返回的桶上界**可能超过实测最大值** | 实测 p99.9=1.0034ms > max=1.0000ms，物理上不可能，破坏分位数单调性，会让论文表格自相矛盾 |
+| 2 | `pkg/model/model.go` | `OversizingFactor` 用 `(n-1)/2` 当容错目标 | n=1000 时算出 501/500 = 1.00，毫无意义；正确应相对 f=5 得 **83.5**。这是论文动机的核心数字 |
+| 3 | `pkg/bench/runner.go` | 预热阶段无操作数上界 | 零成本执行器上 300ms 跑出 658,514 次调用，白烧 CPU |
+| 4 | `pkg/faft/failure.go` | `binomTail` 朴素求和在 `i≈np` 处**下溢** | `binomTail(10,1,0.1)` 返回 1e-10，正确值是 0.6513215599 |
+| 5 | `pkg/faft/analysis.go` | `AvailabilityAtReplicaLevel` 参数方向反了 | 算的是 `P[最多 n-q 存活]` 而非 `P[至少 q 存活]` |
+| 6 | `pkg/faft/analysis.go` | 同一段二项式数学存在**两份实现** | 修了 `failure.go` 的 `binomTail` 却漏了 `analysis.go` 的副本，症状是"看起来修好了但数字没变" |
+
+> ⚠️ **缺陷 4 与 5 会互相抵消**：错误 4 让 `binomTail(n,q,p)` 静默返回
+> `P[X ≤ n-q]`，而这恰好是错误 5 想要的表达式。两条错误一路相抵，
+> 最终数字大致正确 —— 因此**长期未被任何人发现**。
+> 修正后 n=1000、p=1e-4 的输出与修正前完全一致。
+>
+> 教训：**"数字看起来合理"绝不等于实现正确。** 唯一防线是
+> 独立参照实现（`tailPMF`，用解析上尾视角）逐点交叉验证，
+> 加上硬编码已知值的回归测试（`TestAvailabilityRegressionKnownValues`）。
 
 ---
 
@@ -96,7 +160,7 @@
 
 | # | 缺口 | 影响 | 补齐方式 |
 |---|---|---|---|
-| V1 | **`go test -race` 未执行** | BUG-1 的修复缺独立验证。本机无 C 编译器（无 gcc/clang/MSVC），`-race` 需要 cgo | 装 TDM-GCC 或 MSVC Build Tools 后 `pwsh -File build.ps1 race` |
+| V1 | **`go test -race` 未执行** | BUG-1 的修复缺独立验证。本机无 C 编译器（无 gcc/clang/MSVC），`-race` 需要 cgo | 装 TDM-GCC 或 MSVC Build Tools 后 `powershell -File build.ps1 race` |
 | V2 | **etcd 集成路径未跑通** | `pkg/metadata` 单元测试全部基于 `LocalTopology`；`ClusterTopology` 的 watcher / 事务 / `Ping` 只有静态审查 | 起一个 etcd，跑端到端 |
 | V3 | **1000 节点未实测** | `pkg/model` 与 `pkg/faft` 的数字全是解析预测。端到端实测停在 2 分片 × 3 副本 = 6 副本 | 模拟器 + 校准，或真实大规模集群 |
 | V4 | **单机多进程不代表真实部署** | 无真实网络分区、共享 CPU/页面缓存/磁盘、无真实跨域 RTT | 补一组真实多机实验 |

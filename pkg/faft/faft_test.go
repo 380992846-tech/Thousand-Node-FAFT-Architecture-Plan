@@ -660,6 +660,122 @@ func TestQuorumAvailabilityNil(t *testing.T) {
 // 数值工具
 // ---------------------------------------------------------------------------
 
+// TestAvailabilityRegressionKnownValues 用硬编码的已知值锁死可用性计算。
+//
+// 存在的理由：本项目曾出现过两个**互相抵消**的错误 ——
+//   (1) binomTail 的朴素求和在 i≈np 处下溢，静默返回错误值；
+//   (2) AvailabilityAtReplicaLevel 的参数方向反了，算的是"至多 n-q 个存活"。
+// 两者相抵，最终数字大致正确，因此长期未被发现。
+//
+// 这类错误的唯一防线是**独立推导的已知值**：下面的期望值全部用
+// 闭式或手算得到，与被测实现的任何内部结构无关。
+func TestAvailabilityRegressionKnownValues(t *testing.T) {
+	cases := []struct {
+		name       string
+		n, q       int
+		p          float64
+		want       float64
+		derivation string
+	}{
+		{
+			name: "q=n 要求全部在线",
+			n:    10, q: 10, p: 0.1,
+			want:       math.Pow(0.9, 10),
+			derivation: "(1-p)^n：零个副本失效",
+		},
+		{
+			name: "q=1 只要一个在线",
+			n:    10, q: 1, p: 0.1,
+			want:       1 - math.Pow(0.1, 10),
+			derivation: "1-p^n：排除全部失效",
+		},
+		{
+			name: "n=5 q=5 单域小规模",
+			n:    5, q: 5, p: 0.01,
+			want:       math.Pow(0.99, 5),
+			derivation: "(1-p)^n",
+		},
+		{
+			name: "n=5 q=3 需多数",
+			n:    5, q: 3, p: 0.01,
+			want: 10*math.Pow(0.99, 3)*math.Pow(0.01, 2) +
+				5*math.Pow(0.99, 4)*0.01 + math.Pow(0.99, 5),
+			derivation: "手算三项和 = 0.9999901494",
+		},
+		{
+			name: "n=1000 q=999 需几乎全部在线",
+			n:    1000, q: 999, p: 1e-4,
+			want:       math.Pow(1-1e-4, 1000) + 1000*1e-4*math.Pow(1-1e-4, 999),
+			derivation: "P[至多 1 个失效] 闭式 = 0.9953213...（docs/DESIGN.md 引用值）",
+		},
+	}
+
+	for _, c := range cases {
+		got := AvailabilityAtReplicaLevel(c.n, c.q, c.p)
+		scale := math.Max(math.Abs(got), math.Abs(c.want))
+		if scale < 1e-300 {
+			scale = 1
+		}
+		if math.Abs(got-c.want)/scale > 1e-12 {
+			t.Errorf("%s: n=%d q=%d p=%g\n  得到 %.15g\n  期望 %.15g\n  推导 %s",
+				c.name, c.n, c.q, c.p, got, c.want, c.derivation)
+		}
+		t.Logf("%-30s n=%4d q=%4d p=%-8g -> %.12g", c.name, c.n, c.q, c.p, got)
+	}
+}
+
+// TestBinomTailRegressionKnownValues 锁死 binomTail 本身。
+//
+// 重点是 k 落在 n*p 附近的情形 —— 那正是朴素求和在 i≈np 处下溢的区间。
+func TestBinomTailRegressionKnownValues(t *testing.T) {
+	type c struct {
+		n, k int
+		p    float64
+		want float64
+		note string
+	}
+	cases := []c{
+		{10, 1, 0.1, 1 - math.Pow(0.9, 10), "k=1，项数多"},
+		{10, 10, 0.1, math.Pow(0.1, 10), "k=n"},
+		{10, 0, 0.1, 1, "k=0 恒为 1"},
+		{10, 11, 0.1, 0, "k>n"},
+		{10, 2, 0.1, 1 - math.Pow(0.9, 10) - 10*0.1*math.Pow(0.9, 9), "k=2，紧邻均值 np=1"},
+	}
+	for _, cc := range cases {
+		got := binomTail(cc.n, cc.k, cc.p)
+		scale := math.Max(math.Abs(got), math.Abs(cc.want))
+		if scale < 1e-300 {
+			scale = 1
+		}
+		if math.Abs(got-cc.want)/scale > 1e-12 {
+			t.Errorf("binomTail(%d,%d,%g) = %.15g，期望 %.15g（%s）",
+				cc.n, cc.k, cc.p, got, cc.want, cc.note)
+		}
+		t.Logf("binomTail(%4d,%4d,%-6g) = %.12g  (%s)", cc.n, cc.k, cc.p, got, cc.note)
+	}
+
+	// 大 n、k 在均值附近：中心极限定理下尾部应约 0.5。
+	if got := binomTail(1000, 100, 0.1); math.Abs(got-0.5) > 0.05 {
+		t.Errorf("binomTail(1000,100,0.1) = %.6g，均值点附近应在 0.5±0.05", got)
+	} else {
+		t.Logf("binomTail(1000, 100, 0.1) = %.6g（均值点，约 0.5）", got)
+	}
+
+	// 归一化：由相邻尾部之差重建的 PMF 之和必须为 1。
+	const n, p = 20, 0.3
+	if got := binomTail(n, 0, p); got != 1 {
+		t.Errorf("binomTail(n,0,p) = %v，期望 1", got)
+	}
+	sum := 0.0
+	for k := 0; k < n; k++ {
+		sum += binomTail(n, k, p) - binomTail(n, k+1, p)
+	}
+	sum += binomTail(n, n, p)
+	if math.Abs(sum-1) > 1e-12 {
+		t.Errorf("由相邻尾部差重建的 PMF 之和 = %.15g，期望 1", sum)
+	}
+}
+
 // tailPMF 返回 P[X > m]，X ~ Binomial(n, failProb)，用**解析的上尾**
 // 在 log 空间逐项累加。
 //
