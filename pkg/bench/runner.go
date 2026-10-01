@@ -48,6 +48,8 @@ type Config struct {
 	Ops int
 	// Warmup 预热时长。
 	Warmup time.Duration
+	// WarmupOps 预热阶段的操作数上限；0 表示只按 Warmup 时长。
+	WarmupOps int
 
 	// Endpoints 数据面地址（router 或某个节点）。
 	Endpoints []string
@@ -191,11 +193,15 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 	started := time.Now()
 
 	// 1. 预热。
+	//
+	// 预热阶段同样受 WarmupOps 约束（若配置了）。不设上界时，
+	// 在一个"零成本"的执行器上 300ms 可以跑出 65 万次调用
+	// （本包测试中实测），会白白烧 CPU 并把页面缓存搅乱。
 	if r.cfg.Warmup > 0 {
 		wctx, cancel := context.WithTimeout(ctx, r.cfg.Warmup)
-		r.runPhase(wctx, r.cfg.Warmup, 0, true)
+		r.runPhase(wctx, r.cfg.Warmup, r.cfg.WarmupOps, true)
 		cancel()
-		// 预热数据清零。
+		// 预热数据清零，避免污染测量结果。
 		r.latency = NewHistogram()
 		r.latPut = NewHistogram()
 		r.latGet = NewHistogram()

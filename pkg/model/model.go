@@ -49,6 +49,9 @@ type Config struct {
 	DisseminateIDsOnly bool
 	// IDBytes 开启 DisseminateIDsOnly 时 per-entry 的 id 大小。
 	IDBytes int
+	// TargetFaults 论文设定的容错目标 f，用于计算 OversizingFactor。
+	// 0 表示默认 5。
+	TargetFaults int
 }
 
 func (c Config) withDefaults() Config {
@@ -131,11 +134,17 @@ type Report struct {
 
 // Availability 失效容忍分析。
 type Availability struct {
-	// CrashTolerated 多数派模型下可容忍的副本故障数。
+	// CrashTolerated 多数派模型下可容忍的副本故障数 = (n-1)/2。
 	CrashTolerated int `json:"crash_tolerated"`
-	// QuorumNeeded 达成一次决策需要的副本数。
+	// QuorumNeeded 达成一次决策需要的副本数 = n/2+1。
 	QuorumNeeded int `json:"quorum_needed"`
-	// OversizingFactor 相对"仅需容忍 f 个故障"的冗余倍数。
+	// TargetFaults 本报告采用的容错目标 f（论文设定，默认 5）。
+	TargetFaults int `json:"target_faults"`
+	// ReplicasForTarget 仅需容忍 TargetFaults 个故障时所需副本数 = f+1。
+	ReplicasForTarget int `json:"replicas_for_target"`
+	// OversizingFactor = QuorumNeeded / ReplicasForTarget。
+	// 这是论文动机的核心数字：n=1000、f=5 时约 83.5，
+	// 即"为容忍 5 个故障只须 6 个副本，却付了 501 个副本的代价"。
 	OversizingFactor float64 `json:"oversizing_factor"`
 	// FlexiblePaxos 若把阶段二 quorum 缩到 f+1，阶段一需要多大。
 	FlexibleQuorum2 int `json:"flexible_quorum2"`
@@ -246,11 +255,34 @@ func Analyze(cfg Config) Report {
 	}
 
 	// ---- 可用性 ----
+	//
+	// 注意 OversizingFactor 的含义：它衡量的是
+	//
+	//	"多数 quorum 的大小" 相对于 "**给定容错目标**所需的副本数" 的倍数
+	//
+	// 这里的容错目标必须与论文中的设定一致，即 f=TargetFaults（默认 5）。
+	//
+	// 早先的实现用 (n-1)/2 当作容错目标去算，在 n=1000 时得到
+	// 501/500 = 1.00 —— 完全无意义（它只是说"多数 quorum 比 500 个副本多 1"）。
+	// 正确的算法是 501/6 ≈ 83.5，即"为容忍 5 个故障只需 6 个副本，
+	// 却付了 501 个副本的代价"。这个数字是论文动机的核心，算错会让整段论证失效。
 	f := (n - 1) / 2
 	rep.Availability.CrashTolerated = f
 	rep.Availability.QuorumNeeded = rep.MajoritySize
-	if f > 0 {
-		rep.Availability.OversizingFactor = float64(rep.MajoritySize) / float64(f+1)
+
+	targetF := c.TargetFaults
+	if targetF <= 0 {
+		targetF = 5
+	}
+	if targetF > f {
+		// 目标容错度超过多数派模型能提供的上限，此时不存在"过度配置"。
+		targetF = f
+	}
+	rep.Availability.TargetFaults = targetF
+	if targetF > 0 {
+		needed := targetF + 1
+		rep.Availability.ReplicasForTarget = needed
+		rep.Availability.OversizingFactor = float64(rep.MajoritySize) / float64(needed)
 	}
 	// 若把阶段二收窄到 f+1，阶段一必须 >= n-f（即 n-(f+1)+1）。
 	fp := 5

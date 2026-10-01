@@ -107,16 +107,22 @@ func (h *Histogram) Min() uint64 {
 func (h *Histogram) Max() uint64 { return h.maxNs.Load() }
 
 // Percentile 返回 p 分位（纳秒）。p ∈ (0,1]。
+//
+// 分桶是对数刻度的，桶上界只是保守估计，可能**超过实测最大值**
+// （例如所有样本都是 1.000ms 时，p99.9 会取到桶上界 1.0034ms > max=1.0000ms）。
+// 这在物理上不可能，也会破坏 min <= p50 <= ... <= max 的单调性。
+// 因此所有返回值都必须夹到已记录的 Max 以下。
 func (h *Histogram) Percentile(p float64) uint64 {
 	n := h.count.Load()
 	if n == 0 {
 		return 0
 	}
+	maxV := h.Max()
 	if p <= 0 {
 		return h.Min()
 	}
 	if p >= 1 {
-		return h.Max()
+		return maxV
 	}
 	target := uint64(math.Ceil(p * float64(n)))
 
@@ -129,14 +135,17 @@ func (h *Histogram) Percentile(p float64) uint64 {
 		cum += c
 		if cum >= target {
 			if i == overflowBucket {
-				return h.Max()
+				return maxV
 			}
-			// 返回桶上界，作为保守估计。
+			// 桶上界为保守估计，必须夹到实测最大值以下。
 			hi := h.minNsCfg * math.Pow(h.ratio, float64(i+1))
+			if hi > float64(maxV) {
+				return maxV
+			}
 			return uint64(hi)
 		}
 	}
-	return h.Max()
+	return maxV
 }
 
 // Merge 把 other 的观测合并进 h（用于汇总各 worker 的直方图）。
