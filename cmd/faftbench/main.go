@@ -387,13 +387,7 @@ func runPlannerComparison() {
 	fmt.Println("评估判据：先看可行性（两条路径都达标），再比写消息数")
 	fmt.Println()
 
-	planners := []faft.QuorumPlanner{
-		faft.MajorityPlanner{},
-		faft.FlexiRaftPlanner{},
-		faft.FlexiRaftPlanner{DataQuorum: 2},
-		faft.UniformFaftPlanner{Targets: targets},
-		faft.FaftPlanner{Targets: targets},
-	}
+	planners := faft.DefaultBaselines(targets)
 
 	for _, n := range []int{5, 9, 11, 21, 51} {
 		topo, placement, av := buildScenario(n)
@@ -413,14 +407,19 @@ func runPlannerComparison() {
 
 	fmt.Println("planner 说明：")
 	fmt.Println("  majority          Raft / Multi-Paxos：Q1 = Q2 = ⌊n/2⌋+1")
-	fmt.Println("  flexiraft         FlexiRaft static，data quorum = max(2, n/4)")
+	fmt.Println("  tikv-pd           TiKV PD：quorum 几何无自由度（同多数）；")
+	fmt.Println("                    其优化在跨分片 placement 维度，本框架未度量")
+	fmt.Println("  flexiraft         FlexiRaft (CIDR'23) static，data quorum = max(2, n/4)")
 	fmt.Println("  flexiraft         （DataQuorum=2 时）data quorum 取最小")
-	fmt.Println("  faft-countselect  消融：FAFT 的 quorum 大小 + 按域计数选成员")
+	fmt.Println("  orca              Orca (PVLDB'26)：commit quorum 固定 k+1，Q1 按 FPaxos 推导")
 	fmt.Println("  faft              本项目：可用性约束下最小化写消息，成员按边际可用性贪心")
+	fmt.Println("  faft-countselect  消融：FAFT 的 quorum 大小 + 按域计数选成员")
 	fmt.Println()
-	fmt.Println("⚠️ 范围披露：FlexiRaft 仅实现 static 模式；其 dynamic 模式（按运行时故障")
-	fmt.Println("   动态排除节点）未实现，因为它需要故障检测器状态，超出本对照框架。")
-	fmt.Println("   原论文未开源代码，本实现依据其论文描述，性能差距需在论文中披露。")
+	fmt.Println("⚠️ 范围披露（论文中必须逐条写明）：")
+	fmt.Println("  - FlexiRaft 仅 static 模式；dynamic 模式未实现")
+	fmt.Println("  - Orca 仅结构性部分；动态 quorum 的完整运行时机制未实现，")
+	fmt.Println("    且**未获得论文全文**，参数语义可能与原文有差异")
+	fmt.Println("  - TiKV PD 无学术发表，依据官方文档与源码；其收益在跨分片维度，本框架测不到")
 }
 
 // runFlexiRaftSweep 扫描 FlexiRaft 的 data-commit quorum 参数。
