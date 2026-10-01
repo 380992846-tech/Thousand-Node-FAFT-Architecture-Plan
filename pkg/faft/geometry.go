@@ -38,7 +38,10 @@ type Domain struct {
 	// 同域为 0。用于计算 quorum 的延迟代价。
 	RTTMs []float64
 	// FailProb 本域在一段观测窗口内整体失效的概率（相关故障模型）。
-	// 独立故障模型下，把每个副本视作独立，域的概率取 0。
+	//
+	// 若不希望使用逐域失效率，设为 0，改由 FailureModel 提供统一的域失效概率。
+	// 设为非 0 时可表达"某些域更不可靠"（例如一个共享机架的可用区、
+	// 一个成本更低的区域），这正是故障感知放置能获益的场景之一。
 	FailProb float64
 	// Capacity 本域可容纳的副本数上限（0 表示不限）。
 	Capacity int
@@ -49,7 +52,104 @@ type Domain struct {
 // Topology 集群的故障域结构。
 type Topology struct {
 	Domains []Domain
+
+	// RegionalEventProb 区域性事件的发生概率（每观测窗口）。
+	//
+	// 语义：以该概率发生一次"同时打掉多个域"的事件（供电、交换机固件、
+	// BGP 抖动、共享机架故障）。受影响域数由 RegionalEventDomains 给出。
+	//
+	// 为什么必须显式建模：若只有逐域独立失效率，把 Q 个副本全部堆在
+	// 最稳的那个域里**在数学上就是最优解**（实测 k=3 堆叠可得 0.9999999997，
+	// 而跨域展开只有 0.99989）。于是"故障域感知"完全无从体现 ——
+	// 因为模型里根本没有"域整体失效"这件事。
+	// 区域事件正是让"跨域展开"具备真实价值的那一项。
+	RegionalEventProb float64
+	// RegionalEventDomains 一次区域事件同时影响多少个域。
+	RegionalEventDomains int
 }
+
+// RegionalEventScenario 一种"区域事件命中集合"的情形。
+//
+// 区域事件在真实系统中会命中"任意的"若干域（取决于供电拓扑、BGP 路径等）。
+// 若把命中的域固定下来（例如永远是下标最小的 k 个），模型会退化成
+// "给部分域发了免死金牌"：那些域从不被区域事件命中，于是把副本堆在
+// 那里在这个模型内就是最优解。实测确实如此，并让"故障感知"给出与
+// 直觉相反的结果 —— 那与故障域的意义无关，纯属建模假象。
+//
+// 因此按"命中集合"离散化：每次事件等概率命中一个大小为
+// RegionalEventDomains 的域子集，可用性对所有子集取概率加权平均。
+// 这既保留了"一次打掉多个域"的相关性，又不给任何域免死金牌。
+type RegionalEventScenario struct {
+	// Domains 本次事件命中的域下标。
+	Domains []int
+	// Prob 本次情形的概率；所有情形之和为 1。
+	Prob float64
+}
+
+// RegionalEventScenarios 枚举所有"命中 k 个域"的情形，每种等概率。
+//
+// 域数较多时组合数会爆炸（C(12,6)=924 尚可，C(30,15)=1.5e8 不可行），
+// 因此对超过 maxScenarioDomains 的情形退化为**轮转**采样：
+// 取 D 个连续窗口（起点 0..D-1），每个域被命中的总概率仍相同。
+func (t *Topology) RegionalEventScenarios() []RegionalEventScenario {
+	if t == nil || t.RegionalEventProb <= 0 || t.RegionalEventDomains <= 0 {
+		return nil
+	}
+	D := len(t.Domains)
+	k := t.RegionalEventDomains
+	if k <= 0 || D <= 0 {
+		return nil
+	}
+	if k >= D {
+		// 全部域一起挂。此时可用性只取决于"事件不发生"，与放置无关。
+		all := make([]int, D)
+		for i := range all {
+			all[i] = i
+		}
+		return []RegionalEventScenario{{Domains: all, Prob: 1}}
+	}
+
+	if D > maxScenarioDomains {
+		// 轮转采样：以 i 为起点取连续 k 个域，i = 0..D-1。
+		out := make([]RegionalEventScenario, 0, D)
+		p := 1.0 / float64(D)
+		for i := 0; i < D; i++ {
+			ds := make([]int, 0, k)
+			for j := 0; j < k; j++ {
+				ds = append(ds, (i+j)%D)
+			}
+			out = append(out, RegionalEventScenario{Domains: ds, Prob: p})
+		}
+		return out
+	}
+
+	// 小规模：枚举全部 C(D,k) 个组合，等概率。
+	var combos [][]int
+	var rec func(start int, cur []int)
+	rec = func(start int, cur []int) {
+		if len(cur) == k {
+			combos = append(combos, append([]int(nil), cur...))
+			return
+		}
+		for i := start; i < D; i++ {
+			rec(i+1, append(cur, i))
+		}
+	}
+	rec(0, nil)
+
+	if len(combos) == 0 {
+		return nil
+	}
+	p := 1.0 / float64(len(combos))
+	out := make([]RegionalEventScenario, 0, len(combos))
+	for _, ds := range combos {
+		out = append(out, RegionalEventScenario{Domains: ds, Prob: p})
+	}
+	return out
+}
+
+// maxScenarioDomains 超过该域数时改用轮转采样，避免组合爆炸。
+const maxScenarioDomains = 12
 
 // NewUniformTopology 构造 `n` 个均匀域，域间 RTT 均为 rttMs。
 func NewUniformTopology(n int, rttMs float64) *Topology {

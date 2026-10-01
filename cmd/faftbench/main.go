@@ -2,12 +2,15 @@
 //
 // 用法：
 //
-//	faftbench scale    # 副本数扫描：省多少消息、控制路径容错是否退化
-//	faftbench cost     # 副本粒度可用性：弹性 quorum 的真实代价
-//	faftbench domain   # 按故障域组织 quorum 能否恢复控制路径可用性
-//	faftbench n1000    # n=1000 单点详算
-//	faftbench curve    # n=1000 的完整权衡曲线
-//	faftbench avail    # 独立失效 vs 相关失效的可用性高估量
+//	faftbench scale         # 副本数扫描：省多少消息、控制路径容错是否退化
+//	faftbench cost          # 副本粒度可用性：弹性 quorum 的真实代价
+//	faftbench domain        # 按故障域组织 quorum 能否恢复控制路径可用性
+//	faftbench solve         # 故障感知成员选择 vs 按域计数贪心（FAFT 核心增量）
+//	faftbench solve-uniform # 对照组：域之间等价时的表现
+//	faftbench solve-plan    # 给定 SLA 目标求最小消息数方案
+//	faftbench n1000         # n=1000 单点详算
+//	faftbench curve         # n=1000 的完整权衡曲线
+//	faftbench avail         # 独立失效 vs 相关失效的可用性高估量
 package main
 
 import (
@@ -34,7 +37,6 @@ func main() {
 		fmt.Print(faft.FormatScaleTable(rows))
 
 	case "cost":
-		// 最关键的一张表：把"省消息"与"选举需要多少副本在线"放在一起看。
 		fmt.Println("=== 弹性 quorum 的真实代价（副本粒度可用性，单副本失效率 p=1e-4）===")
 		fmt.Println()
 		const p = 1e-4
@@ -48,10 +50,10 @@ func main() {
 				n, base.DataQuorum, base.ControlQuorum, 2*base.DataQuorum,
 				base.DataAvailability, base.ControlAvailability, base.ReplicasNeededToElect)
 
-			faftC := faft.ComputeControlCost(n, 2, p)
+			ext := faft.ComputeControlCost(n, 2, p)
 			fmt.Printf("%-7s %-6d %-6d %-11d %-18.12f %-18.12f %d  (|Q2|=2 极限)\n",
-				"", faftC.DataQuorum, faftC.ControlQuorum, 2*faftC.DataQuorum,
-				faftC.DataAvailability, faftC.ControlAvailability, faftC.ReplicasNeededToElect)
+				"", ext.DataQuorum, ext.ControlQuorum, 2*ext.DataQuorum,
+				ext.DataAvailability, ext.ControlAvailability, ext.ReplicasNeededToElect)
 
 			q2 := n / 4
 			if q2 < 2 {
@@ -65,18 +67,13 @@ func main() {
 		}
 
 	case "domain":
-		// 核心验证：quorum 按故障域组织时，控制路径的可用性会怎样？
-		//
-		// 设定：n=1000 副本摊到 D 个故障域，每域 n/D 个副本。
-		// 故障模型：域内失效完全相关（整域一起挂），域间独立，
-		// 单域失效率 p_d。一个跨 d 个域的 quorum 只要还有 q 个域在线即可用。
 		fmt.Println("=== 按故障域组织 quorum：控制路径可用性能否恢复 ===")
 		fmt.Println()
 		fmt.Println("模型：1000 副本摊到 D 个域；域内失效完全相关，域间独立；单域失效率 p_d=1e-3")
 		fmt.Println()
 		const n = 1000
 		const pd = 1e-3
-		fmt.Printf("%-8s %-12s %-12s %-14s %-22s %s\n",
+		fmt.Printf("%-8s %-12s %-12s %-12s %-22s %s\n",
 			"域数 D", "每域副本", "|Q2|(域)", "|Q1|(域)", "控制路径可用性", "选举需在线域数")
 		fmt.Println(strings.Repeat("-", 96))
 		for _, D := range []int{3, 5, 7, 9, 15} {
@@ -86,13 +83,36 @@ func main() {
 					q1d = D
 				}
 				avail := faft.AvailabilityBound(D, D-q1d, pd)
-				fmt.Printf("%-8d %-12d %-12d %-14d %-22.15f %d\n",
+				fmt.Printf("%-8d %-12d %-12d %-12d %-22.15f %d\n",
 					D, n/D, q2d, q1d, avail, q1d)
 			}
 			fmt.Println()
 		}
 		fmt.Println("对照：不按域组织（副本粒度，p=1e-4）时，|Q2|=2 需要 999/1000 副本在线，")
 		fmt.Println("控制路径可用性降到 0.995325232148 —— 即约 13 倍的可达性劣化。")
+
+	case "solve":
+		fmt.Println("=== 故障感知成员选择 vs 按域计数贪心 ===")
+		fmt.Println()
+		fmt.Println("关键前提：域之间必须**不等价**。若域等价，「多覆盖一个域」永远最优，")
+		fmt.Println("按计数贪心恰好就是最优解，故障感知无从发挥。")
+		fmt.Println()
+		runSolveComparison(true)
+
+	case "solve-uniform":
+		fmt.Println("=== 对照组：域之间等价（失效率相同）===")
+		fmt.Println()
+		fmt.Println("预期：此时两种策略结果应一致。若一致，说明收益确实来自「域不等价」。")
+		fmt.Println()
+		runSolveComparison(false)
+
+	case "solve-plan":
+		fmt.Println("=== 故障感知求解：给定可用性目标求最小消息数方案 ===")
+		fmt.Println()
+		runSolvePlan()
+
+	case "regional":
+		runRegionalControl()
 
 	case "n1000":
 		sc := faft.ScaleConfig{
@@ -124,5 +144,194 @@ func main() {
 				fmt.Printf("%-8d %-10d %-18.12f %-18.12f %.8f\n", d, tol, ind, cor, ind-cor)
 			}
 		}
+
+	default:
+		fmt.Fprintf(os.Stderr,
+			"未知模式 %q\n可用: scale cost domain solve solve-uniform solve-plan regional n1000 curve avail\n", mode)
+		os.Exit(2)
 	}
+}
+
+// skewedTopology 构造逐域失效率不等、且含区域事件的拓扑。
+//
+// 两个要素缺一不可：
+//   - 逐域失效率不等     → 让"选哪个域"有意义
+//   - 区域事件           → 让"跨域展开"优于"堆叠"
+//
+// 若只有前者而无后者，把全部副本堆在最稳的域在数学上就是最优，
+// 故障感知无从体现（见 buildRegionalFreeTopology 的对照）。
+func skewedTopology() *faft.Topology {
+	t := faft.NewUniformTopology(5, 2.0)
+	probs := []float64{1e-5, 1e-4, 1e-3, 5e-3, 1e-2}
+	for i, p := range probs {
+		t.Domains[i].FailProb = p
+	}
+	// 区域事件：1e-3 的概率一次打掉 3 个域（下标最小的三个）。
+	t.RegionalEventProb = 1e-3
+	t.RegionalEventDomains = 3
+	return t
+}
+
+// regionalFreeTopology 与 skewedTopology 相同的逐域失效率，但**无区域事件**。
+//
+// 用途：对照实验。预期此时"按可用性贪心"会退化为"把副本堆在最稳的域"，
+// 反而**劣于**跨域展开的按计数贪心 —— 说明区域事件是故障域感知的必要前提。
+func regionalFreeTopology() *faft.Topology {
+	t := skewedTopology()
+	t.RegionalEventProb = 0
+	t.RegionalEventDomains = 0
+	return t
+}
+
+// uniformTopology 构造域之间完全等价的拓扑（对照组）。
+func uniformTopology() *faft.Topology {
+	t := faft.NewUniformTopology(5, 2.0)
+	for i := range t.Domains {
+		t.Domains[i].FailProb = 1e-3
+	}
+	t.RegionalEventProb = 1e-3
+	t.RegionalEventDomains = 3
+	return t
+}
+
+// runSolveComparison 打印两种成员选择策略的对比。
+func runSolveComparison(skewed bool) {
+	const n = 21
+	topo := skewedTopology()
+	label := "域失效率不等（1e-5~1e-2）+ 区域事件（1e-3 打掉 3 域）"
+	if !skewed {
+		topo = uniformTopology()
+		label = "域等价（均 1e-3）+ 区域事件（1e-3 打掉 3 域）"
+	}
+
+	placement := make([]int, n)
+	for i := range placement {
+		placement[i] = i % len(topo.Domains)
+	}
+
+	fmt.Printf("拓扑：%s；n=%d 副本\n\n", label, n)
+	fmt.Printf("%-7s %-18s %-20s %-14s %-9s\n",
+		"|Q2|", "按域计数贪心", "按可用性贪心", "绝对提升", "倍数")
+	fmt.Println(strings.Repeat("-", 74))
+
+	av := faft.AvailabilityModel{Model: faft.IndependentFailure{P: 0}, Topology: topo}
+	cmps := faft.ComparePlacementStrategies(topo, faft.Config{
+		Replicas: n, Placement: placement,
+	}, av, n)
+
+	maxGain := 0.0
+	for _, c := range cmps {
+		gainX := "-"
+		if c.GainX == 1 {
+			gainX = "1.000x"
+		} else if c.GainX > 1 {
+			gainX = fmt.Sprintf("%.3fx", c.GainX)
+		}
+		mark := ""
+		if c.Gain > 1e-15 {
+			mark = "  <-- 提升"
+			if c.Gain > maxGain {
+				maxGain = c.Gain
+			}
+		}
+		fmt.Printf("%-7d %-18.12f %-20.12f %-14.3e %-9s%s\n",
+			c.Q2Size, c.CountBasedAvailability, c.AvailabilityBased, c.Gain, gainX, mark)
+	}
+	fmt.Println()
+	fmt.Printf("最大绝对提升 = %.3e\n", maxGain)
+
+	if !skewed {
+		if maxGain < 1e-15 {
+			fmt.Println("结论：域等价时两种策略结果一致 —— 收益确实来自「域不等价」。")
+		} else {
+			fmt.Printf("注意：域等价时仍有 %.3e 差异。\n", maxGain)
+		}
+	} else if maxGain < 1e-15 {
+		fmt.Println("警告：域不等价却没有提升，需检查 pickMaxAvailability 的排序准则。")
+	} else {
+		fmt.Println("结论：域不等价时，按可用性贪心优于按域计数贪心。")
+	}
+}
+
+// runRegionalControl 对照实验：区域事件是否存在，决定策略优劣方向。
+func runRegionalControl() {
+	const n = 21
+	fmt.Println("=== 对照：区域事件是故障域感知的必要前提 ===")
+	fmt.Println()
+	fmt.Println("两组拓扑的逐域失效率完全相同（1e-5 ~ 1e-2，相差 1000 倍），")
+	fmt.Println("唯一区别是有无『区域事件』（一次打掉多个域的相关故障）。")
+	fmt.Println()
+
+	for _, scen := range []struct {
+		name string
+		topo *faft.Topology
+	}{
+		{"有区域事件（1e-3 打掉 3 域）", skewedTopology()},
+		{"无区域事件（纯逐域独立失效）", regionalFreeTopology()},
+	} {
+		placement := make([]int, n)
+		for i := range placement {
+			placement[i] = i % len(scen.topo.Domains)
+		}
+		av := faft.AvailabilityModel{Model: faft.IndependentFailure{P: 0}, Topology: scen.topo}
+		cmps := faft.ComparePlacementStrategies(scen.topo, faft.Config{
+			Replicas: n, Placement: placement,
+		}, av, 5)
+
+		fmt.Printf("--- %s ---\n", scen.name)
+		fmt.Printf("%-6s %-18s %-20s %-14s\n", "|Q2|", "按域计数", "按可用性", "差异")
+		for _, c := range cmps {
+			fmt.Printf("%-6d %-18.12f %-20.12f %+-14.3e\n",
+				c.Q2Size, c.CountBasedAvailability, c.AvailabilityBased, c.Gain)
+		}
+		worst := 0.0
+		for _, c := range cmps {
+			if c.Gain < worst {
+				worst = c.Gain
+			}
+		}
+		if worst < -1e-12 {
+			fmt.Printf("注意：按可用性贪心在此场景下**劣于**按计数贪心（最差 %.3e）。\n", worst)
+			fmt.Println("      这说明缺少区域事件时，堆叠副本在模型内是最优的 ——")
+			fmt.Println("      模型不惩罚堆叠，故障域感知自然无从体现。")
+		} else {
+			fmt.Println("按可用性贪心不低于按计数贪心。")
+		}
+		fmt.Println()
+	}
+}
+
+// runSolvePlan 演示给定 SLA 目标时的完整求解。
+func runSolvePlan() {
+	topo := skewedTopology()
+	targets := faft.AvailabilityTargets{Data: 0.999, Control: 0.9999}
+
+	fmt.Printf("可用性目标：数据路径 >= %.4g，控制路径 >= %.4g\n", targets.Data, targets.Control)
+	fmt.Printf("拓扑：5 个域，逐域失效率 1e-5 ~ 1e-2\n\n", )
+	fmt.Printf("%-6s %-12s %-8s %-8s %-18s %-18s %-8s\n",
+		"n", "写消息/op", "|Q2|", "|Q1|", "数据可用性", "控制可用性", "达标")
+	fmt.Println(strings.Repeat("-", 92))
+
+	for _, n := range []int{5, 7, 9, 11, 15, 21} {
+		placement := make([]int, n)
+		for i := range placement {
+			placement[i] = i % len(topo.Domains)
+		}
+		av := faft.AvailabilityModel{Model: faft.IndependentFailure{P: 0}, Topology: topo}
+		fp := faft.SolveWithFailures(topo, faft.Config{
+			Replicas: n, Placement: placement,
+		}, av, targets)
+
+		q1, q2 := fp.Quorum.Size()
+		ok := "否"
+		if fp.Meets {
+			ok = "是"
+		}
+		fmt.Printf("%-6d %-12d %-8d %-8d %-18.6g %-18.6g %-8s\n",
+			n, fp.WriteMsgsPerOp, q2, q1,
+			fp.DataAvailability, fp.ControlAvailability, ok)
+	}
+	fmt.Println()
+	fmt.Println("说明：|Q1| 满足 |Q1|+|Q2| > n（Flexible Paxos, OPODIS 2016 §4.2）；")
+	fmt.Println("求解目标是在两条路径可用性达标的前提下最小化写消息数 2|Q2|。")
 }
