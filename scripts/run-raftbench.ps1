@@ -1,4 +1,4 @@
-# scripts/run-raftbench.ps1 —— 一键复现 raftbench 的全部实验
+﻿# scripts/run-raftbench.ps1 —— 一键复现 raftbench 的全部实验
 #
 # 为什么要有这个脚本：
 #   raftbench 的每一组数字都必须能被第三方**原样重跑**。散在命令历史里的
@@ -8,6 +8,15 @@
 #   powershell -ExecutionPolicy Bypass -File scripts\run-raftbench.ps1
 #   powershell -ExecutionPolicy Bypass -File scripts\run-raftbench.ps1 -SkipBuild
 #   powershell -ExecutionPolicy Bypass -File scripts\run-raftbench.ps1 -Only sweep
+#   -Only 取值：all | sweep | avail | scale | mae
+#
+# 实验 A（sweep）   quorum 几何 × 注入延迟 —— 收益侧主实验
+# 实验 B（avail）   |Q1| 变大后的选主可用性 —— 可用性代价
+# 实验 C（scale）   规模维度 n=5/7/9
+# 实验 D（mae）     MaxAppendEntries 转折点 —— |Q2| 变小的可行性条件
+#
+# 全部跑完约 20–30 分钟（本机）。|Q2|=1 的组需要等 follower 追平才能做
+# 一致性检查，所以每组末尾会有几十秒到两分钟的"安静时间"，属正常。
 #
 # 前置：third_party/flexiraft 已就位（本仓库自带），Go 工具链可用。
 # 注意：Windows 上所有 go 命令必须带 -p 1（并发编译器会随机 0xc0000005）。
@@ -15,7 +24,7 @@
 param(
   [string]$GoExe = 'go',
   [switch]$SkipBuild,
-  [ValidateSet('all', 'sweep', 'avail', 'scale')]
+  [ValidateSet('all', 'sweep', 'avail', 'scale', 'mae')]
   [string]$Only = 'all'
 )
 
@@ -58,7 +67,7 @@ if (-not (Test-Path $Exe)) { throw "找不到 $Exe，先去掉 -SkipBuild 构建
 if ($Only -eq 'all' -or $Only -eq 'sweep') {
   Step "实验 A：quorum 几何 × 注入延迟（n=5）"
   & $Exe -mode sweep -n 5 `
-      -ops 200000 -warmup 2000 -concurrency 512 -repeat 3 -duration 2s `
+      -ops 200000 -warmup 2000 -concurrency 512 -repeat 5 -duration 2s -settle 180s `
       -delays "0s,1ms,2ms,5ms" `
       -out (Join-Path $Results 'raftbench-sweep-n5.json')
   if ($LASTEXITCODE -ne 0) { throw "实验 A 失败" }
@@ -104,10 +113,30 @@ if ($Only -eq 'all' -or $Only -eq 'scale') {
       $tag = "n$n-q1$q1-q2$q2"
       Step "  $tag"
       & $Exe -mode bench -n $n -q1 $q1 -q2 $q2 -delay 2ms `
-          -ops 200000 -warmup 2000 -concurrency 512 -repeat 3 -duration 2s `
+          -ops 200000 -warmup 2000 -concurrency 512 -repeat 5 -duration 2s -settle 180s `
           -out (Join-Path $Results "raftbench-$tag.json")
       if ($LASTEXITCODE -ne 0) { Warn "  $tag 失败，继续" }
     }
+  }
+}
+
+# ── 实验 D：|Q2| 变小的可行性条件（MaxAppendEntries 的转折点）──────────
+#
+# |Q2|=1 让 leader 不必等 follower，但 follower 仍要以某个速率收日志。
+# 收不过来的部分只能在 leader 上堆积 —— 表现为"欠债"而不是"更快"。
+# 控制变量是 MaxAppendEntries（每条 AppendEntries 最多带几条，上游默认 64）。
+#
+# 期望形状（也是要证伪的对象）：吞吐随 mae 基本不变，但落后量在某个 mae
+# 处从"单调增长"翻转为"稳定有界"。上一轮实测转折点在 128 与 256 之间。
+if ($Only -eq 'all' -or $Only -eq 'mae') {
+  Step "实验 D：MaxAppendEntries 转折点（n=5, |Q1|=5, |Q2|=1, 注入延迟 5ms）"
+  foreach ($mae in @(64, 128, 256, 512, 1024)) {
+    $tag = "mae$mae"
+    Step "  mae=$mae"
+    & $Exe -mode bench -n 5 -q1 5 -q2 1 -delay 5ms -mae $mae `
+        -ops 200000 -warmup 2000 -concurrency 512 -repeat 4 -duration 2s -settle 180s `
+        -out (Join-Path $Results "raftbench-mae-$tag.json")
+    if ($LASTEXITCODE -ne 0) { Warn "  $tag 失败，继续" }
   }
 }
 
