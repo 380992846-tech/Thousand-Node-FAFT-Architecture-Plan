@@ -44,6 +44,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -360,6 +361,9 @@ type result struct {
 	ClockFloorUs  int64 `json:"clock_floor_us"`
 	LatencyUsable bool  `json:"latency_usable"`
 
+	// GCPercent 本轮的 GC 触发阈值（见 -gogc）。影响内存占用，不影响对照公平性。
+	GCPercent int `json:"gc_percent"`
+
 	// 各轮实测 p50 的最小值，用于判断延迟是否真的高过时钟地板。
 	ObservedP50Ms float64 `json:"observed_p50_ms"`
 
@@ -420,7 +424,14 @@ func main() {
 	delays := flag.String("delays", "0s,2ms", "sweep 模式：逗号分隔的注入延迟列表")
 	lagOps := flag.Int("lagops", 2000, "lag 模式的串行采样条数")
 	settle := flag.Duration("settle", 60*time.Second, "测量结束后等各节点追平的最长时间（|Q2| 变小时 follower 会明显落后）")
+	gogc := flag.Int("gogc", 400, "GC 触发百分比。InmemStore 不截断日志，一轮测量会留下几十万个活跃 Log；"+
+		"默认 GOGC=100 会让 GC 频繁扫描它们，把噪声打进吞吐。设 -1 关闭 GC（内存换稳定）")
 	flag.Parse()
+
+	// 本机噪声本来就大（同一段忙循环十次测量差 ±40%），再叠加 GC 就是双重噪声。
+	// 提高 GC 阈值把这一层压掉 —— 对所有配置一视同仁，不偏向任何一组。
+	// 代价是内存占用上升，所以把生效值记进结果。
+	debug.SetGCPercent(*gogc)
 
 	if *payload < 8 {
 		fmt.Fprintln(os.Stderr, "payload 必须 >= 8（前 8 字节是命令序号）")
@@ -440,7 +451,7 @@ func main() {
 			buildOpts: buildOpts{n: *n, q1: *q1, q2: *q2, delay: *delay, sigma: *sigma, seed: *seed, payload: *payload},
 			label:     *label, ops: *ops, conc: *conc, warmup: *warmup, repeat: *repeat,
 			duration: *duration, timeout: *timeout, electTimeout: *electTimeout,
-			settle: *settle, dump: *dump, clockFloor: floor,
+			settle: *settle, dump: *dump, clockFloor: floor, gogc: *gogc,
 		})
 	case "avail":
 		res, err = runAvail(availOpts{
@@ -473,7 +484,7 @@ func main() {
 		err = runSweep(sweepOpts{
 			out: *out, n: *n, ops: *ops, conc: *conc, payload: *payload, warmup: *warmup,
 			repeat: *repeat, duration: *duration, timeout: *timeout, electTimeout: *electTimeout,
-			seed: *seed, sigma: *sigma, delays: ds, clockFloor: floor, settle: *settle,
+			seed: *seed, sigma: *sigma, delays: ds, clockFloor: floor, settle: *settle, gogc: *gogc,
 		})
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "sweep 失败:", err)
@@ -524,6 +535,7 @@ type benchOpts struct {
 	settle       time.Duration
 	dump         bool
 	clockFloor   time.Duration
+	gogc         int
 }
 
 // makeCmd 造一条带全局唯一序号的命令。
@@ -731,6 +743,7 @@ func assembleResult(cl *cluster, runs []runStats, o benchOpts) *result {
 		InjectedDelayUs:     o.delay.Microseconds(),
 		InjectedJitterSigma: o.sigma,
 		ClockFloorUs:        o.clockFloor.Microseconds(),
+		GCPercent:           o.gogc,
 		Runs:                runs,
 	}
 	if res.Label == "" {
@@ -1150,6 +1163,7 @@ type sweepOpts struct {
 	delays       []time.Duration
 	clockFloor   time.Duration
 	settle       time.Duration
+	gogc         int
 }
 
 // configs 生成满足 |Q1|+|Q2| > n 的 (Q1,Q2) 组合。
@@ -1206,6 +1220,7 @@ func runSweep(o sweepOpts) error {
 				electTimeout: o.electTimeout,
 				settle:       o.settle,
 				clockFloor:   o.clockFloor,
+				gogc:         o.gogc,
 			})
 			if err != nil {
 				return fmt.Errorf("q1=%d q2=%d delay=%v: %w", cfg[0], cfg[1], d, err)

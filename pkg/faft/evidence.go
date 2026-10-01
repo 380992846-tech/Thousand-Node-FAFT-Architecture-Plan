@@ -126,15 +126,28 @@ func EvidenceManifest() []Claim {
 		},
 		{
 			Statement: "在 hashicorp/raft 的真实提交路径上，|Q2| 从 3 降到 1 使提交吞吐从 " +
-				"38.5k 升到 154.4k ops/s（4.0 倍，注入单程延迟 5ms）；注入延迟 0/1ms 时三组落在噪声内",
+				"41.2k 升到 166.7k ops/s（4.05 倍，注入单程延迟 5ms）；极值比随 RTT " +
+				"单调上升：0ms 1.03 → 1ms 1.25 → 2ms 2.02 → 5ms 4.05，而注入延迟为 0 时三组区间重叠",
 			Evidence: EvidenceMeasured,
 			Where:    "cmd/raftbench -> results/raftbench-sweep-n5.json; scripts/run-raftbench.ps1",
 			CanClaim: "在**本机、进程内 in-memory 介质、注入延迟**这套设定下，" +
-				"quorum 几何对共识层提交吞吐/延迟的因果效应；以及「收益随 RTT 增大」这一形状",
+				"quorum 几何对共识层提交吞吐/延迟的因果效应；以及「收益随 RTT 单调上升」这一形状",
 			CannotClaim: "端到端系统吞吐（路由/编解码/存储/fsync 全被剥掉）；" +
 				"真实网络的绝对性能（注入的是延迟模型，不是真实网络）；" +
-				"也不能报单点倍数 —— 本机轮间波动 ±30%，同一配置上轮跑到过 5.3 倍、本轮 4.0 倍，" +
+				"不能报单点倍数 —— 本机同一配置 5 轮内波动可达 72k–184k，" +
 				"必须报区间与趋势方向",
+		},
+		{
+			Statement: "|Q2| 小于多数时 leader 的日志会**无界**领先于复制：" +
+				"|Q2|=1 时 2s 窗口末落后 3.4 万–9.6 万条，|Q2|>=多数时只有千条量级",
+			Evidence: EvidenceMeasured,
+			Where:    "cmd/raftbench -> results/raftbench-sweep-n5.json 的 runs[].replication_gap_entries",
+			CanClaim: "|Q2| 变小的收益**有前提**：复制必须跟得上。" +
+				"复制循环每次 AppendEntries 最多带 MaxAppendEntries（默认 64）条，" +
+				"跟不上 leader 产生日志的速度时，多出来的只能在 leader 上堆积",
+			CannotClaim: "具体到某个生产配置的堆积速率 —— 本机是 in-memory 日志，" +
+				"真实磁盘下 leader 自身会被 fsync 拖慢，堆积会更慢；" +
+				"但「收益有前提」这一定性结论不依赖介质",
 		},
 		{
 			Statement: "|Q2| 就是「Apply 返回成功那一刻日志所在副本数」的严格下界：" +

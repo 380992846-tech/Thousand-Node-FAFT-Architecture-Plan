@@ -14,8 +14,9 @@
   "throughput_ops_per_sec_max": 0,
   "injected_delay_us": 0,
   "injected_jitter_sigma": 0,
-  "clock_floor_us": 305,
+  "clock_floor_us": 316,
   "latency_usable": false,
+  "gc_percent": 0,
   "observed_p50_ms": 0,
   "client_saturation_min": 0,
   "client_saturation_max": 0,
@@ -30,11 +31,11 @@
   "avail_success_rate": 0,
   "lag_samples": 1500,
   "lag_histogram": {
-    "3": 1138,
-    "4": 336,
-    "5": 26
+    "3": 982,
+    "4": 440,
+    "5": 78
   },
-  "lag_mean_replicas": 3.2586666666666666,
+  "lag_mean_replicas": 3.3973333333333335,
   "notes": [
     "串行提交（并发 1）、每条命令独立 payload；量的是 **Apply 返回成功那一瞬间**，日志里已经有这条记录的副本数（用 LastIndex，不是 FSM 的 AppliedIndex）。",
     "并发下的流水线会让 follower 追上，所以这里刻意用串行 —— 量的是提交瞬间，不是稳态。",
