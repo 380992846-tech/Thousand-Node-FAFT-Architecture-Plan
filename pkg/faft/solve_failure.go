@@ -298,6 +298,14 @@ func (av AvailabilityModel) availOf(members []int, placement Placement) float64 
 	return memberAvailability(members, placement, av.Model, 0)
 }
 
+// MemberAvailability 是 availOf 的导出形式，供 pkg/sim 等外部包调用。
+//
+// 语义：给定成员集合与放置，返回该 quorum 在指定故障模型下的可用性
+// （需要至少 len(members)/2+1 个成员存活）。
+func MemberAvailability(members []int, placement Placement, av AvailabilityModel) float64 {
+	return av.availOf(members, placement)
+}
+
 // pickMaxAvailability 从候选副本中贪心挑选 k 个，使成员集合的可用性最大。
 //
 // 贪心准则：每一步加入能带来最大**边际可用性增益**的副本。
