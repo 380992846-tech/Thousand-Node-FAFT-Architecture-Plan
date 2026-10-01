@@ -87,6 +87,9 @@ BenchmarkBarrierVsCommitTimeout: commit=1ms/5ms/20ms → 5.72/6.46/5.87 ms
 | `pkg/faft` | FAFT quorum 几何求解器 + 故障感知求解器 + 可用性计算器 |
 | `cmd/kvbench` | 一体化实验驱动：同命令 + 同种子 => 同结果 |
 | `cmd/faftbench` | FAFT 分析（`scale`/`cost`/`domain`/`curve`/`avail`/`solve`/`solve-uniform`/`solve-plan`/`regional`） |
+| `third_party/flexiraft` | **hashicorp/raft v1.6.1 的 FPaxos 改造版**：可配置 \|Q1\|/\|Q2\|；未设时与上游逐行等价 |
+| `cmd/raftbench` | **共识层微基准**：`bench`/`avail`/`lag`/`sweep` 四种模式，实测 quorum 几何的收益与代价 |
+| `scripts/run-raftbench.ps1` | 一键复现全部 raftbench 实验，结果落 `results/raftbench-*.json` |
 
 ### 1.5 方向验证（关键产出）
 
@@ -187,6 +190,54 @@ BenchmarkBarrierVsCommitTimeout: commit=1ms/5ms/20ms → 5.72/6.46/5.87 ms
 
 详见 [`DESIGN.md`](DESIGN.md) §2.3。
 
+### 1.8 FlexiRaft 机制的真实测量（`cmd/raftbench` + `third_party/flexiraft`）
+
+**为什么单独做这一层**：端到端基准（`cmd/kvbench`）里，`|Q1|`/`|Q2|` 的效应
+会被 HTTP 栈、编解码、BoltDB fsync 全部淹掉。要回答"quorum 几何值多少吞吐"，
+必须把共识层单独隔离出来测。
+
+**做法**：把 `hashicorp/raft@v1.6.1` 复制一份到 `third_party/flexiraft`
+（29 个非测试文件），只改 5 处让 quorum 大小可配置：
+
+| 位置 | 改动 |
+|---|---|
+| `config.go` | 新增 `DataQuorumSize` / `ElectionQuorumSize`（**故意不进** `ReloadableConfig`） |
+| `commitment.go` | `recalculate()` 用 `matched[len(matched)-q]`，`q` 可配置 |
+| `raft.go` | `setupLeaderState` 把 data quorum 传给 `newCommitment` |
+| `raft.go` | `quorumSize()` 返回 election quorum（选举 / `verifyLeader` / lease 三处都该用 `\|Q1\|`） |
+| `raft.go` | 新增 `dataQuorumSize()` / `voterCount()` |
+
+**基线为什么可信**：两个字段都为 0 时，上面的改动全部回退到上游行为
+（`voters/2+1`），与上游**逐行等价**。所以 majority 基线与 FlexiRaft 实验组
+跑的是同一个二进制、同一段提交逻辑，只差两个整数 ——
+**实现差异这个混淆变量被彻底排除**。这比"重实现一个 FlexiRaft"强得多。
+
+**测出来的东西**（全部落在 `results/raftbench-*.json`）：
+
+| 维度 | 结果 |
+|---|---|
+| 收益 | 注入单程延迟 5ms 时，`\|Q2\|` 从 3 降到 1 使吞吐从 **38.5k 升到 154.4k ops/s（4.0×）**；注入延迟为 0 或 1ms 时三组落在噪声内（收益确实来自"不等副本"） |
+| 选主可用性代价 | **阶跃**：存活副本数 < `\|Q1\|` 时 0/7 成功，≥ 时 7/7。`\|Q1\|=5` 意味着任何单点故障都让集群失去选主能力 |
+| durability 代价 | `\|Q2\|` 就是「`Apply` 返回成功那一刻日志所在副本数」的**严格下界**，实测 3/2/1。`\|Q2\|=1` 时 100% 只在一个副本上 |
+| 复制落后量 | `\|Q2\|`≥多数时 leader 与最慢 follower 只差千条量级；`\|Q2\|=1` 时窗口末落后 **1.2 万–25 万条**且单调累积 |
+
+**过程中修掉的两个真问题**（都写进了代码注释，因为它们是可复现的陷阱）：
+
+1. **payload 缓冲区复用**：`InmemStore` 与 `InmemTransport` 传的都是引用，
+   复用缓冲区会静默改写"已提交"的日志。症状极隐蔽 —— 各节点 `applied`
+   条数与 `lastIndex` 完全一致，只有状态指纹 `hash` 不一致。
+2. **注入延迟的语义写反了**：早先写成「先等前一个 enqueue，再 `sleep(d)`」，
+   于是延迟**累加**，每个 follower 吞吐被钉死在 `1/d`，实测 p50 从 2ms 爆到
+   169ms、心跳排不上队、leader 反复因 lease 失效退位重新选举。
+   正确语义是 `enqueue_i = max(t_i + d_i, enqueue_{i-1})`（TCP 模型）。
+
+**本机限制**（必须随结果一起读）：Go 单调时钟地板约 **300µs**、跳变最大
+**4.5ms**，`time.Sleep(10µs)` 最快也要 521µs 才返回。**低于 ~1ms 的延迟
+读数会读成 0。** `raftbench` 启动时自测并写进结果
+（`clock_floor_us` / `latency_usable` / `observed_p50_ms`），
+不达标时显式标注并把主指标让给吞吐。完整依据见
+[`MEASUREMENT.md`](MEASUREMENT.md)。
+
 ---
 
 ## 二、未完成（按优先级）
@@ -198,8 +249,18 @@ BenchmarkBarrierVsCommitTimeout: commit=1ms/5ms/20ms → 5.72/6.46/5.87 ms
 | 1 | ~~写路径批处理~~ | ✅ **已完成**（见 §1.3.2）。put p50 99.24ms → 17.72ms |
 | 2 | ~~相关故障下的联合优化~~ | ✅ **已完成**（见 §1.6）。求解器已以 quorum 可用性为准则 |
 | 3 | ~~离散事件模拟器~~ | ✅ **已完成**（见 §1.7）。**且校准未通过** —— 见该节的诚实结论 |
-| 4 | **Baseline 重实现** | ❌ 未开始。FlexiRaft (CIDR'23) / Orca (PVLDB'26) / TiKV PD 启发式 |
+| 4 | **Baseline 重实现** | 🟡 **部分完成**。FlexiRaft 的机制已落到 `third_party/flexiraft`（fork hashicorp/raft，quorum 可配置）；Orca / TiKV PD 的**解析对照**已在 `pkg/faft/planner_orca.go`。缺的是 Orca 的端到端实现 |
 | 5 | 真实 etcd 端到端 | ❌ 未开始（见 V2） |
+
+### P0.5 · 已在做的实测（本轮新增）
+
+| # | 任务 | 状态 |
+|---|---|---|
+| 4a | ~~FlexiRaft 的真实测量~~ | ✅ **已完成**。见 §1.8 |
+| 4b | Orca (PVLDB'26) 解析对照 | ✅ 已完成（`faftbench planners`）。**论文全文未取得**，参数语义按摘要与引用重述，已在 `Notes()` 与测试中披露 |
+| 4c | TiKV PD 启发式对照 | ✅ 已完成，但**结论是"不可直接比"**：PD 是放置调度器，**没有 quorum 几何自由度**，其跨分片优化不在本框架的比较范围内。已在 `planner_orca.go` 的 `Notes()` 中披露 |
+| 4d | `go test -race` | ❌ 本机无 C 编译器（见 V1） |
+| 4e | Orca 的端到端实现 | ❌ 未开始 |
 
 ### P1 · 论文需要
 
@@ -323,6 +384,29 @@ powershell -File build.ps1 bench
 产生乱码并把多行合并（本次开发中实际发生过两次）。
 请使用支持 UTF-8 的编辑器。
 
+**注意 3（本机时钟粒度）**：本机 Go 单调时钟是**粗粒度跳变**的，
+实测地板约 **300µs**、200ms 忙等内最大跳变 **4.5ms**、
+`time.Sleep(10µs)` 最快也要 521µs 才返回。
+
+后果：**任何低于约 1ms 的延迟测量都会读成 0**（`raftbench -dump` 的
+`raw_latency_ns` 全是 0 就是这个原因，不是 bug）。
+
+这不是本项目能修的，它来自运行环境（虚拟化时钟）。应对方式：
+
+- `cmd/raftbench` 启动时自测地板并写进结果（`clock_floor_us`）；
+- 用 `latency_usable` / `observed_p50_ms` 标记该轮延迟是否可信；
+- 延迟不可信时，主指标换成**吞吐**（跨秒窗口，噪声可平均掉）
+  或 `derived_avg_latency_ms`（Little 定律反推，只用聚合量）；
+- 亚毫秒延迟的结论**一律不作**。
+
+完整数据见 [`MEASUREMENT.md`](MEASUREMENT.md) §4.1。
+
+**注意 4（PowerShell 数值舍入）**：`[int]($n / 2)` 在 PowerShell 里走
+**银行家舍入**：`[int]3.5` 得 4，于是 n=7 的多数 quorum 会被算成 5（应为 4），
+而 n=5 与 n=9 恰好正确 —— 是个只在奇数上暴露的坑。
+正确写法是 `[int][math]::Floor($n / 2) + 1`。
+（`scripts/run-raftbench.ps1` 已修并加了注释；本项目的 scale 实验第一次就是这么跑错的。）
+
 ---
 
 ## 五、复现命令
@@ -344,9 +428,21 @@ go run ./cmd/kvbench -model -spec 1x5 -payload 256 -nic-gbps 1 -fsync-us 100 -ba
 go run ./cmd/faftbench scale     # 收益与代价随 n 的变化
 go run ./cmd/faftbench cost      # 副本粒度可用性：弹性 quorum 的真实代价
 go run ./cmd/faftbench domain    # 按故障域组织能否恢复控制路径可用性
+
 go run ./cmd/faftbench avail     # 独立失效 vs 相关失效
 
 # 6. 端到端集群实验
 go run ./cmd/kvbench -spec 2x3 -duration 10s -warmup 3s -concurrency 32 \
     -mode closed -read-ratio 0.9 -keys 5000 -out-json results/smoke.json
+
+# 7. 共识层微基准（quorum 几何的真实收益与代价）
+powershell -ExecutionPolicy Bypass -File scripts\run-raftbench.ps1   # 全部实验
+go run ./cmd/raftbench -mode bench -n 5 -q1 3 -q2 3 -delay 5ms \
+    -ops 200000 -warmup 2000 -concurrency 512 -repeat 3 -duration 2s
+go run ./cmd/raftbench -mode avail -n 5 -q1 5 -q2 1 -kill 0 -trials 7
+go run ./cmd/raftbench -mode lag   -n 5 -q1 5 -q2 1 -delay 1ms -lagops 1500
+
+# 8. baseline 对照（解析级）
+go run ./cmd/faftbench planners  # majority / FlexiRaft / Orca / TiKV PD / FAFT
+go run ./cmd/faftbench evidence  # 全部结论的证据等级清单
 ```

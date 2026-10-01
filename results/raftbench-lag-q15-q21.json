@@ -1,0 +1,43 @@
+{
+  "label": "raftbench-lag-n5-q15-q21",
+  "mode": "lag",
+  "n": 5,
+  "q1": 5,
+  "q2": 1,
+  "majority": 3,
+  "ops": 0,
+  "concurrency": 0,
+  "payload_bytes": 0,
+  "repeat": 0,
+  "throughput_ops_per_sec_median": 0,
+  "throughput_ops_per_sec_min": 0,
+  "throughput_ops_per_sec_max": 0,
+  "injected_delay_us": 0,
+  "injected_jitter_sigma": 0,
+  "clock_floor_us": 316,
+  "latency_usable": false,
+  "observed_p50_ms": 0,
+  "client_saturation_min": 0,
+  "client_saturation_max": 0,
+  "runs": null,
+  "applied_per_node": null,
+  "last_index_per_node": null,
+  "hash_per_node": null,
+  "consistent": false,
+  "avail_trials": 0,
+  "avail_success": 0,
+  "avail_killed": 0,
+  "avail_success_rate": 0,
+  "lag_samples": 1500,
+  "lag_histogram": {
+    "1": 1500
+  },
+  "lag_mean_replicas": 1,
+  "notes": [
+    "串行提交（并发 1）、每条命令独立 payload；量的是 **Apply 返回成功那一瞬间**，日志里已经有这条记录的副本数（用 LastIndex，不是 FSM 的 AppliedIndex）。",
+    "并发下的流水线会让 follower 追上，所以这里刻意用串行 —— 量的是提交瞬间，不是稳态。",
+    "|Q1|=5 |Q2|=1 n=5：|Q2| 就是提交所需的最小副本数（含 leader 自己），分布的下界应当等于它。",
+    "|Q2|=1 时下界是 1 —— 也就是说客户端收到成功时，数据可能只在一个副本上。",
+    "这不违反 FPaxos 安全性（|Q1|+|Q2|\u003eN 保证不回滚），但意味着**介质丢失**会丢已提交的数据，且 leader 挂掉后集群会一直不可用直到它回来。这是 |Q2| 变小的真实代价。"
+  ]
+}

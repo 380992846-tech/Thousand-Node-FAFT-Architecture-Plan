@@ -1,0 +1,131 @@
+{
+  "label": "raftbench-n5-q15-q21-d2ms",
+  "mode": "bench",
+  "n": 5,
+  "q1": 5,
+  "q2": 1,
+  "majority": 3,
+  "ops": 600000,
+  "concurrency": 512,
+  "payload_bytes": 64,
+  "repeat": 3,
+  "throughput_ops_per_sec_median": 213848.66870649785,
+  "throughput_ops_per_sec_min": 176464.3964110318,
+  "throughput_ops_per_sec_max": 217240.69987132834,
+  "injected_delay_us": 2000,
+  "injected_jitter_sigma": 0.6,
+  "clock_floor_us": 484,
+  "latency_usable": true,
+  "observed_p50_ms": 2.087691,
+  "client_saturation_min": 0.9938974957428971,
+  "client_saturation_max": 0.9987890511642304,
+  "runs": [
+    {
+      "index": 0,
+      "ops": 200000,
+      "elapsed_sec": 0.9206378,
+      "throughput_ops_per_sec": 217240.69987132834,
+      "latency_ms": {
+        "count": 200000,
+        "mean_ms": 2.342450186,
+        "min_ms": 0,
+        "p50_ms": 2.087691,
+        "p90_ms": 3.49358,
+        "p99_ms": 7.713964,
+        "p99_9_ms": 10.38198,
+        "max_ms": 12.1422
+      },
+      "leader_retries": 0,
+      "append_entries_rpc": 333,
+      "pipeline_append_entries_rpc": 11659,
+      "request_vote_rpc": 0,
+      "append_entries_rpc_per_op": 0.05996,
+      "replication_gap_entries": 15730,
+      "client_saturation": 0.9938974957428971,
+      "derived_avg_latency_ms": 2.3568327680000003
+    },
+    {
+      "index": 1,
+      "ops": 200000,
+      "elapsed_sec": 0.9352408,
+      "throughput_ops_per_sec": 213848.66870649785,
+      "latency_ms": {
+        "count": 200000,
+        "mean_ms": 2.3870102335000003,
+        "min_ms": 0,
+        "p50_ms": 2.215474,
+        "p90_ms": 3.227528,
+        "p99_ms": 7.414421,
+        "p99_9_ms": 10.178412,
+        "max_ms": 12.7443
+      },
+      "leader_retries": 0,
+      "append_entries_rpc": 337,
+      "pipeline_append_entries_rpc": 11590,
+      "request_vote_rpc": 0,
+      "append_entries_rpc_per_op": 0.059635,
+      "replication_gap_entries": 34098,
+      "client_saturation": 0.9969901574663311,
+      "derived_avg_latency_ms": 2.394216448
+    },
+    {
+      "index": 2,
+      "ops": 200000,
+      "elapsed_sec": 1.1333731,
+      "throughput_ops_per_sec": 176464.3964110318,
+      "latency_ms": {
+        "count": 200000,
+        "mean_ms": 2.8979216465,
+        "min_ms": 0,
+        "p50_ms": 2.351079,
+        "p90_ms": 5.509024,
+        "p99_ms": 8.687176,
+        "p99_9_ms": 11.237789,
+        "max_ms": 12.2715
+      },
+      "leader_retries": 0,
+      "append_entries_rpc": 384,
+      "pipeline_append_entries_rpc": 10721,
+      "request_vote_rpc": 0,
+      "append_entries_rpc_per_op": 0.055525,
+      "replication_gap_entries": 62706,
+      "client_saturation": 0.9987890511642304,
+      "derived_avg_latency_ms": 2.9014351360000004
+    }
+  ],
+  "applied_per_node": [
+    602000,
+    602000,
+    602000,
+    602000,
+    602000
+  ],
+  "last_index_per_node": [
+    602002,
+    602002,
+    602002,
+    602002,
+    602002
+  ],
+  "hash_per_node": [
+    11013454472052768224,
+    11013454472052768224,
+    11013454472052768224,
+    11013454472052768224,
+    11013454472052768224
+  ],
+  "consistent": true,
+  "avail_trials": 0,
+  "avail_success": 0,
+  "avail_killed": 0,
+  "avail_success_rate": 0,
+  "lag_samples": 0,
+  "lag_mean_replicas": 0,
+  "notes": [
+    "传输为进程内 in-memory，日志在内存中，单机单进程：这是共识层微基准，不是端到端集群吞吐。",
+    "每条 AppendEntries RPC 注入单程延迟 LogNormal(中位数=2ms, sigma=0.60)；这是**注入**的，不是实测网络。",
+    "|Q1|=5, |Q2|=1, n=5, |Q1|+|Q2|=6 \u003e n 满足 Flexible Paxos 安全性条件。",
+    "q1=0/q2=0 时 flexiraft 与上游 hashicorp/raft 逐行等价，因此 majority 基线无实现差异混淆。",
+    "本机 Go 单调时钟地板 = 484µs（实测最小跳变）。低于此量级的延迟读数不可信。"
+  ]
+}

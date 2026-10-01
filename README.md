@@ -92,9 +92,12 @@ go run ./cmd/kvbench -spec 2x3 -duration 10s -warmup 3s -concurrency 32
 | `pkg/bench` | 延迟直方图 + 开环/闭环发压 + 结果序列化 |
 | `pkg/model` | 解析成本模型（leader 出口 / 磁盘 / CPU 上限） |
 | `pkg/faft` | **FAFT quorum 几何求解器 + 可用性计算器** |
+| `third_party/flexiraft` | **hashicorp/raft 的 FPaxos 改造版**（可配置 \|Q1\|/\|Q2\|） |
 | `cmd/kvbench` | 一体化实验驱动 |
 | `cmd/faftbench` | FAFT 收益与代价分析 |
-| `docs/` | [BUGS](docs/BUGS.md) · [DESIGN](docs/DESIGN.md) · [ROADMAP](docs/ROADMAP.md) |
+| `cmd/raftbench` | **共识层微基准**：quorum 几何对提交吞吐/延迟的实测 |
+| `cmd/simbench` | 离散事件模拟器驱动 |
+| `docs/` | [BUGS](docs/BUGS.md) · [DESIGN](docs/DESIGN.md) · [MEASUREMENT](docs/MEASUREMENT.md) · [ROADMAP](docs/ROADMAP.md) |
 
 ---
 
@@ -104,6 +107,8 @@ go run ./cmd/kvbench -spec 2x3 -duration 10s -warmup 3s -concurrency 32
   发现方式、修复与回归测试
 - **[docs/DESIGN.md](docs/DESIGN.md)** —— 论文方向与实验方案：
   文献空白、理论支撑、FAFT 设计、baselines、指标、消融、风险
+- **[docs/MEASUREMENT.md](docs/MEASUREMENT.md)** —— **证据分级与本机限制**：
+  哪些数字是实测、哪些是解析、时钟地板的实测数据、注入延迟的语义
 - **[docs/ROADMAP.md](docs/ROADMAP.md)** —— 已完成 / 未完成 / **验证缺口**
 - **[docs/related-work-notes.md](docs/related-work-notes.md)** —— 顶会调研原始笔记
 - **[_research_pdfs/](_research_pdfs/)** —— 调研引用的一手 PDF 与文本
@@ -170,6 +175,67 @@ BenchmarkBarrier          6,672,332 ns/op
 > 批处理的收益来自并发摊薄，**串行场景不应期待收益**（实测同量级）。
 > 本机 fsync 波动较大（同配置不同轮次 4.6~8.1ms/op），
 > 因此绝对数字不可跨轮次比较，只能看同轮内的相对关系。
+
+---
+
+## 弹性 quorum 的真实代价与收益（共识层实测）
+
+上面那组是**端到端**数字，它回答不了 FAFT 的核心问题：`|Q1|`/`|Q2|`
+这两个整数到底值多少吞吐、多少可用性。所以另建了一套装置
+`cmd/raftbench`，直接驱动 [`third_party/flexiraft`](third_party/flexiraft) ——
+`hashicorp/raft` 的 FPaxos 改造版。
+
+> **基线为什么可信**：fork 在 `DataQuorumSize=0 && ElectionQuorumSize=0` 时
+> 与上游**逐行等价**（`quorumSize()`、`recalculate()` 的回退值都还原成多数）。
+> 所以「多数基线」与「FlexiRaft 实验组」跑的是**同一个二进制、同一段提交逻辑**，
+> 只差两个整数 —— 实现差异这个混淆变量被彻底排除。
+
+n=5，512 并发，每轮 2s，3 轮取中位数，每条 RPC 注入单程延迟：
+
+| 注入延迟 | 多数 (\|Q1\|=3,\|Q2\|=3) | (\|Q1\|=4,\|Q2\|=2) | (\|Q1\|=5,\|Q2\|=1) |
+|---|---|---|---|
+| 0（纯内存介质） | 173,895 | 204,282 | 148,717 |
+| 1 ms | 161,737 | 165,130 | 156,507 |
+| 2 ms | 92,810 | 99,376 | 116,719 |
+| **5 ms** | 38,506 | 45,956 | **154,437** |
+
+- **延迟为 0、1 ms 时三组没有区别** —— 介质里没有等待（或效应落在噪声内），
+  就没有收益。这是对照组。
+- 多数 quorum 的吞吐随 RTT 近似反比下滑；`|Q2|=1` 几乎不受影响，
+  因为提交路径上完全不等 follower。
+- 5ms 时差距 **4.0 倍**（本机噪声大，轮间波动 ±30%，
+  上一轮同一配置跑到过 5.3 倍 —— 见 [MEASUREMENT](docs/MEASUREMENT.md) §5.1）。
+
+**但代价必须一起报**，否则这个数字是误导的：
+
+| 代价 | 实测 |
+|---|---|
+| 选主可用性 | `|Q1|` 变大后是**阶跃**的：存活副本数 < `|Q1|` 时 **0/7** 成功，≥ 时 **7/7**。`|Q1|=5` 意味着任何一个副本挂掉，集群就失去选主能力 |
+| durability | `|Q2|` 就是「ack 那一刻日志所在副本数」的严格下界：实测 `|Q2|=3/2/1` 对应下界 **3/2/1**。`|Q2|=1` 时客户端收到成功的那一刻，数据 **100%** 只存在于 leader 一个副本上 |
+| 复制落后 | `|Q2|` ≥ 多数时 leader 与最慢 follower 只差千条量级；`|Q2|=1` 时 leader 一路跑在前面，窗口结束时落后 **1.2 万–25 万条**且单调累积 |
+
+`|Q2|=1` 不违反安全性（`|Q1|+|Q2|>N` 保证已提交日志不回滚），
+但**介质丢失 = 已提交数据丢失**，且 leader 挂掉后集群一直不可用直到它回来。
+中段（如 `|Q2|=2`）才是可用的点 —— **而选哪个点取决于故障域结构**，
+这正是 `pkg/faft` 求解器在做的事。
+
+```bash
+# 一键复现全部（结果落 results/raftbench-*.json）
+powershell -ExecutionPolicy Bypass -File scripts\run-raftbench.ps1
+
+# 单跑
+go run ./cmd/raftbench -mode bench -n 5 -q1 3 -q2 3 -delay 2ms \
+    -ops 200000 -warmup 2000 -concurrency 512 -repeat 3 -duration 2s
+go run ./cmd/raftbench -mode avail -n 5 -q1 5 -q2 1 -kill 0 -trials 7
+go run ./cmd/raftbench -mode lag   -n 5 -q1 5 -q2 1 -delay 1ms -lagops 1500
+```
+
+> ⚠️ **本机时钟地板 ≈ 300µs，跳变最大 4.5ms**（200ms 忙等里只有 142 次跳变）。
+> 低于 ~1ms 的延迟读数会读成 0 —— 这不是 bug，是运行环境。
+> `raftbench` 会自己测出这个地板并写进结果（`clock_floor_us` /
+> `latency_usable`），延迟不可信时明确标注、主指标让给吞吐。
+> 全部依据见 **[docs/MEASUREMENT.md](docs/MEASUREMENT.md)**。
+> 注入的是**延迟模型**，不是真实网络。
 
 ---
 

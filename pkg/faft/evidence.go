@@ -124,6 +124,39 @@ func EvidenceManifest() []Claim {
 			CanClaim: "作为引用（Mencius OSDI'08 §7 已给出该律），不能作为本项目的发现",
 			CannotClaim: "这是本项目的贡献 —— 已发表文献里明确写着",
 		},
+		{
+			Statement: "在 hashicorp/raft 的真实提交路径上，|Q2| 从 3 降到 1 使提交吞吐从 " +
+				"38.5k 升到 154.4k ops/s（4.0 倍，注入单程延迟 5ms）；注入延迟 0/1ms 时三组落在噪声内",
+			Evidence: EvidenceMeasured,
+			Where:    "cmd/raftbench -> results/raftbench-sweep-n5.json; scripts/run-raftbench.ps1",
+			CanClaim: "在**本机、进程内 in-memory 介质、注入延迟**这套设定下，" +
+				"quorum 几何对共识层提交吞吐/延迟的因果效应；以及「收益随 RTT 增大」这一形状",
+			CannotClaim: "端到端系统吞吐（路由/编解码/存储/fsync 全被剥掉）；" +
+				"真实网络的绝对性能（注入的是延迟模型，不是真实网络）；" +
+				"也不能报单点倍数 —— 本机轮间波动 ±30%，同一配置上轮跑到过 5.3 倍、本轮 4.0 倍，" +
+				"必须报区间与趋势方向",
+		},
+		{
+			Statement: "|Q2| 就是「Apply 返回成功那一刻日志所在副本数」的严格下界：" +
+				"|Q2|=3/2/1 时实测下界分别为 3/2/1（1500 个串行样本，注入延迟 1ms）",
+			Evidence: EvidenceMeasured,
+			Where:    "cmd/raftbench -mode lag -> results/raftbench-lag-q1*.json",
+			CanClaim: "|Q2| 的语义在真实实现上确实就是提交所需的副本数；" +
+				"|Q2|=1 时客户端收到成功时数据只在一个副本上（实测 100%）",
+			CannotClaim: "真实磁盘故障下的持久性 —— in-memory 日志；" +
+				"也不能说这违反安全性：|Q1|+|Q2|>N 保证已提交日志不回滚，" +
+				"被牺牲的是介质丢失容忍度与选主可用性",
+		},
+		{
+			Statement: "|Q1| 变大对选主可用性的影响是**阶跃**的：存活副本数 < |Q1| 时 0/7 成功，" +
+				"≥ |Q1| 时 7/7 成功（n=5，杀掉原 leader + k-1 个节点）",
+			Evidence: EvidenceMeasured,
+			Where:    "cmd/raftbench -mode avail -> results/raftbench-avail-q1*.json",
+			CanClaim: "在 in-memory 介质下，选主成功率由「存活数 ≥ |Q1|」这个算术关系决定，" +
+				"不是渐变；|Q1|=5 时任何单点故障都让集群失去选主能力",
+			CannotClaim: "真实分区场景下的可用性 —— 没有真实网络分区，" +
+				"且选举本身在内存介质下快到不构成瓶颈，所以这里量的主要是门槛而不是超时",
+		},
 	}
 }
 

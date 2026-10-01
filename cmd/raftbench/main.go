@@ -40,6 +40,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -319,6 +320,21 @@ type runStats struct {
 	PipelineAE     int64          `json:"pipeline_append_entries_rpc"`
 	RequestVoteRPC int64          `json:"request_vote_rpc"`
 	AERPCPerOp     float64        `json:"append_entries_rpc_per_op"`
+
+	// 窗口结束瞬间 leader 日志末尾与最慢 follower 之差（条数）。
+	// |Q2| 小于多数时为正 —— 它是「已提交但尚未复制」的日志量。
+	ReplicationGapMax uint64 `json:"replication_gap_entries"`
+
+	// ClientSaturation = 客户端等待 Apply 的总时长 / (并发数 × 窗口时长)。
+	// 接近 1 说明所有 worker 一直在等，系统已饱和（吞吐受服务端能力限制）；
+	// 明显小于 1 说明吞吐只是"并发数 ÷ 延迟"，比较配置容量时不可直接用。
+	ClientSaturation float64 `json:"client_saturation"`
+
+	// DerivedAvgLatencyMs 由 Little 定律反推：W = L/λ = 并发数 / 吞吐。
+	// 只用两个跨秒窗口的聚合量，因此**不受本机时钟地板影响** ——
+	// 当直接测量的延迟低于时钟分辨率时，这是唯一还能用的延迟口径。
+	// 仅在 ClientSaturation ≈ 1 时有意义。
+	DerivedAvgLatencyMs float64 `json:"derived_avg_latency_ms"`
 }
 
 type result struct {
@@ -344,6 +360,13 @@ type result struct {
 	ClockFloorUs  int64 `json:"clock_floor_us"`
 	LatencyUsable bool  `json:"latency_usable"`
 
+	// 各轮实测 p50 的最小值，用于判断延迟是否真的高过时钟地板。
+	ObservedP50Ms float64 `json:"observed_p50_ms"`
+
+	// 客户端饱和度区间：接近 1 才说明测到的是服务端容量。
+	ClientSaturationLo float64 `json:"client_saturation_min"`
+	ClientSaturationHi float64 `json:"client_saturation_max"`
+
 	Runs []runStats `json:"runs"`
 
 	// 原始延迟样本（仅 -dump 时填充），单位纳秒，用于排查。
@@ -357,10 +380,18 @@ type result struct {
 	ConsistencyMsg string   `json:"consistency_msg,omitempty"`
 
 	// avail 模式
-	AvailTrials  int     `json:"avail_trials,omitempty"`
-	AvailSuccess int     `json:"avail_success,omitempty"`
-	AvailKilled  int     `json:"avail_killed,omitempty"`
-	AvailRate    float64 `json:"avail_success_rate,omitempty"`
+	//
+	// 刻意不加 omitempty：0% 成功是本实验最重要的读数之一
+	// （存活数 < |Q1| 时必然选不出 leader），被省略掉就看不见了。
+	AvailTrials  int     `json:"avail_trials"`
+	AvailSuccess int     `json:"avail_success"`
+	AvailKilled  int     `json:"avail_killed"`
+	AvailRate    float64 `json:"avail_success_rate"`
+
+	// lag 模式：Apply 成功那一刻已应用该日志的副本数分布
+	LagSamples      int            `json:"lag_samples"`
+	LagHistogram    map[string]int `json:"lag_histogram,omitempty"`
+	LagMeanReplicas float64        `json:"lag_mean_replicas"`
 
 	Notes []string `json:"notes"`
 }
@@ -387,6 +418,8 @@ func main() {
 	out := flag.String("out", "", "结果 JSON 输出路径；留空则打到 stdout（sweep 模式必填）")
 	dump := flag.Bool("dump", false, "把每次提交的原始延迟（纳秒）写进结果，用于排查")
 	delays := flag.String("delays", "0s,2ms", "sweep 模式：逗号分隔的注入延迟列表")
+	lagOps := flag.Int("lagops", 2000, "lag 模式的串行采样条数")
+	settle := flag.Duration("settle", 60*time.Second, "测量结束后等各节点追平的最长时间（|Q2| 变小时 follower 会明显落后）")
 	flag.Parse()
 
 	if *payload < 8 {
@@ -407,12 +440,21 @@ func main() {
 			buildOpts: buildOpts{n: *n, q1: *q1, q2: *q2, delay: *delay, sigma: *sigma, seed: *seed, payload: *payload},
 			label:     *label, ops: *ops, conc: *conc, warmup: *warmup, repeat: *repeat,
 			duration: *duration, timeout: *timeout, electTimeout: *electTimeout,
-			dump: *dump, clockFloor: floor,
+			settle: *settle, dump: *dump, clockFloor: floor,
 		})
 	case "avail":
 		res, err = runAvail(availOpts{
 			buildOpts: buildOpts{n: *n, q1: *q1, q2: *q2, delay: *delay, sigma: *sigma, seed: *seed, payload: *payload},
 			label:     *label, trials: *trials, kill: *kill, electTimeout: *electTimeout, clockFloor: floor,
+		})
+	case "lag":
+		res, err = runLag(lagOpts{
+			buildOpts:    buildOpts{n: *n, q1: *q1, q2: *q2, delay: *delay, sigma: *sigma, seed: *seed, payload: *payload},
+			label:        *label,
+			samples:      *lagOps,
+			timeout:      *timeout,
+			electTimeout: *electTimeout,
+			clockFloor:   floor,
 		})
 	case "sweep":
 		var ds []time.Duration
@@ -431,7 +473,7 @@ func main() {
 		err = runSweep(sweepOpts{
 			out: *out, n: *n, ops: *ops, conc: *conc, payload: *payload, warmup: *warmup,
 			repeat: *repeat, duration: *duration, timeout: *timeout, electTimeout: *electTimeout,
-			seed: *seed, sigma: *sigma, delays: ds, clockFloor: floor,
+			seed: *seed, sigma: *sigma, delays: ds, clockFloor: floor, settle: *settle,
 		})
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "sweep 失败:", err)
@@ -479,6 +521,7 @@ type benchOpts struct {
 	duration     time.Duration
 	timeout      time.Duration
 	electTimeout time.Duration
+	settle       time.Duration
 	dump         bool
 	clockFloor   time.Duration
 }
@@ -611,6 +654,12 @@ func measureWindow(cl *cluster, o benchOpts, startSeq uint64) (runStats, []int64
 		PipelineAE:     cl.counters.pipelineAE.Load(),
 		RequestVoteRPC: cl.counters.requestVote.Load(),
 	}
+	// 窗口结束瞬间的复制落后量：leader 的日志末尾 vs 最慢 follower 的日志末尾。
+	//
+	// 这是「leader 跑在多快、复制跟在多后面」的直接读数，与 §lag 模式的
+	// 「ack 那一刻有几个副本有数据」互补：那个是逐条的瞬时值，这个是
+	// 窗口末尾的累计落后。|Q2|=1 时 leader 不等任何人，这个数会明显为正。
+	st.ReplicationGapMax = replicationGap(cl)
 	if elapsed > 0 {
 		st.Throughput = float64(st.Ops) / elapsed.Seconds()
 	}
@@ -619,6 +668,18 @@ func measureWindow(cl *cluster, o benchOpts, startSeq uint64) (runStats, []int64
 		denom = 1
 	}
 	st.AERPCPerOp = float64(st.AppendEntries+st.PipelineAE) / float64(denom)
+
+	// 客户端饱和度：等待 Apply 的总时长 ÷ (并发 × 窗口)。
+	sumLatNs := hist.Mean() * float64(hist.Count())
+	if capNs := float64(o.conc) * elapsed.Seconds() * 1e9; capNs > 0 {
+		st.ClientSaturation = sumLatNs / capNs
+	}
+	// Little 定律：W = L/λ。只用聚合量，不受时钟地板影响。
+	if st.Throughput > 0 {
+		st.DerivedAvgLatencyMs = float64(o.conc) / st.Throughput * 1000
+	}
+
+	// 重置复制落后量的采样：下一轮的窗口从新的基线开始。
 	return st, rawLat, startSeq + uint64(submitted.Load()), nil
 }
 
@@ -689,11 +750,28 @@ func assembleResult(cl *cluster, runs []runStats, o benchOpts) *result {
 		res.Ops = totalOps
 	}
 
-	// 延迟是否可信：注入延迟必须显著高于本机时钟地板。
-	// 门槛取 3× 地板 —— 低于这个量级，分位数的桶宽和时钟跳变同阶。
-	res.LatencyUsable = res.InjectedDelayUs >= 3*max64(1, res.ClockFloorUs)
+	// 延迟是否可信：用**实测分位数**判断，而不是只看注入延迟。
+	//
+	// 判据：p50 必须至少是时钟地板的 3 倍。低于它，样本会大量读成 0
+	// 或一次跳变，分位数没有意义。
+	//
+	// 注意这与"注入延迟"不是一回事：在 -delay 0（纯内存介质）下，
+	// 只要并发足够高，排队延迟本身就会远超时钟地板，此时 p50 是**可信**的
+	// （它反映的是队列长度，不是单次 RPC 耗时）。所以判据必须看实测值。
+	res.LatencyUsable = false
+	if len(runs) > 0 {
+		best := math.MaxFloat64
+		for _, r := range runs {
+			if r.Latency.P50Ms < best {
+				best = r.Latency.P50Ms
+			}
+		}
+		res.ObservedP50Ms = best
+		floorMs := float64(max64(1, res.ClockFloorUs)) / 1000.0
+		res.LatencyUsable = best >= 3*floorMs
+	}
 
-	res.AppliedPerNode, res.LastIdxPerNode, res.HashPerNode, res.Consistent, res.ConsistencyMsg = checkConsistency(cl)
+	res.AppliedPerNode, res.LastIdxPerNode, res.HashPerNode, res.Consistent, res.ConsistencyMsg = checkConsistency(cl, o.settle)
 
 	res.Notes = []string{
 		"传输为进程内 in-memory，日志在内存中，单机单进程：这是共识层微基准，不是端到端集群吞吐。",
@@ -704,9 +782,32 @@ func assembleResult(cl *cluster, runs []runStats, o benchOpts) *result {
 	}
 	if !res.LatencyUsable {
 		res.Notes = append(res.Notes,
-			fmt.Sprintf("⚠️ 注入延迟 %dµs < 3×时钟地板 %dµs：本轮**延迟分位数不可信**（大量样本会读成 0）。"+
-				"请只看吞吐（跨秒窗口，噪声可平均掉），或把 -delay 提到 1ms 以上。",
-				res.InjectedDelayUs, res.ClockFloorUs))
+			fmt.Sprintf("⚠️ 实测 p50=%.3fms < 3×时钟地板 %.3fms：本轮**延迟分位数不可信**"+
+				"（样本会大量读成 0 或一次时钟跳变）。请只看吞吐（跨秒窗口，噪声可平均掉）"+
+				"或 runs[].derived_avg_latency_ms（Little 定律反推）。",
+				res.ObservedP50Ms, float64(max64(1, res.ClockFloorUs))/1000.0))
+	}
+	if res.InjectedDelayUs == 0 {
+		res.Notes = append(res.Notes,
+			"本轮注入延迟为 0：这是**纯内存介质**的对照组。介质里没有网络等待，"+
+				"因此 |Q2| 变小应当几乎没有收益 —— 这正是用来证伪「收益来自实现差异」的对照条件。")
+	}
+	if len(runs) > 0 {
+		lo, hi := 1.0, 0.0
+		for _, r := range runs {
+			if r.ClientSaturation < lo {
+				lo = r.ClientSaturation
+			}
+			if r.ClientSaturation > hi {
+				hi = r.ClientSaturation
+			}
+		}
+		res.ClientSaturationLo, res.ClientSaturationHi = lo, hi
+		if lo < 0.5 {
+			res.Notes = append(res.Notes,
+				fmt.Sprintf("⚠️ 客户端饱和度最低只有 %.2f：并发数不足以压满服务端，此时吞吐 ≈ 并发数 ÷ 延迟，"+
+					"**不能**当作服务端容量来比较不同配置。要么提高 -concurrency，要么只看延迟。", lo))
+		}
 	}
 	return res
 }
@@ -716,8 +817,18 @@ func assembleResult(cl *cluster, runs []runStats, o benchOpts) *result {
 // hash 一致比 count 一致强得多：它同时排除"两个节点在同一 index 应用了
 // 不同命令"。这仍然不是形式化证明，但足以抓住 quorum 不相交、
 // commit 规则写错这类灾难性缺陷。
-func checkConsistency(cl *cluster) (applied, lastIdx, hashes []uint64, consistent bool, msg string) {
-	deadline := time.Now().Add(3 * time.Second)
+//
+// ⚠️ 必须给足追平时间。|Q2| 小于多数时，leader 会**跑在复制前面**
+// （这正是它的收益来源），测量窗口结束时 follower 天然落后几万条；
+// 而窗口结束后 leader 空闲，复制只能靠 CommitTimeout 心跳推进，
+// 每个 AppendEntries 最多带 MaxAppendEntries（默认 64）条。
+// 早先把上限设成 3 秒，于是所有 |Q2|=1 的配置都被误判为"不一致" ——
+// 那不是数据丢失，是**还没抄完**。默认给 60 秒，并且区分
+// 「收敛了」与「给了时间仍不收敛」。
+func checkConsistency(cl *cluster, settle time.Duration) (applied, lastIdx, hashes []uint64, consistent bool, msg string) {
+	deadline := time.Now().Add(settle)
+	var gapAtStart uint64
+	first := true
 	for {
 		applied = applied[:0]
 		lastIdx = lastIdx[:0]
@@ -733,29 +844,39 @@ func checkConsistency(cl *cluster) (applied, lastIdx, hashes []uint64, consisten
 				maxC = c
 			}
 		}
-		if minC == maxC || time.Now().After(deadline) {
+		if first {
+			gapAtStart = maxC - minC
+			first = false
+		}
+		if minC == maxC {
 			break
 		}
-		time.Sleep(10 * time.Millisecond)
+		if time.Now().After(deadline) {
+			return applied, lastIdx, hashOf(cl), false,
+				fmt.Sprintf("给足 %v 仍未追平：已应用条数 min=%d max=%d（差 %d 条，"+
+					"起始差 %d）。这更可能是复制吞吐不足而非数据丢失 —— "+
+					"看 runs[].replication_gap_entries 与 |Q2| 的关系。",
+					settle, minC, maxC, maxC-minC, gapAtStart)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 
-	hashes = hashes[:0]
-	for _, nd := range cl.nodes {
-		hashes = append(hashes, nd.fsm.hash.Load())
-	}
+	hashes = hashOf(cl)
 	for i := 1; i < len(hashes); i++ {
 		if hashes[i] != hashes[0] {
 			return applied, lastIdx, hashes, false,
 				fmt.Sprintf("节点间状态指纹不一致：node0 hash=%d node%d hash=%d", hashes[0], i, hashes[i])
 		}
 	}
-	for i := 1; i < len(applied); i++ {
-		if applied[i] != applied[0] {
-			return applied, lastIdx, hashes, false,
-				fmt.Sprintf("追平后已应用条数仍不一致：node0=%d node%d=%d", applied[0], i, applied[i])
-		}
-	}
 	return applied, lastIdx, hashes, true, ""
+}
+
+func hashOf(cl *cluster) []uint64 {
+	out := make([]uint64, 0, len(cl.nodes))
+	for _, nd := range cl.nodes {
+		out = append(out, nd.fsm.hash.Load())
+	}
+	return out
 }
 
 func max64(a, b int64) int64 {
@@ -763,6 +884,31 @@ func max64(a, b int64) int64 {
 		return a
 	}
 	return b
+}
+
+// replicationGap 返回 leader 日志末尾与最慢存活 follower 日志末尾之差。
+//
+// 这个量只在 |Q2| 小于多数时才有意义：|Q2| 不小于多数时，leader 每次提交
+// 都必须等够副本，日志末尾天然被压在一起；|Q2|=1 时 leader 完全不等人，
+// 于是可以一路领先，落后的部分就是「已提交但尚未复制的日志」。
+func replicationGap(cl *cluster) uint64 {
+	var leaderLast, minFollowerLast uint64
+	found := false
+	for _, nd := range cl.nodes {
+		last := nd.raft.LastIndex()
+		if nd.raft.State() == fraft.Leader {
+			leaderLast = last
+			continue
+		}
+		if !found || last < minFollowerLast {
+			minFollowerLast = last
+			found = true
+		}
+	}
+	if !found || leaderLast <= minFollowerLast {
+		return 0
+	}
+	return leaderLast - minFollowerLast
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -868,6 +1014,125 @@ func runAvail(o availOpts) (*result, error) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// lag 模式：量化「已提交」与「已复制」之间的差
+//
+// 为什么必须测这个 —— 它是 |Q2| 变小的**代价侧**，也是最容易被忽略的一点。
+//
+// |Q2|=1 意味着 leader 在**任何 follower 都还没有这条日志**的时候，
+// 就把成功返回给客户端。安全性仍然成立：
+// |Q1|+|Q2|>N 且 |Q1|=N，所以没有旧 leader 参与就选不出新 leader，
+// 已提交的日志不会被回滚。但是：
+//
+//   - 这条数据此刻只存在于**一个副本**上。leader 的磁盘坏掉 = 真丢。
+//     （崩溃重启不丢；介质丢失才丢。这是 FPaxos 安全性论证覆盖不到的部分。）
+//   - leader 一旦挂掉，集群会一直不可用，直到它回来。
+//
+// 所以"|Q2| 变小换吞吐"这句话必须带上"提交时只有 k 个副本有数据"这个注脚。
+// 本模式把那个 k 的分布测出来。
+//
+// 注意本模式是**串行提交**（并发 1）：并发下 leader 的流水线会让 follower
+// 追上，测出来的 k 会被高估 —— 那样量的是稳态而不是提交瞬间。
+// ─────────────────────────────────────────────────────────────────────
+
+type lagOpts struct {
+	buildOpts
+	label        string
+	samples      int
+	timeout      time.Duration
+	electTimeout time.Duration
+	clockFloor   time.Duration
+}
+
+func runLag(o lagOpts) (*result, error) {
+	cl, err := buildCluster(o.buildOpts)
+	if err != nil {
+		return nil, err
+	}
+	defer cl.shutdown()
+
+	leader, err := cl.waitLeader(o.electTimeout)
+	if err != nil {
+		return nil, err
+	}
+	progress("lag: leader = %s（|Q1|=%d |Q2|=%d n=%d）", leader.id, cl.q1, cl.q2, o.n)
+	if err := warmupRun(cl, 200, 4, o.payload, o.timeout); err != nil {
+		return nil, err
+	}
+
+	hist := map[int]int{}
+	sum, ok := 0, 0
+	var seq uint64 = 1 << 40
+
+	for i := 0; i < o.samples; i++ {
+		seq++
+		cur := cl.leader()
+		if cur == nil {
+			continue
+		}
+		fut := cur.raft.Apply(makeCmd(o.payload, seq), o.timeout)
+		if err := fut.Error(); err != nil {
+			continue
+		}
+		idx := fut.Index()
+
+		// Apply 返回的**那一刻**，有几个副本的**日志里**已经有这条记录。
+		//
+		// 用 LastIndex()（日志已落盘到哪）而不是 AppliedIndex()（FSM 应用到哪）：
+		// durability 关心的是"这条日志在几个副本上存在"，不是"有几个副本把它
+		// 喂给了状态机"。FSM 是异步的，用 AppliedIndex 会连 leader 自己都算不进去
+		// —— 早先版本就是这么写的，结果是三组配置全部读出 1.0，毫无区分度。
+		replicas := 0
+		for _, nd := range cl.nodes {
+			if nd.raft.LastIndex() >= idx {
+				replicas++
+			}
+		}
+		hist[replicas]++
+		sum += replicas
+		ok++
+	}
+
+	res := &result{
+		Mode:         "lag",
+		N:            o.n,
+		Q1:           cl.q1,
+		Q2:           cl.q2,
+		Majority:     majority(o.n),
+		ClockFloorUs: o.clockFloor.Microseconds(),
+		LagSamples:   ok,
+	}
+	if o.label == "" {
+		res.Label = fmt.Sprintf("raftbench-lag-n%d-q1%d-q2%d", o.n, cl.q1, cl.q2)
+	} else {
+		res.Label = o.label
+	}
+	res.LagHistogram = make(map[string]int, len(hist))
+	keys := make([]int, 0, len(hist))
+	for k := range hist {
+		keys = append(keys, k)
+	}
+	sort.Ints(keys)
+	for _, k := range keys {
+		res.LagHistogram[fmt.Sprintf("%d", k)] = hist[k]
+	}
+	if ok > 0 {
+		res.LagMeanReplicas = float64(sum) / float64(ok)
+	}
+
+	res.Notes = []string{
+		"串行提交（并发 1）、每条命令独立 payload；量的是 **Apply 返回成功那一瞬间**，" +
+			"日志里已经有这条记录的副本数（用 LastIndex，不是 FSM 的 AppliedIndex）。",
+		"并发下的流水线会让 follower 追上，所以这里刻意用串行 —— 量的是提交瞬间，不是稳态。",
+		fmt.Sprintf("|Q1|=%d |Q2|=%d n=%d：|Q2| 就是提交所需的最小副本数（含 leader 自己），"+
+			"分布的下界应当等于它。", cl.q1, cl.q2, o.n),
+		"|Q2|=1 时下界是 1 —— 也就是说客户端收到成功时，数据可能只在一个副本上。",
+		"这不违反 FPaxos 安全性（|Q1|+|Q2|>N 保证不回滚），但意味着**介质丢失**会丢已提交的数据，" +
+			"且 leader 挂掉后集群会一直不可用直到它回来。这是 |Q2| 变小的真实代价。",
+	}
+	return res, nil
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // sweep：扫 (|Q1|,|Q2|) × 注入延迟，输出 JSON 数组
 // ─────────────────────────────────────────────────────────────────────
 
@@ -884,6 +1149,7 @@ type sweepOpts struct {
 	sigma        float64
 	delays       []time.Duration
 	clockFloor   time.Duration
+	settle       time.Duration
 }
 
 // configs 生成满足 |Q1|+|Q2| > n 的 (Q1,Q2) 组合。
@@ -938,6 +1204,7 @@ func runSweep(o sweepOpts) error {
 				duration:     o.duration,
 				timeout:      o.timeout,
 				electTimeout: o.electTimeout,
+				settle:       o.settle,
 				clockFloor:   o.clockFloor,
 			})
 			if err != nil {
