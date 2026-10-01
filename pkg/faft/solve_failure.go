@@ -380,8 +380,26 @@ func SolveWithFailures(t *Topology, cfg Config, av AvailabilityModel, targets Av
 		all[i] = i
 	}
 
-	var bestScore float64 = -1
+	// 记录"最接近"的方案，供无解时返回 —— 只记分数是不够的：
+	// planner 对照表需要看到该方案的 quorum 大小与两条路径的可用性，
+	// 才能判断是目标过严还是求解器有问题。
+	var (
+		bestPlan       *Plan
+		bestDataAvail  float64 = -1
+		bestCtrlAvail  float64
+	)
 	evaluated := 0
+
+	consider := func(p Plan, dataAvail, ctrlAvail float64) {
+		// 以数据路径可用性为主序，控制路径为次序，保留最接近达标者。
+		if dataAvail > bestDataAvail ||
+			(dataAvail == bestDataAvail && ctrlAvail > bestCtrlAvail) {
+			cp := p
+			bestPlan = &cp
+			bestDataAvail = dataAvail
+			bestCtrlAvail = ctrlAvail
+		}
+	}
 
 	// 目标是最小化 2|Q2|，所以 k 从小到大扫描，第一个达标即为最优。
 	for k := 1; k <= n; k++ {
@@ -389,23 +407,32 @@ func SolveWithFailures(t *Topology, cfg Config, av AvailabilityModel, targets Av
 		dataAvail := av.availOf(q2mem, cfg.Placement)
 		evaluated++
 
+		// 即使数据路径不达标也要记录候选：这是"最接近"的主要来源。
+		q1min := n - k + 1
+		if q1min < 1 {
+			q1min = 1
+		}
+		if q1min <= n {
+			q1memMin := pickMaxAvailability(all, cfg.Placement, av, q1min)
+			consider(Evaluate(t, cfg, Quorum{Q1Members: q1memMin, Q2Members: q2mem}),
+				dataAvail, av.availOf(q1memMin, cfg.Placement))
+		}
+
 		if dataAvail < targets.Data {
-			// 记录"最接近"的方案，继续试更大的 k。
-			if dataAvail > bestScore {
-				bestScore = dataAvail
-			}
 			continue
 		}
 
 		// 数据路径达标，确定 |Q2|=k；再求满足控制目标的最小 |Q1|。
 		// |Q1| 的下界是 n-k+1（Flexible Paxos 约束）。
-		for q1size := n - k + 1; q1size <= n; q1size++ {
+		for q1size := q1min; q1size <= n; q1size++ {
 			q1mem := pickMaxAvailability(all, cfg.Placement, av, q1size)
 			ctrlAvail := av.availOf(q1mem, cfg.Placement)
 			evaluated++
 
 			q := Quorum{Q1Members: q1mem, Q2Members: q2mem}
 			p := Evaluate(t, cfg, q)
+			consider(p, dataAvail, ctrlAvail)
+
 			fp := FailurePlan{
 				Plan:                p,
 				DataAvailability:    dataAvail,
@@ -426,15 +453,39 @@ func SolveWithFailures(t *Topology, cfg Config, av AvailabilityModel, targets Av
 		}
 	}
 
-	// 没有完全达标的方案：返回"数据路径可用性最高"的那个，并标记未达标。
-	return FailurePlan{
-		FailureModel: av.Model.Name(),
-		MeetsData:    false, MeetsControl: false, Meets: false,
-		DataAvailability: bestScore,
-		Diagnostics: fmt.Sprintf(
-			"无达标方案：目标 数据>=%.4g 控制>=%.4g；共评估 %d 个方案；数据路径最高可用性 %.6g",
-			targets.Data, targets.Control, evaluated, bestScore),
+	// 没有完全达标的方案。
+	//
+	// 这里**不能**返回零值 FailurePlan —— 调用方（如 planner 对照表）会把它
+	// 当成"|Q2|=0、写消息=0"的有效方案，从而在表里显示一个看起来最优
+	// 但实际无意义的行。正确做法是：
+	//   - 显式标记 Meets=false 与 Feasible=false；
+	//   - 把"最接近的方案"的 quorum 与代价填进去，供人判断目标是否过严；
+	//   - 若连一个候选都没评估过（n 非法等），给出零值并靠 Diagnostics 说明。
+	if bestPlan == nil {
+		return FailurePlan{
+			FailureModel: av.Model.Name(),
+			Diagnostics: fmt.Sprintf(
+				"无可评估方案：目标 数据>=%.4g 控制>=%.4g；共评估 %d 个方案",
+				targets.Data, targets.Control, evaluated),
+		}
 	}
+
+	fp := FailurePlan{
+		Plan:                *bestPlan,
+		DataAvailability:    clamp01(bestDataAvail),
+		ControlAvailability: clamp01(bestCtrlAvail),
+		FailureModel:        av.Model.Name(),
+	}
+	fp.MeetsData = fp.DataAvailability >= targets.Data
+	fp.MeetsControl = fp.ControlAvailability >= targets.Control
+	fp.Meets = fp.MeetsData && fp.MeetsControl
+	fp.Diagnostics = fmt.Sprintf(
+		"无达标方案：目标 数据>=%.4g 控制>=%.4g；共评估 %d 个方案；"+
+			"最接近者 |Q2|=%d |Q1|=%d，数据=%.6g 控制=%.6g",
+		targets.Data, targets.Control, evaluated,
+		len(fp.Quorum.Q2Members), len(fp.Quorum.Q1Members),
+		fp.DataAvailability, fp.ControlAvailability)
+	return fp
 }
 
 // ComparePlacementStrategies 对比两种放置策略在同一故障模型下的可用性。

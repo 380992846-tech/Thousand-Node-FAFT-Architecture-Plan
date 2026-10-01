@@ -8,6 +8,10 @@
 //	faftbench solve         # 故障感知成员选择 vs 按域计数贪心（FAFT 核心增量）
 //	faftbench solve-uniform # 对照组：域之间等价时的表现
 //	faftbench solve-plan    # 给定 SLA 目标求最小消息数方案
+//	faftbench planners      # baseline 对照（majority / FlexiRaft / FAFT / 消融）
+//	faftbench flexiraft-sweep # FlexiRaft data-commit quorum 参数扫描
+//	faftbench regional      # 区域事件是故障域感知的必要前提（对照实验）
+//	faftbench evidence      # 本项目结论的证据等级清单（写作自查用）
 //	faftbench n1000         # n=1000 单点详算
 //	faftbench curve         # n=1000 的完整权衡曲线
 //	faftbench avail         # 独立失效 vs 相关失效的可用性高估量
@@ -113,6 +117,23 @@ func main() {
 
 	case "regional":
 		runRegionalControl()
+
+	case "planners":
+		// P0-4：baseline 对照。所有 planner 在同一拓扑、同一故障模型、
+		// 同一代价模型下比较，避免拿不同口径的数字对比。
+		fmt.Println("=== Baseline 对照：同一故障模型下的 quorum 规划器 ===")
+		fmt.Println()
+		runPlannerComparison()
+
+	case "flexiraft-sweep":
+		// FlexiRaft 的收益取决于其 data-commit quorum 取值，
+		// 因此必须扫描该参数并报告整条曲线，不能只报一个点。
+		fmt.Println("=== FlexiRaft data-commit quorum 参数扫描 ===")
+		fmt.Println()
+		runFlexiRaftSweep()
+
+	case "evidence":
+		fmt.Print(faft.FormatEvidenceManifest())
 
 	case "n1000":
 		sc := faft.ScaleConfig{
@@ -307,7 +328,7 @@ func runSolvePlan() {
 	targets := faft.AvailabilityTargets{Data: 0.999, Control: 0.9999}
 
 	fmt.Printf("可用性目标：数据路径 >= %.4g，控制路径 >= %.4g\n", targets.Data, targets.Control)
-	fmt.Printf("拓扑：5 个域，逐域失效率 1e-5 ~ 1e-2\n\n", )
+	fmt.Printf("拓扑：5 个域，逐域失效率 1e-5 ~ 1e-2\n\n")
 	fmt.Printf("%-6s %-12s %-8s %-8s %-18s %-18s %-8s\n",
 		"n", "写消息/op", "|Q2|", "|Q1|", "数据可用性", "控制可用性", "达标")
 	fmt.Println(strings.Repeat("-", 92))
@@ -334,4 +355,122 @@ func runSolvePlan() {
 	fmt.Println()
 	fmt.Println("说明：|Q1| 满足 |Q1|+|Q2| > n（Flexible Paxos, OPODIS 2016 §4.2）；")
 	fmt.Println("求解目标是在两条路径可用性达标的前提下最小化写消息数 2|Q2|。")
+}
+
+// buildScenario 构造对照用的场景：拓扑 + 放置 + 故障模型。
+func buildScenario(n int) (*faft.Topology, faft.Placement, faft.AvailabilityModel) {
+	topo := skewedTopology() // 5 域，失效率 1e-5~1e-2，含区域事件
+	placement := make(faft.Placement, n)
+	for i := range placement {
+		placement[i] = i % len(topo.Domains)
+	}
+	av := faft.AvailabilityModel{
+		Model:    faft.IndependentFailure{P: 0},
+		Topology: topo,
+	}
+	return topo, placement, av
+}
+
+// runPlannerComparison 在同一口径下对照五个 planner。
+//
+// ⚠️ 目标必须**可达**，否则所有 planner 都显示"不可行"，对照失去意义。
+// 本拓扑含区域事件 q=1e-3，它把最坏情形下的可用性钉在 1-q = 0.999，
+// 因此目标必须低于它（这里取 0.998 / 0.9989）。
+// 初版取了 0.999 / 0.9999，结果每个 planner 都不可行 —— 那是场景设计错误，
+// 不是 planner 的问题。
+func runPlannerComparison() {
+	targets := faft.AvailabilityTargets{Data: 0.998, Control: 0.9989}
+
+	fmt.Println("拓扑：5 个域，逐域失效率 1e-5 ~ 1e-2（相差 1000 倍），区域事件 q=1e-3 打掉 3 域")
+	fmt.Printf("可用性目标：数据 >= %.4g，控制 >= %.4g（低于 1-q=0.999，保证可达）\n",
+		targets.Data, targets.Control)
+	fmt.Println("评估判据：先看可行性（两条路径都达标），再比写消息数")
+	fmt.Println()
+
+	planners := []faft.QuorumPlanner{
+		faft.MajorityPlanner{},
+		faft.FlexiRaftPlanner{},
+		faft.FlexiRaftPlanner{DataQuorum: 2},
+		faft.UniformFaftPlanner{Targets: targets},
+		faft.FaftPlanner{Targets: targets},
+	}
+
+	for _, n := range []int{5, 9, 11, 21, 51} {
+		topo, placement, av := buildScenario(n)
+		fmt.Printf("--- n=%d 副本 ---\n", n)
+
+		cmps := faft.ComparePlanners(topo, faft.Config{Replicas: n, Placement: placement}, av, planners...)
+		fmt.Print(faft.FormatPlannerComparison(cmps))
+
+		if best, ok := faft.BestFeasible(cmps); ok {
+			fmt.Printf("最优可行方案：%s（写消息 %d，相对多数 quorum 降 %.2fx）\n",
+				best.Planner, best.WriteMsgsPerOp, best.MsgReductionVsMajority)
+		} else {
+			fmt.Println("**没有任何可行方案** —— 该规模下目标不可达")
+		}
+		fmt.Println()
+	}
+
+	fmt.Println("planner 说明：")
+	fmt.Println("  majority          Raft / Multi-Paxos：Q1 = Q2 = ⌊n/2⌋+1")
+	fmt.Println("  flexiraft         FlexiRaft static，data quorum = max(2, n/4)")
+	fmt.Println("  flexiraft         （DataQuorum=2 时）data quorum 取最小")
+	fmt.Println("  faft-countselect  消融：FAFT 的 quorum 大小 + 按域计数选成员")
+	fmt.Println("  faft              本项目：可用性约束下最小化写消息，成员按边际可用性贪心")
+	fmt.Println()
+	fmt.Println("⚠️ 范围披露：FlexiRaft 仅实现 static 模式；其 dynamic 模式（按运行时故障")
+	fmt.Println("   动态排除节点）未实现，因为它需要故障检测器状态，超出本对照框架。")
+	fmt.Println("   原论文未开源代码，本实现依据其论文描述，性能差距需在论文中披露。")
+}
+
+// runFlexiRaftSweep 扫描 FlexiRaft 的 data-commit quorum 参数。
+func runFlexiRaftSweep() {
+	// FlexiRaft 的收益完全取决于 data-commit quorum 取值，
+	// 只报一个点是误导性的 —— 必须给出整条曲线。
+	const n = 21
+	topo, placement, av := buildScenario(n)
+	cfg := faft.Config{Replicas: n, Placement: placement}
+
+	fmt.Printf("n=%d，5 个域，目标：数据 >= %.4g，控制 >= %.4g\n\n",
+		n, faft.DefaultTargets().Data, faft.DefaultTargets().Control)
+	fmt.Printf("%-14s %-6s %-6s %-10s %-16s %-16s %-8s\n",
+		"data quorum", "|Q2|", "|Q1|", "写消息", "数据可用性", "控制可用性", "可行")
+	fmt.Println(strings.Repeat("-", 88))
+
+	for _, q2 := range []int{1, 2, 3, 5, 8, 11} {
+		p := faft.FlexiRaftPlanner{DataQuorum: q2}
+		cmps := faft.ComparePlanners(topo, cfg, av, p)
+		if len(cmps) == 0 {
+			continue
+		}
+		c := cmps[0]
+		feas := "否"
+		if c.Feasible {
+			feas = "是"
+		}
+		mark := ""
+		if !c.MeetsControl {
+			mark = "  ← 控制路径不达标"
+		}
+		fmt.Printf("%-14d %-6d %-6d %-10d %-16.6g %-16.6g %-8s%s\n",
+			q2, c.Q2Size, c.Q1Size, c.WriteMsgsPerOp,
+			c.DataAvailability, c.ControlAvailability, feas, mark)
+	}
+
+	fmt.Println()
+	fmt.Println("对照：多数 quorum（Raft）")
+	base := faft.ComparePlanners(topo, cfg, av, faft.MajorityPlanner{})
+	if len(base) > 0 {
+		c := base[0]
+		feas := "否"
+		if c.Feasible {
+			feas = "是"
+		}
+		fmt.Printf("%-14s %-6d %-6d %-10d %-16.6g %-16.6g %-8s\n",
+			"—", c.Q2Size, c.Q1Size, c.WriteMsgsPerOp,
+			c.DataAvailability, c.ControlAvailability, feas)
+	}
+	fmt.Println()
+	fmt.Println("观察要点：data quorum 越小，写消息越少，但控制路径可用性下降越快。")
+	fmt.Println("          这正是 Flexible Paxos 的 |Q1|+|Q2| > N 约束在起作用。")
 }

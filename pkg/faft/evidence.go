@@ -1,0 +1,146 @@
+package faft
+
+import "fmt"
+
+// Evidence 证据等级。
+//
+// 为什么需要显式分级：本项目同时存在三类数字，它们的可主张强度差别极大，
+// 混用会让论文站不住。写作与复现时都必须能一眼看出某个数字属于哪一级。
+//
+// 本项目在文档中曾把解析计算结果表述为"本项目实测"——那是错的。
+// 这个枚举的存在就是为了防止再犯：任何引用 faft 数字的地方，
+// 都必须同时说明它是 Analysis 级。
+type Evidence int
+
+const (
+	// EvidenceMeasured 真实系统实测。可以作绝对性能声明。
+	// 产出位置：cmd/kvbench -> results/*.json
+	EvidenceMeasured Evidence = iota + 1
+
+	// EvidenceAnalysis 解析计算（组合概率、成本模型、约束求解）。
+	// 只能作**成本界与结构性质**的声明，不能作性能声明。
+	// 产出位置：pkg/faft、pkg/model
+	EvidenceAnalysis
+
+	// EvidenceSimulated 离散事件模拟，且经实测校准。
+	// 只能作**趋势**声明；若校准未通过，还须标注偏离规模点。
+	// 产出位置：pkg/sim
+	EvidenceSimulated
+
+	// EvidenceDerived 本项目自行推导的模型（非引用文献，也非实测）。
+	// 必须在论文中同样标注为推导。
+	EvidenceDerived
+)
+
+// String 实现 fmt.Stringer。
+func (e Evidence) String() string {
+	switch e {
+	case EvidenceMeasured:
+		return "MEASURED(实测)"
+	case EvidenceAnalysis:
+		return "ANALYSIS(解析)"
+	case EvidenceSimulated:
+		return "SIMULATED(模拟)"
+	case EvidenceDerived:
+		return "DERIVED(推导)"
+	}
+	return "UNKNOWN"
+}
+
+// Claim 一条可主张的结论，附带其证据等级与产出位置。
+//
+// 设计意图：把"这句话有多硬"变成数据结构而不是散文。
+// 论文写作时逐条核对，就不会把解析结果写成实测。
+type Claim struct {
+	// Statement 结论本身。
+	Statement string `json:"statement"`
+	// Evidence 证据等级。
+	Evidence Evidence `json:"evidence"`
+	// Where 产出位置（文件路径或命令）。
+	Where string `json:"where"`
+	// CanClaim 该等级下**可以**主张什么。
+	CanClaim string `json:"can_claim"`
+	// CannotClaim 该等级下**不可以**主张什么。
+	CannotClaim string `json:"cannot_claim"`
+}
+
+// EvidenceManifest 返回本项目主要结论及其证据等级的清单。
+//
+// 用法：论文写作与审稿自查时逐条过一遍。
+func EvidenceManifest() []Claim {
+	return []Claim{
+		{
+			Statement: "readIndex 语义把读 p50 从 39.13ms 降到 4.09ms；put p50 从 99.24ms 降到 17.72ms",
+			Evidence:  EvidenceMeasured,
+			Where:     "cmd/kvbench -> results/readheavy-after.json, results/writeheavy.json",
+			CanClaim:  "在这台机器、这个配置下的绝对性能改善",
+			CannotClaim: "在其他硬件/网络/副本数下的绝对性能 —— 本机 fsync 波动大（同配置不同轮次 4.6~8.1ms/op），" +
+				"绝对数字不可跨轮次比较",
+		},
+		{
+			Statement: "弹性 quorum 把 n=1000 的稳态写消息从 1002 压到 4（167 倍），" +
+				"代价是选举需 999/1000 副本在线、控制路径可用性从 ~1.0 降到 0.9953",
+			Evidence: EvidenceAnalysis,
+			Where:    "pkg/faft/analysis.go: ComputeControlCost; cmd/faftbench cost",
+			CanClaim: "在既定故障模型与闭式下界下的**结构性质**：消息数、门槛与可用性的定量关系",
+			CannotClaim: "任何性能声明。这是组合概率与消息计数，不是测出来的吞吐或延迟",
+		},
+		{
+			Statement: "域感知的成员选择在同样 quorum 大小下把可用性从 0.9999998989 提升到 0.999999999997",
+			Evidence: EvidenceAnalysis,
+			Where:    "pkg/faft/planner.go: UniformFaftPlanner 消融; pkg/faft/planner_test.go",
+			CanClaim: "在给定故障模型下，成员选择准则单独贡献了多少可用性",
+			CannotClaim: "真实系统中的可用性 —— 依赖故障模型的正确性，而模型参数是假设值",
+		},
+		{
+			Statement: "相关故障下加大 quorum 会让系统更脆弱：5 域、事件打掉 3 域时，" +
+				"3 副本/3 域可用性 = 1-0.7q，4 副本/4 域 = 1-q",
+			Evidence: EvidenceAnalysis,
+			Where:    "pkg/faft/solve_failure_test.go: TestMemberAvailabilityRegionalEventCapsAvailability",
+			CanClaim: "在'事件等概率命中固定数量域'这一模型下的精确结论",
+			CannotClaim: "真实区域事件的命中分布就是这样 —— 模型是简化，参数需实测标定",
+		},
+		{
+			Statement: "1000 分片下单分片可用性 99.8%，全集群同时可用仅 13.5%",
+			Evidence:  EvidenceAnalysis,
+			Where:     "pkg/sim/sim.go: Result.ClusterAvailability（= 单分片可用性 ^ 分片数）",
+			CanClaim:  "在分片间**独立**假设下，全集群可用性随分片数指数衰减这一结构性质",
+			CannotClaim: "绝对可用性 —— 分片间独立是强假设。宿主共享会让多个分片的副本一起挂，" +
+				"实际值会更低。注意此数字是**解析计算**，不是离散事件模拟的结果，" +
+				"尽管它产出于名为 sim 的包",
+		},
+		{
+			Statement: "模拟吞吐上限与实测的比值：实测平均为上限的 7.26%（范围 4.44%–10.07%）",
+			Evidence:  EvidenceAnalysis,
+			Where:     "pkg/sim/calib.go: FitOverheadFactor；输入为 results/*.json 的实测样本",
+			CanClaim:  "从 2 个实测样本拟合出的「模型外开销」量级",
+			CannotClaim: "把它当作实测值本身 —— 它是派生量。更不能迁移到其他硬件：" +
+				"2 个样本远不足以支撑这样的外推",
+		},
+		{
+			Statement: "leader 出口带宽 ∝ 1/(n-1)，因此大规模下绑定约束必然转向带宽",
+			Evidence: EvidenceDerived,
+			Where:    "pkg/model; pkg/sim",
+			CanClaim: "作为引用（Mencius OSDI'08 §7 已给出该律），不能作为本项目的发现",
+			CannotClaim: "这是本项目的贡献 —— 已发表文献里明确写着",
+		},
+	}
+}
+
+// FormatEvidenceManifest 渲染证据清单。
+func FormatEvidenceManifest() string {
+	out := "本项目结论的证据等级清单\n"
+	out += "============================\n\n"
+	for i, c := range EvidenceManifest() {
+		out += fmt.Sprintf("%d. [%s] %s\n", i+1, c.Evidence, c.Statement)
+		out += fmt.Sprintf("   产出位置: %s\n", c.Where)
+		out += fmt.Sprintf("   可主张  : %s\n", c.CanClaim)
+		out += fmt.Sprintf("   不可主张: %s\n\n", c.CannotClaim)
+	}
+	out += "证据等级说明：\n"
+	out += "  MEASURED(实测)   真实系统运行产出，可作绝对性能声明\n"
+	out += "  ANALYSIS(解析)   组合概率/成本模型/约束求解，只作成本界与结构性质\n"
+	out += "  SIMULATED(模拟)  离散事件模拟，只作趋势；校准未过还须标注偏离点\n"
+	out += "  DERIVED(推导)    本项目自行推导，论文中须同样标注为推导\n"
+	return out
+}
