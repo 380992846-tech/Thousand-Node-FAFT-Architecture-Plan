@@ -120,7 +120,7 @@ go run ./cmd/kvbench -spec 2x3 -duration 10s -warmup 3s -concurrency 32
 ```
 go build -p 1 ./...     通过
 go vet   -p 1 ./...     通过
-go test  -p 1 ./...     通过
+go test  -p 1 ./...     通过（10 个包）
 ```
 
 测试覆盖：命令编解码与 CRC、快照往返与截断拒绝、并发读写 FSM、
@@ -128,14 +128,29 @@ go test  -p 1 ./...     通过
 **Leader 硬停后重新选主**、幂等 Bootstrap、非 Leader 拒绝写、
 ephemeral 端口解析。
 
+`third_party/flexiraft` 与 `cmd/raftbench` 另有专门的回归测试
+（这两个是本项目自己改出来的东西，没有上游测试兜底）：
+
+| 测试 | 守什么 |
+|---|---|
+| `TestCommitmentDataQuorumArithmetic` | 提交门槛算术：`matched[len-q]`，逐档手算对照 |
+| `TestCommitmentFallsBackToMajority` | 未设/越界时**必须**回退到多数 —— 这是"基线与上游逐行等价"的保证 |
+| `TestCommitmentRespectsStartIndex` | Raft 提交规则没被破坏（新 leader 必须先复制本任期首条日志） |
+| `TestElectionQuorumSizeIsEnforced` | `\|Q1\|` 在选主路径上真的生效：存活 2/3 时，多数能选出、`\|Q1\|=3` 选不出 |
+| `TestDataQuorumOneStillCommits` | `\|Q2\|=1` 在真实提交路径上确实推进 commitIndex |
+| `TestSweepConfigsSatisfyFPaxos` | sweep 生成的每一组配置都满足 `\|Q1\|+\|Q2\| > n` |
+| `TestBuildClusterRejectsUnsafeQuorum` | 不安全组合在建集群前就被拦住 |
+| `TestMakeCmdIsUniquePerCall` | payload 不能复用缓冲区（踩过的真坑） |
+
 **未验证的缺口**（详见 [ROADMAP §三](docs/ROADMAP.md)）：
 
 | 缺口 | 说明 |
 |---|---|
 | `go test -race` | 本机无 C 编译器，`-race` 需要 cgo。BUG-1 的修复目前只有逻辑推理 + 并发功能测试支撑 |
 | etcd 集成 | `pkg/metadata` 测试全部基于 `LocalTopology`，`ClusterTopology` 未端到端验证 |
-| 1000 节点 | `pkg/model` 与 `pkg/faft` 的数字是**解析预测**；端到端实测停在 6 副本 |
+| 1000 节点 | `pkg/model` 与 `pkg/faft` 的数字是**解析预测**；端到端实测停在 6 副本，共识层实测停在 n=9 |
 | 真实多机 | 单机多进程无真实网络分区与跨域 RTT |
+| 亚毫秒延迟 | 本机时钟地板 ≈300µs，低于 ~1ms 的延迟读数会读成 0，见 [MEASUREMENT](docs/MEASUREMENT.md) §4.1 |
 
 ---
 
