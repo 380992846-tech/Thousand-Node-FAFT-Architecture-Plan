@@ -1,0 +1,66 @@
+{
+  "label": "2x3",
+  "mode": "closed",
+  "notes": "",
+  "cluster": {
+    "shards": 2,
+    "replicas": 3,
+    "learners": 0,
+    "nodes": 6
+  },
+  "workload": "read_ratio=0.50 keys=100000 dist=zipf value_size=128 zipf_theta=0.99",
+  "concurrency": 32,
+  "target_rate": 0,
+  "ops": 17349,
+  "errors": 0,
+  "error_rate": 0,
+  "duration_ms": 5012.727,
+  "throughput": 3460.990256960323,
+  "latency": {
+    "count": 17349,
+    "mean_ms": 9.188260164851,
+    "min_ms": 0,
+    "p50_ms": 4.093286,
+    "p90_ms": 20.762814,
+    "p99_ms": 27.396092,
+    "p99_9_ms": 44.064896,
+    "max_ms": 47.1855
+  },
+  "latency_by_op": {
+    "get": {
+      "count": 8830,
+      "mean_ms": 0.8743148471121178,
+      "min_ms": 0,
+      "p50_ms": 0.576308,
+      "p90_ms": 2.046756,
+      "p99_ms": 4.701899,
+      "p99_9_ms": 10.38198,
+      "max_ms": 25.6386
+    },
+    "put": {
+      "count": 8519,
+      "mean_ms": 17.80571962671675,
+      "min_ms": 1.5925,
+      "p50_ms": 18.075279,
+      "p90_ms": 22.923824,
+      "p99_ms": 30.85245,
+      "p99_9_ms": 45.845118,
+      "max_ms": 47.1855
+    }
+  },
+  "leader_distribution": {
+    "n0-0": 1,
+    "n1-0": 1
+  },
+  "leader_max": 1,
+  "leader_mean": 1,
+  "shards_with_leader": 2,
+  "env": {
+    "go_version": "go1.24.6",
+    "goos": "windows",
+    "goarch": "amd64",
+    "num_cpu": 16,
+    "started_at": "2026-10-02T18:52:37+08:00",
+    "hostname": "OSS-WANGX37"
+  }
+}

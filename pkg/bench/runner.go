@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -112,12 +113,33 @@ type Result struct {
 	DurationMs float64 `json:"duration_ms"`
 	Throughput float64 `json:"throughput"`
 
+	// ErrorClasses 错误分类计数。
+	//
+	// 为什么必须有：只报 "errors=983" 是**没法排查**的 —— 是客户端 500ms 超时？
+	// 是 503 非 Leader？是连接被拒？三者的含义完全不同，混在一个数字里
+	// 会让人把"压测客户端扛不住"读成"集群出问题了"。
+	// 实测就是这么撞上的：单分片并发 32 时报 44% 错误，而并发 16 时 0 错误，
+	// 不分类根本看不出原因。
+	ErrorClasses map[string]int `json:"error_classes,omitempty"`
+
 	Latency Snapshot `json:"latency"`
 
 	// LatencyByOp 分操作类型的延迟。
 	LatencyByOp map[string]Snapshot `json:"latency_by_op"`
 
 	Samples []Sample `json:"samples,omitempty"`
+
+	// 以下是 Multi-Raft 的结构量，不是性能量 —— 但它们决定性能数字怎么读。
+	//
+	// Leader 分布：每个节点当了几个分片的 Leader。
+	// 随机选举会让少数节点承担大部分分片的写负载，成为瓶颈；
+	// 所以"吞吐随分片数上升"必须与分布一起报，否则可能只是这一轮恰好均匀。
+	LeaderDist map[string]int `json:"leader_distribution,omitempty"`
+	// LeaderMax/LeaderMean：分布的不均衡度（最大 / 均值）。
+	LeaderMax  int     `json:"leader_max,omitempty"`
+	LeaderMean float64 `json:"leader_mean,omitempty"`
+	// ShardsWithLeader：当前已经选出 Leader 的分片数。
+	ShardsWithLeader int `json:"shards_with_leader,omitempty"`
 
 	Env EnvInfo `json:"env"`
 }
@@ -142,6 +164,12 @@ type Runner struct {
 
 	ops    atomic.Uint64
 	errors atomic.Uint64
+
+	// errMu/errClasses 错误分类计数（错误信息 → 次数）。
+	// 用 map 而不是按类型分支：错误来自 HTTP 客户端、路由层、Raft 层三处，
+	// 事先枚举不全；按文本归类能覆盖住所有实际出现过的错误。
+	errMu      sync.Mutex
+	errClasses map[string]int
 
 	endpoints []string
 	rr        atomic.Uint64
@@ -187,6 +215,46 @@ func (r *Runner) nextEndpoint() string {
 	i := r.rr.Add(1)
 	return r.endpoints[int(i)%len(r.endpoints)]
 }
+
+// noteError 记录一次错误及其分类。
+//
+// 分类键做归一化：去掉易变部分（端口号、时长、地址），
+// 否则每一处不同的地址都会生成一个新键，分类表会爆掉、
+// 也就失去了"一眼看出是哪类错误"的意义。
+func (r *Runner) noteError(err error) {
+	r.errors.Add(1)
+	if err == nil {
+		return
+	}
+	k := classifyError(err.Error())
+
+	r.errMu.Lock()
+	if r.errClasses == nil {
+		r.errClasses = map[string]int{}
+	}
+	// 上限保护：真出现大量不同错误时，避免 map 无限增长。
+	if len(r.errClasses) < 64 {
+		r.errClasses[k]++
+	}
+	r.errMu.Unlock()
+}
+
+// classifyError 把错误文本归一化成分类键。
+func classifyError(msg string) string {
+	const maxLen = 160
+	if len(msg) > maxLen {
+		msg = msg[:maxLen] + "…"
+	}
+	// 127.0.0.1:18001 → 127.0.0.1:PORT；"after 500ms" 之类也去掉数字。
+	msg = reHostPort.ReplaceAllString(msg, "$1:PORT")
+	msg = reDuration.ReplaceAllString(msg, "DURATION")
+	return msg
+}
+
+var (
+	reHostPort = regexp.MustCompile(`(127\.0\.0\.1|localhost|\[::1\]):\d+`)
+	reDuration = regexp.MustCompile(`\b\d+(\.\d+)?(ns|µs|us|ms|s)\b`)
+)
 
 // Run 执行一次实验。
 func (r *Runner) Run(ctx context.Context) (*Result, error) {
@@ -259,6 +327,15 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 	res.Samples = append([]Sample(nil), r.samples...)
 	r.samplesMu.Unlock()
 
+	r.errMu.Lock()
+	if len(r.errClasses) > 0 {
+		res.ErrorClasses = make(map[string]int, len(r.errClasses))
+		for k, v := range r.errClasses {
+			res.ErrorClasses[k] = v
+		}
+	}
+	r.errMu.Unlock()
+
 	return res, nil
 }
 
@@ -313,7 +390,7 @@ func (r *Runner) runClosed(ctx context.Context, dur time.Duration, targetOps int
 
 				if err != nil {
 					if !warmup {
-						r.errors.Add(1)
+						r.noteError(err)
 					}
 					continue
 				}
@@ -399,7 +476,7 @@ func (r *Runner) runOpen(ctx context.Context, dur time.Duration, targetOps int, 
 
 				if err != nil {
 					if !warmup {
-						r.errors.Add(1)
+						r.noteError(err)
 					}
 				} else if !warmup {
 					lat.Observe(el)

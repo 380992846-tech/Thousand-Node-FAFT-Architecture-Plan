@@ -238,6 +238,29 @@ func main() {
 		res.LatencyByOp["put"].P50Ms, res.LatencyByOp["put"].P99Ms,
 		res.LatencyByOp["get"].P50Ms, res.LatencyByOp["get"].P99Ms)
 
+	// 5.1 Leader 分布：Multi-Raft 的结构量。
+	// 吞吐随分片数上升，只有在分布不至于过于集中时才说明问题。
+	{
+		dist, total, withLeader := cl.LeaderDistribution()
+		res.LeaderDist = dist
+		res.ShardsWithLeader = withLeader
+		maxN, sum := 0, 0
+		for _, n := range dist {
+			if n > maxN {
+				maxN = n
+			}
+			sum += n
+		}
+		res.LeaderMax = maxN
+		if withLeader > 0 {
+			res.LeaderMean = float64(sum) / float64(withLeader)
+		}
+		// 理想情况是每个分片一个 Leader、且摊到不同节点上。
+		fmt.Printf("  Leader 分布: %d/%d 个分片已选出 Leader，涉及 %d 个节点，"+
+			"最忙节点带 %d 个（均值 %.2f）\n",
+			withLeader, total, len(dist), res.LeaderMax, res.LeaderMean)
+	}
+
 	if *outJSON != "" {
 		f, err := os.Create(*outJSON)
 		if err != nil {

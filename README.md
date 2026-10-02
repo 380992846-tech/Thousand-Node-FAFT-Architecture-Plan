@@ -105,7 +105,7 @@ go run ./cmd/kvbench -spec 2x3 -duration 10s -warmup 3s -concurrency 32
 
 ## 文档
 
-- **[docs/BUGS.md](docs/BUGS.md)** —— **36 项**缺陷的完整审计（33 条带编号，BUG-18 缺号；
+- **[docs/BUGS.md](docs/BUGS.md)** —— **37 项**缺陷的完整审计（34 条带编号，BUG-18 缺号；
   另 3 条未编号的新发现）：源码位置、成因、
   发现方式、修复与回归测试
 - **[docs/DESIGN.md](docs/DESIGN.md)** —— 论文方向与实验方案：

@@ -322,6 +322,35 @@ func (c *Cluster) LeaderCount() int {
 	return len(c.Leaders())
 }
 
+// LeaderDistribution 统计每个**节点**当了几个分片的 Leader。
+//
+// 为什么必须报这个量：Multi-Raft 的常见失效模式不是"选不出来"，
+// 而是**分布不均** —— 少数节点当了大部分分片的 Leader，
+// 于是它们所在的机器成为瓶颈，吞吐不再随分片数上升。
+// 如果只报"分片数 vs 吞吐"，很可能只是碰上了一轮分布均匀的选举。
+//
+// 返回 map[NodeID]分片数，以及（分片总数, 已选出 Leader 的分片数）。
+func (c *Cluster) LeaderDistribution() (map[string]int, int, int) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	dist := map[string]int{}
+	total := 0
+	withLeader := 0
+	for id, ms := range c.members {
+		total++
+		for _, m := range ms {
+			if m.Store.IsLeader() {
+				dist[m.NodeID]++
+				withLeader++
+				break
+			}
+		}
+		_ = id
+	}
+	return dist, total, withLeader
+}
+
 // DuplicateLeaders 返回同时认为自己是 Leader 的 (shard, term) 组合。
 // 这是安全性检查：同一分片、同一任期内不应出现两个 Leader。
 func (c *Cluster) DuplicateLeaders() []string {

@@ -1,0 +1,92 @@
+{
+  "label": "1x3",
+  "mode": "closed",
+  "notes": "",
+  "cluster": {
+    "shards": 1,
+    "replicas": 3,
+    "learners": 0,
+    "nodes": 3
+  },
+  "workload": "read_ratio=0.50 keys=100000 dist=zipf value_size=128 zipf_theta=0.99",
+  "concurrency": 256,
+  "target_rate": 0,
+  "ops": 7616,
+  "errors": 3116,
+  "error_rate": 0.29034662691017515,
+  "duration_ms": 4088.755,
+  "throughput": 1862.6695968494275,
+  "error_classes": {
+    "bench: get k00000001 -\u003e 502 Bad Gateway": 917,
+    "bench: get k00000015 -\u003e 502 Bad Gateway": 10,
+    "bench: get k00000030 -\u003e 502 Bad Gateway": 57,
+    "bench: get k00000050 -\u003e 502 Bad Gateway": 55,
+    "bench: get k00000095 -\u003e 502 Bad Gateway": 83,
+    "bench: get k00000216 -\u003e 502 Bad Gateway": 126,
+    "bench: get k00000995 -\u003e 502 Bad Gateway": 36,
+    "bench: get k00008151 -\u003e 502 Bad Gateway": 119,
+    "bench: get k00009677 -\u003e 502 Bad Gateway": 88,
+    "bench: get k00010553 -\u003e 502 Bad Gateway": 1,
+    "bench: get k00011888 -\u003e 502 Bad Gateway": 54,
+    "bench: get k00024329 -\u003e 502 Bad Gateway": 25,
+    "bench: get k00091935 -\u003e 502 Bad Gateway": 1,
+    "bench: put k00000001 -\u003e 502 Bad Gateway": 882,
+    "bench: put k00000015 -\u003e 502 Bad Gateway": 13,
+    "bench: put k00000030 -\u003e 502 Bad Gateway": 50,
+    "bench: put k00000050 -\u003e 502 Bad Gateway": 38,
+    "bench: put k00000095 -\u003e 502 Bad Gateway": 77,
+    "bench: put k00000216 -\u003e 502 Bad Gateway": 130,
+    "bench: put k00000995 -\u003e 502 Bad Gateway": 36,
+    "bench: put k00008151 -\u003e 502 Bad Gateway": 118,
+    "bench: put k00008521 -\u003e 502 Bad Gateway": 1,
+    "bench: put k00009677 -\u003e 502 Bad Gateway": 99,
+    "bench: put k00011888 -\u003e 502 Bad Gateway": 72,
+    "bench: put k00024329 -\u003e 502 Bad Gateway": 28
+  },
+  "latency": {
+    "count": 7616,
+    "mean_ms": 104.19290229779412,
+    "min_ms": 20.8612,
+    "p50_ms": 113.998988,
+    "p90_ms": 144.578281,
+    "p99_ms": 176.240117,
+    "p99_9_ms": 187.027423,
+    "max_ms": 433.9181
+  },
+  "latency_by_op": {
+    "get": {
+      "count": 3808,
+      "mean_ms": 94.36633679096639,
+      "min_ms": 20.8612,
+      "p50_ms": 103.252395,
+      "p90_ms": 130.949003,
+      "p99_ms": 159.626104,
+      "p99_9_ms": 169.396499,
+      "max_ms": 431.135
+    },
+    "put": {
+      "count": 3808,
+      "mean_ms": 114.01946780462184,
+      "min_ms": 29.7571,
+      "p50_ms": 123.39617,
+      "p90_ms": 150.419243,
+      "p99_ms": 179.76492,
+      "p99_9_ms": 190.767971,
+      "max_ms": 433.9181
+    }
+  },
+  "leader_distribution": {
+    "n0-2": 1
+  },
+  "leader_max": 1,
+  "leader_mean": 1,
+  "shards_with_leader": 1,
+  "env": {
+    "go_version": "go1.24.6",
+    "goos": "windows",
+    "goarch": "amd64",
+    "num_cpu": 16,
+    "started_at": "2026-10-02T18:55:38+08:00",
+    "hostname": "OSS-WANGX37"
+  }
+}

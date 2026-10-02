@@ -1,0 +1,80 @@
+{
+  "label": "16x3",
+  "mode": "closed",
+  "notes": "",
+  "cluster": {
+    "shards": 16,
+    "replicas": 3,
+    "learners": 0,
+    "nodes": 48
+  },
+  "workload": "read_ratio=0.50 keys=100000 dist=zipf value_size=128 zipf_theta=0.99",
+  "concurrency": 32,
+  "target_rate": 0,
+  "ops": 16599,
+  "errors": 0,
+  "error_rate": 0,
+  "duration_ms": 5005.33,
+  "throughput": 3316.2642653655525,
+  "latency": {
+    "count": 16599,
+    "mean_ms": 9.577132869449967,
+    "min_ms": 0,
+    "p50_ms": 3.35792,
+    "p90_ms": 22.033664,
+    "p99_ms": 26.332269,
+    "p99_9_ms": 35.439767,
+    "max_ms": 62.2709
+  },
+  "latency_by_op": {
+    "get": {
+      "count": 8468,
+      "mean_ms": 0.9928794166273027,
+      "min_ms": 0,
+      "p50_ms": 0.745516,
+      "p90_ms": 2.087691,
+      "p99_ms": 4.175152,
+      "p99_9_ms": 22.923824,
+      "max_ms": 41.511
+    },
+    "put": {
+      "count": 8131,
+      "mean_ms": 18.517172008363055,
+      "min_ms": 6.6273,
+      "p50_ms": 19.565263,
+      "p90_ms": 23.849947,
+      "p99_ms": 26.858914,
+      "p99_9_ms": 44.946194,
+      "max_ms": 62.2709
+    }
+  },
+  "leader_distribution": {
+    "n0-0": 1,
+    "n1-0": 1,
+    "n10-0": 1,
+    "n11-0": 1,
+    "n12-0": 1,
+    "n13-0": 1,
+    "n14-0": 1,
+    "n15-0": 1,
+    "n2-0": 1,
+    "n3-0": 1,
+    "n4-0": 1,
+    "n5-0": 1,
+    "n6-0": 1,
+    "n7-0": 1,
+    "n8-0": 1,
+    "n9-0": 1
+  },
+  "leader_max": 1,
+  "leader_mean": 1,
+  "shards_with_leader": 16,
+  "env": {
+    "go_version": "go1.24.6",
+    "goos": "windows",
+    "goarch": "amd64",
+    "num_cpu": 16,
+    "started_at": "2026-10-02T18:53:58+08:00",
+    "hostname": "OSS-WANGX37"
+  }
+}
