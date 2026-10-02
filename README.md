@@ -105,7 +105,7 @@ go run ./cmd/kvbench -spec 2x3 -duration 10s -warmup 3s -concurrency 32
 
 ## 文档
 
-- **[docs/BUGS.md](docs/BUGS.md)** —— **35 项**缺陷的完整审计（32 条带编号，BUG-18 缺号；
+- **[docs/BUGS.md](docs/BUGS.md)** —— **36 项**缺陷的完整审计（33 条带编号，BUG-18 缺号；
   另 3 条未编号的新发现）：源码位置、成因、
   发现方式、修复与回归测试
 - **[docs/DESIGN.md](docs/DESIGN.md)** —— 论文方向与实验方案：
@@ -127,9 +127,10 @@ go run ./cmd/kvbench -spec 2x3 -duration 10s -warmup 3s -concurrency 32
 ## 验证状态
 
 ```
-go build -p 1 ./...     通过
-go vet   -p 1 ./...     通过
-go test  -p 1 ./...     通过（12 个包，191 个测试函数 + 11 个 benchmark）
+go build -p 1 ./...                通过
+go vet   -p 1 ./...                通过
+go test  -p 1 ./...                通过（21 个包，191 个测试函数 + 11 个 benchmark）
+powershell -File build.ps1 race    通过（21 个包全部通过 -race，含 third_party/flexiraft）
 ```
 
 > 测试数量以 `go test -list '.*' ./...` 的自报为准（191 / 11）。
@@ -139,6 +140,7 @@ go test  -p 1 ./...     通过（12 个包，191 个测试函数 + 11 个 benchm
 >
 > ⚠️ **"同种子 ⇒ 同结果"指的是负载序列，不是测量结果。**
 > 测量结果（吞吐、延迟分位）**不可能逐位复现** —— 同一配置 5 轮内波动可达 72k–184k ops/s。
+> **解析结果**（`pkg/faft` 的可用性、消息数、下界）则**是**逐位可复现的。
 > 详见 **[docs/WALKTHROUGH.md](docs/WALKTHROUGH.md)** §3。
 
 测试覆盖：命令编解码与 CRC、快照往返与截断拒绝、并发读写 FSM、
@@ -164,9 +166,9 @@ ephemeral 端口解析。
 
 | 缺口 | 说明 |
 |---|---|
-| `go test -race` | 本机无 C 编译器，`-race` 需要 cgo。BUG-1 的修复目前只有逻辑推理 + 并发功能测试支撑 |
+| ~~`go test -race`~~ | ✅ **已跑通（2026-10）**：装了 MinGW-w64 gcc，`build.ps1 race` 覆盖 21 个包全部通过，**并做了正向对照**（故意制造数据竞争，确认本机 `-race` 真会报 `WARNING: DATA RACE`）——BUG-1 的修复从此有 race detector 独立验证。顺带查出 `build.ps1` 的包清单漏了 5 个包（41 个测试），见 BUG-34 |
 | etcd 集成 | `pkg/metadata` 测试全部基于 `LocalTopology`，`ClusterTopology` 未端到端验证 |
-| 1000 节点 | `pkg/model` 与 `pkg/faft` 的数字是**解析预测**；端到端实测停在 6 副本，共识层实测停在 n=9 |
+| 1000 节点 | `pkg/model` 与 `pkg/faft` 的数字是**解析预测**；端到端实测停在 6 副本，共识层实测停在 n=9。另有一条硬约束：**联合求解 n=21 单次就要 70 秒，n=1000 不可行** |
 | 真实多机 | 单机多进程无真实网络分区与跨域 RTT |
 | 亚毫秒延迟 | 本机时钟地板 ≈300µs，低于 ~1ms 的延迟读数会读成 0，见 [MEASUREMENT](docs/MEASUREMENT.md) §4.1 |
 

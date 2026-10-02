@@ -118,13 +118,19 @@ function Invoke-Go {
   return $code
 }
 
-# 所有包（含测试），显式列出以避免 "./..." 在某些 Go 版本上的解析差异。
-$allPkgs = @(
-  './pkg/bench', './pkg/client', './pkg/cluster', './pkg/faft', './pkg/metadata',
-  './pkg/metrics', './pkg/model', './pkg/nodeapi', './pkg/raft', './pkg/router',
-  './cmd/faftbench', './cmd/kvbench', './cmd/kvstore-client',
-  './cmd/kvstore-node', './cmd/kvstore-router'
-)
+# 所有包。
+#
+# ⚠️ 这里原本是**显式列出**的 15 个包，注释理由是"避免 ./... 在某些 Go 版本上
+# 的解析差异"。那个理由早已不成立（Go 1.24 上 ./... 一直正常），
+# 而代价很实在：仓库后来又加了 4 个包，清单没跟着更新，于是
+# **pkg/sim、cmd/faultagg、cmd/faultfit、cmd/raftbench、third_party/flexiraft
+# 这 5 个包（共 41 个测试）长期没被 build/vet/test/race 覆盖** ——
+# 而脚本照样打印"通过"。
+#
+# 尤其 third_party/flexiraft 是论文基线测量所驱动的代码（hashicorp/raft 的
+# FPaxos 改造版），它没被 -race 覆盖过，等于把并发正确性的证据留了个洞。
+# 改成 ./... ：以后新增包自动纳入。
+$allPkgs = @('./...')
 
 $code = 0
 
@@ -150,9 +156,29 @@ switch ($Task) {
   }
   'race' {
     # -race 需要 cgo，即需要一个 C 编译器（gcc / clang / MSVC）。
-    # 本机当前没有，因此这条命令预计会失败并给出 "C compiler not found"。
+    #
+    # 2026-10 起本机已有 gcc：winget 装了 WinLibs MinGW-w64（UCRT, gcc 16.2.0）。
+    # 但**当前进程的 PATH 可能是安装前继承的旧 PATH**，所以这里显式找一遍：
+    # 先看 PATH，再看 winget 的包目录。找不到就明确报错，不要让它退化成
+    # "C compiler not found" 这种看不出原因的失败。
+    $cc = (Get-Command gcc -ErrorAction SilentlyContinue).Source
+    if (-not $cc) {
+      $cc = Get-ChildItem "$env:LOCALAPPDATA\Microsoft\WinGet\Packages" -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like '*WinLibs*' } |
+        ForEach-Object { Get-ChildItem $_.FullName -Recurse -Filter gcc.exe -ErrorAction SilentlyContinue -Depth 4 } |
+        Select-Object -First 1 -ExpandProperty FullName
+    }
+    if (-not $cc) {
+      Write-Host "[race] 找不到 C 编译器。装一个：winget install BrechtSanders.WinLibs.POSIX.UCRT" -ForegroundColor Red
+      exit 3
+    }
+    $env:CC = $cc
+    $env:PATH = "$(Split-Path $cc -Parent);$env:PATH"
+    Write-Host "[race] CC = $cc" -ForegroundColor Cyan
+    & $cc --version 2>&1 | Select-Object -First 1 | ForEach-Object { Write-Host "[race] $_" }
+
     $env:CGO_ENABLED = '1'
-    $a = @('test', '-race', '-p', '1', '-count=1', '-timeout', '600s') + $allPkgs
+    $a = @('test', '-race', '-p', '1', '-count=1', '-timeout', '900s') + $allPkgs
     $code = Invoke-Go -CmdArgs $a -Name 'race'
   }
   'bench' {

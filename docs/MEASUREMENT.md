@@ -162,10 +162,43 @@ quorum，无法自检，所以 `buildCluster` 在建立集群前直接拒绝该�
 - 没有真实的网络分区、没有跨机 RTT、没有共享交换机故障。
 - 注入延迟是**模拟**网络，不是真实网络。
 
-### 4.3 没有 `-race`
+### 4.3 `-race` 已经跑了（2026-10 起）
 
-本机无 C 编译器（`-race` 需要 cgo）。所有并发代码的验证只有
-逻辑推理 + 功能性并发测试。详见 [`ROADMAP.md`](ROADMAP.md) §三。
+**结论：全仓库 21 个包 `go test -race` 全部通过。** ✅ 这条限制已消除。
+
+做了什么：
+
+```
+powershell -File build.ps1 race      # CGO_ENABLED=1，CC=gcc，-p 1，timeout 900s
+```
+
+- 装了 C 编译器：`winget install BrechtSanders.WinLibs.POSIX.UCRT`
+  （MinGW-w64 gcc 16.2.0）。`build.ps1 race` 会自己找 `gcc.exe`（先 PATH，再 winget 包目录），
+  找不到就明确报错。
+- 覆盖 `./...` 全部 21 个包，**包括 `third_party/flexiraft`**（论文基线测量驱动的
+  hashicorp/raft FPaxos 改造版）与 `pkg/sim`。
+
+**正向对照（这一步不能省）**：光说"race 通过"没有意义 —— 检测器没生效时它也会通过。
+所以另外写了一个**故意制造数据竞争**的测试，确认本机上 `-race` 真的会判失败：
+
+```
+WARNING: DATA RACE
+--- FAIL: TestDeliberateRace
+```
+
+反向的证据也有：**BUG-1**（`FSM` 读写用了两把不相干的锁，并发读写 Go map）
+现在有了 race detector 的独立验证，不再只有"逻辑推理 + 功能测试"。
+
+> ⚠️ 一个必须一起讲的坑（BUG-34）：`build.ps1` 原来把包**显式列成 15 个**，
+> 后来仓库加了 4 个包、清单没更新，于是 `pkg/sim`、`cmd/faultagg`、`cmd/faultfit`、
+> `cmd/raftbench`、`third_party/flexiraft` 这 5 个包（41 个测试）**长期没被
+> build/vet/test/race 覆盖**，而脚本照样打印"通过"。
+> 已改成 `./...`。**"测试通过"这句话之前是虚的** —— 这一点比 race 本身更值得讲。
+
+### 4.4 仍然没有的（与上面 4.3 分开列）
+
+- 真实多机、真实网络：注入延迟仍是模型。
+- 真实磁盘：日志在内存里。
 
 ---
 

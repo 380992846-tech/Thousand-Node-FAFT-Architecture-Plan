@@ -7,7 +7,7 @@
 
 ## 一、已完成
 
-### 1.1 缺陷修复（35 项：32 条带编号 + 3 条未编号的新发现，编号中 BUG-18 缺号）
+### 1.1 缺陷修复（36 项：33 条带编号 + 3 条未编号的新发现，编号中 BUG-18 缺号）
 
 详见 [`BUGS.md`](BUGS.md)。最严重的三条：
 
@@ -311,7 +311,7 @@ BenchmarkBarrierVsCommitTimeout: commit=1ms/5ms/20ms → 5.72/6.46/5.87 ms
 | 4a | ~~FlexiRaft 的真实测量~~ | ✅ **已完成**。见 §1.8 |
 | 4b | Orca (PVLDB'26) 解析对照 | ✅ 已完成（`faftbench planners`）。**论文全文未取得**，参数语义按摘要与引用重述，已在 `Notes()` 与测试中披露 |
 | 4c | TiKV PD 启发式对照 | ✅ 已完成，但**结论是"不可直接比"**：PD 是放置调度器，**没有 quorum 几何自由度**，其跨分片优化不在本框架的比较范围内。已在 `planner_orca.go` 的 `Notes()` 中披露 |
-| 4d | `go test -race` | ❌ 本机无 C 编译器（见 V1） |
+| 4d | ~~`go test -race`~~ | ✅ **已完成**：装了 MinGW-w64 gcc，21 个包全部通过 + 正向对照；并查出脚本漏包（BUG-34） |
 | 4e | Orca 的端到端实现 | ❌ 未开始 |
 
 ### P1 · 论文需要
@@ -389,7 +389,9 @@ BenchmarkBarrierVsCommitTimeout: commit=1ms/5ms/20ms → 5.72/6.46/5.87 ms
 
 | # | 缺口 | 影响 | 补齐方式 |
 |---|---|---|---|
-| V1 | **`go test -race` 未执行** | BUG-1 的修复缺独立验证。本机无 C 编译器（无 gcc/clang/MSVC），`-race` 需要 cgo | 装 TDM-GCC 或 MSVC Build Tools 后 `powershell -File build.ps1 race` |
+| V1 | ~~**`go test -race` 未执行**~~ | ✅ **已补上（2026-10）**：`winget install BrechtSanders.WinLibs.POSIX.UCRT` 装 MinGW-w64 gcc 后，`build.ps1 race` 覆盖 **21 个包全部通过**（含 `third_party/flexiraft` 与 `pkg/sim`）。**并做了正向对照**：故意写一个数据竞争的测试，确认本机 `-race` 真会报 `WARNING: DATA RACE` —— 否则"通过"与"检测器没生效"无法区分 | 已完成；顺带查出脚本漏包（BUG-34） |
+| V1b | **验证脚本漏了 5 个包** | `build.ps1` 的包清单是显式列出的 15 个，仓库加了包没更新 ⇒ `pkg/sim`/`cmd/faultagg`/`cmd/faultfit`/`cmd/raftbench`/`third_party/flexiraft` 共 41 个测试从未被 build/vet/test/race 覆盖，脚本却照常打印"通过" | ✅ 已改成 `./...`（BUG-34） |
+| V1c | **求解器的算力天花板** | 联合求解 n=21 单次 70 s（原来 561 s），按趋势 **n=1000 不可行** ⇒ n=1000 的数字只能标注为解析外推 | 需要换算法（如按域计数搜索）或分批求解；当前必须在论文中声明 |
 | V2 | **etcd 集成路径未跑通** | `pkg/metadata` 单元测试全部基于 `LocalTopology`；`ClusterTopology` 的 watcher / 事务 / `Ping` 只有静态审查 | 起一个 etcd，跑端到端 |
 | V3 | **1000 节点未实测** | `pkg/model` 与 `pkg/faft` 的数字全是解析预测。端到端实测停在 2 分片 × 3 副本 = 6 副本 | 模拟器 + 校准，或真实大规模集群 |
 | V4 | **单机多进程不代表真实部署** | 无真实网络分区、共享 CPU/页面缓存/磁盘、无真实跨域 RTT | 补一组真实多机实验 |
@@ -421,7 +423,7 @@ powershell -File build.ps1 tools            # 查看环境
 powershell -File build.ps1 build            # go build -p 1 ./...
 powershell -File build.ps1 vet
 powershell -File build.ps1 test
-powershell -File build.ps1 race             # 需要 C 编译器（当前缺失，见 V1）
+powershell -File build.ps1 race             # 已可用：脚本自己找 gcc（winget 装的 MinGW-w64）
 powershell -File build.ps1 bench
 ```
 
