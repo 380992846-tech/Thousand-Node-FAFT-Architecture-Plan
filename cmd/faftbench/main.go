@@ -15,6 +15,7 @@
 //	faftbench n1000         # n=1000 单点详算
 //	faftbench curve         # n=1000 的完整权衡曲线
 //	faftbench avail         # 独立失效 vs 相关失效的可用性高估量
+//	faftbench sens          # **敏感性扫描**：联合求解在故障参数空间的哪些区域占优
 package main
 
 import (
@@ -28,8 +29,12 @@ import (
 
 func main() {
 	mode := "scale"
+	sensOut := ""
 	if len(os.Args) > 1 {
 		mode = os.Args[1]
+	}
+	if len(os.Args) > 2 {
+		sensOut = os.Args[2]
 	}
 
 	switch mode {
@@ -124,6 +129,18 @@ func main() {
 		fmt.Println("=== Baseline 对照：同一故障模型下的 quorum 规划器 ===")
 		fmt.Println()
 		runPlannerComparison()
+
+	case "sens":
+		// 敏感性扫描：结论在故障参数空间的哪些区域里成立。
+		//
+		// 这是「拿不到真实故障数据时」的正确应对 —— 报分界线而不是报单点数字。
+		// 分界线本身与具体参数值无关，而且它明确说出了方法的适用边界。
+		fmt.Println("=== 敏感性扫描：联合求解在故障参数空间的哪些区域占优 ===")
+		fmt.Println()
+		if err := runSens(sensOpts{domains: 9, replicas: 5, dataTol: 1, ctrlTol: 1, outPath: sensOut}); err != nil {
+			fmt.Fprintln(os.Stderr, "敏感性扫描失败:", err)
+			os.Exit(1)
+		}
 
 	case "flexiraft-sweep":
 		// FlexiRaft 的收益取决于其 data-commit quorum 取值，
