@@ -118,7 +118,8 @@ go run ./cmd/kvbench -spec 2x3 -duration 10s -warmup 3s -concurrency 32
   时钟地板限制、确定性复现的真实范围；开篇纠正三处与事实不符的提法
 - **[docs/FAULT-DATA.md](docs/FAULT-DATA.md)** —— **故障参数从哪来**：要挖哪些数据、
   怎么统计、拿不到怎么做敏感性扫描
-- **[docs/ROADMAP.md](docs/ROADMAP.md)** —— 已完成 / 未完成 / **验证缺口**
+- **[docs/ROADMAP.md](docs/ROADMAP.md)** —— 已完成 / 未完成 / **验证缺口**，
+  以及 **§三之二 机时申请**（要什么、为什么、消掉哪几条 L —— 可直接转给资源管理员）
 - **[docs/related-work-notes.md](docs/related-work-notes.md)** —— 顶会调研原始笔记
 - **[_research_pdfs/](_research_pdfs/)** —— 调研引用的一手 PDF 与文本
 
