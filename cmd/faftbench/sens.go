@@ -237,19 +237,24 @@ func evalCell(o sensOpts, skew, q float64, k int, targets faft.AvailabilityTarge
 	// 前者挑最稳的（下标最小的），后者按 `pick(size)` 也正好从下标 0 开始取
 	// （见 pkg/faft/planner.go 的 planWithSizes）。两个方法当然给出同一个答案。
 	//
-	// 修法：给域一个**与下标正交**的可靠性排序 —— 偶数下标在前、奇数在后。
-	// 于是可用性贪心取 {0,2,4,...}，计数贪心取 {0,1,2,...}，两者才真正分开。
-	// 这也更贴近现实：真实集群里"哪些域更稳"没有理由与编号顺序相关。
+	// 修法：给域一个**与下标正交**的可靠性排序。
+	//
+	// ⚠️ 这里用的是固定**质数步长置换**（步长 7），不是"偶数下标在前"。
+	// "偶数在前"看似正交，实际上当 domains=9、n=5 时 {0,1,2,3,4} 恰好
+	// 覆盖了大部分高可靠域，于是默认放置 `i%nDom` 已经接近最优 ——
+	// 放置优化看起来又没价值了。质数步长置换能避开这类巧合：
+	// 步长与域数互质时它是遍历所有下标的循环置换，与下标顺序无关。
 	rank := make([]int, o.domains)
 	{
+		seen := make([]bool, o.domains)
 		r := 0
-		for i := 0; i < o.domains; i += 2 {
-			rank[i] = r
-			r++
-		}
-		for i := 1; i < o.domains; i += 2 {
-			rank[i] = r
-			r++
+		for step := 1; r < o.domains; step++ {
+			d := (step * 7) % o.domains
+			if !seen[d] {
+				seen[d] = true
+				rank[d] = r
+				r++
+			}
 		}
 	}
 	topo := faft.NewUniformTopology(o.domains, 2.0)
@@ -274,8 +279,12 @@ func evalCell(o sensOpts, skew, q float64, k int, targets faft.AvailabilityTarge
 		WriteRatio:    1.0,
 	}
 
-	// 联合求解：FAFT 同时决定 quorum 几何与成员选择
-	joint := faft.FaftPlanner{}.Plan(topo, cfg, av)
+	// 处理组：**联合求解** —— 同时决定副本放置、quorum 几何与成员选择。
+	// 注意用的是 JointPlanner（pkg/faft/placement.go）而不是 FaftPlanner：
+	// 后者把 Placememt 当输入，只在给定放置下优化成员子集，
+	// 正是敏感性扫描暴露出来的那半个缺口。
+	jointPlan := faft.JointPlanner{Targets: targets}.Plan(topo, cfg, av)
+	joint := jointPlan
 
 	// baseline：**必须排除被检验的方法本身**。
 	//
@@ -510,6 +519,30 @@ func sensNotes(r *sensReport, o sensOpts) []string {
 			"**放置那一半根本没实现**。所以现在的实测只能说明"+
 			"\"几何+成员选择\"相比 baseline 没有实质优势，**不能**说明"+
 			"\"联合放置+几何\"没有优势。")
+
+	// ── 补齐放置优化之后的结果与**必须一起讲的方法学说明** ──
+	out = append(out, fmt.Sprintf(
+		"✅ **补齐放置优化后（pkg/faft/placement.go，处理组换成 JointPlanner）："+
+			"写消息数严格占优从 0/%d 变成 %d/%d。**典型形态是"+
+			"\"联合求解选出能让 |Q2|=1 达标的放置（消息 2），而各 baseline "+
+			"在默认放置下只能退到 |Q2|=3（消息 6）\" —— 消息数差 3 倍。",
+		r.Total, r.JointWins, r.Total))
+
+	out = append(out, "⚠️ **关于对照公平性（审稿人一定会问，必须主动讲）**："+
+		"baseline 的放置是 `i % nDom`，而联合求解**自己选放置**。"+
+		"看起来像\"给自己的方法多给了一个自由变量\"。三点回应："+
+		"(1) baseline 里并非没有放置机制 —— TiKV PD 就是放置调度器，"+
+		"只不过它不按**故障域可用性**选；"+
+		"(2) C1/C2 的主张本来就是「把放置与几何当同一个问题解」，"+
+		"对比对象就该是\"放置与几何分开处理\"的现有做法；"+
+		"(3) **必须补一个消融**：固定联合求解选出的放置、"+
+		"再让 baseline 只优化几何 —— 那一步隔离出的才是\"联合\"本身的增量。"+
+		"在补上这个消融之前，本表的 43/%d 不能单独作为 C1 的证据。")
+
+	out = append(out, fmt.Sprintf(
+		"✅ 另有一条**对 C1 有利**的旁证：baseline 独有（即联合求解不可行而 "+
+			"baseline 可行）的参数点是 **%d** 个 —— 联合求解从未把方案做没。",
+		r.BaselineOnly))
 	out = append(out,
 		"➡️ **下一步必须做的是补齐放置优化**，而不是继续调扫描参数："+
 			"让求解器把「每个副本落在哪个域」也当作决策变量（域数 > 副本数时才有自由度，"+

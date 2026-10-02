@@ -105,7 +105,8 @@ go run ./cmd/kvbench -spec 2x3 -duration 10s -warmup 3s -concurrency 32
 
 ## 文档
 
-- **[docs/BUGS.md](docs/BUGS.md)** —— 27 项缺陷的完整审计：源码位置、成因、
+- **[docs/BUGS.md](docs/BUGS.md)** —— **29 项**缺陷的完整审计（26 条带编号，BUG-18 缺号；
+  另 3 条未编号的新发现）：源码位置、成因、
   发现方式、修复与回归测试
 - **[docs/DESIGN.md](docs/DESIGN.md)** —— 论文方向与实验方案：
   文献空白、理论支撑、FAFT 设计、baselines、指标、消融、风险
@@ -113,6 +114,8 @@ go run ./cmd/kvbench -spec 2x3 -duration 10s -warmup 3s -concurrency 32
   哪些数字是实测、哪些是解析、时钟地板的实测数据、注入延迟的语义
 - **[docs/PAPER-DRAFT.md](docs/PAPER-DRAFT.md)** —— **论文骨架**：把已有结果按章节摆好，
   逐条标注证据等级与产出位置，附审稿人质疑自检清单
+- **[docs/WALKTHROUGH.md](docs/WALKTHROUGH.md)** —— **答辩讲解稿**：缺陷审计逐条、
+  时钟地板限制、确定性复现的真实范围；开篇纠正三处与事实不符的提法
 - **[docs/FAULT-DATA.md](docs/FAULT-DATA.md)** —— **故障参数从哪来**：要挖哪些数据、
   怎么统计、拿不到怎么做敏感性扫描
 - **[docs/ROADMAP.md](docs/ROADMAP.md)** —— 已完成 / 未完成 / **验证缺口**
@@ -126,8 +129,17 @@ go run ./cmd/kvbench -spec 2x3 -duration 10s -warmup 3s -concurrency 32
 ```
 go build -p 1 ./...     通过
 go vet   -p 1 ./...     通过
-go test  -p 1 ./...     通过（10 个包）
+go test  -p 1 ./...     通过（12 个包，173 个测试函数 + 11 个 benchmark）
 ```
+
+> 测试数量以 `go test -list '.*' ./...` 的自报为准（173 / 11）。
+> 其中**与确定性直接相关的只有 2 个**：`TestWorkloadDeterministic`（同种子 ⇒ 同负载序列）
+> 与 `TestEncodeDeterministic`（同输入 ⇒ 同字节，200 次比对），另有 1 个反向对照
+> `TestWorkloadDifferentSeedsDiffer`。
+>
+> ⚠️ **"同种子 ⇒ 同结果"指的是负载序列，不是测量结果。**
+> 测量结果（吞吐、延迟分位）**不可能逐位复现** —— 同一配置 5 轮内波动可达 72k–184k ops/s。
+> 详见 **[docs/WALKTHROUGH.md](docs/WALKTHROUGH.md)** §3。
 
 测试覆盖：命令编解码与 CRC、快照往返与截断拒绝、并发读写 FSM、
 二分查找对全键空间逐一对照、**三副本复制一致性**、
