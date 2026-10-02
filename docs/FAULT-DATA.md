@@ -87,7 +87,7 @@
 
 ---
 
-## 3. 输出格式（`cmd/faultfit` 的输入）
+## 3. 中间格式（`cmd/faultagg` 的输出 = `cmd/faultfit` 的输入）
 
 CSV，三列带表头：
 
@@ -145,21 +145,98 @@ start,end,domain
 
 ---
 
-## 5. 用 `cmd/faultfit` 拟合
+## 5. 链路：监控导出 → 域级区间 → 故障参数
+
+链路有两段，中间那一段是**整条链路上唯一带主观判据**的地方：
+
+```
+监控系统导出          cmd/faultagg              cmd/faultfit
+节点级故障记录   →   域级故障区间        →     {P, Q, K}
+(node,domain,        (start,end,domain)        可直接粘进代码
+ start,end,kind)     ↑
+                     判据在这里：多少比例的节点挂了算"域挂了"
+```
+
+### 5.1 第一段：`cmd/faultagg`（节点级 → 域级）
+
+**为什么必须单独一个工具**：监控导出的都是**节点级**事件
+（"node-1234 NotReady"、"GPU 掉卡"、"整机重启"），而模型要的是**域级**故障。
+中间这一步的判据是主观的，也是审稿人最会追问的地方：
+
+| 判据 | 问题 |
+|---|---|
+| "域里挂了 3 个节点" | 随集群规模漂移 |
+| "域里超过一半节点挂了" | 尺度无关，但要选阈值 ← **本工具默认用这个** |
+| "域里的训练作业全断了" | 最贴近业务，但要有作业层数据 |
+
+本工具把判据**显式参数化**，并要求把取值写进论文：
 
 ```bash
-go run ./cmd/faultfit -in failures.csv -window 6h -physical 20m -out-json faultparams.json
+go run ./cmd/faultagg \
+    -in node_outages.csv \
+    -total az-a=64,az-b=64,az-c=64 \
+    -threshold 0.5 -minduration 1m -mergegap 2m \
+    -out domain_faults.csv
+```
+
+> ⚠️ **`-total` 是必须显式给的，这是最容易踩的坑。**
+> 域内总节点数如果只从"在输入里出现过的节点"推断，会**系统性高估**故障比例：
+> 64 个节点里挂了 30 个（47%）本该**不算**域级故障，但如果只有这 30 个节点
+> 出现在输入里，分母就变成 30，比例算成 100%，直接误判。
+> `TestAggregateUsesExplicitTotal` 专门守这条。
+
+> ⚠️ **另一个方向性偏差：聚合出的区间会比"真实域故障"短。**
+> 节点的恢复时间是错开的，域级故障在"不足阈值的节点仍在线"时就算结束，
+> 而"真实"的 end 通常是最后一个节点恢复的时刻。
+> 自检里加了 0–120 秒的恢复抖动，还原出的区间稳定地**早结束 1–2 分钟**。
+> 这不是缺陷，是判据的固有含义 —— 但**口径必须写清楚**：
+> 聚合出来的是"**影响面达标的时段**"，不是"最后一个字节恢复的时刻"。
+
+**自检**（往返验证）：
+
+```bash
+go run ./cmd/faultagg -sample -sample-out nodes.csv
+```
+
+按已知域级区间展开成节点级记录，再聚合回来，逐条比对。实测：
+
+```
+  期望（注入的真值）                实际（聚合还原）              边界偏差
+  ✓ az-a 01-01 03:00–03:20         az-a 01-01 03:00–03:18       起  +0.6 分 / 止  -1.2 分
+  ✓ az-c 01-01 05:00–05:40         az-c 01-01 05:00–05:38       起  +0.5 分 / 止  -1.2 分
+  ✓ az-b 01-01 05:10–05:35         az-b 01-01 05:10–05:34       起  +0.7 分 / 止  -1.0 分
+  ✓ az-d 01-02 06:00–06:15         az-d 01-02 06:00–06:13       起  +0.6 分 / 止  -1.1 分
+```
+
+### 5.2 第二段：`cmd/faultfit`（域级区间 → 参数）
+
+```bash
+go run ./cmd/faultfit -in domain_faults.csv -window 6h -physical 20m -out-json faultparams.json
 ```
 
 输出五块：逐域 P（边际 / 独立）、Q、K 分布、**两两相关性检验**、
 以及可直接粘进 Go 的参数块。
 
-### 自检（没有真实数据也能验证工具正确）
+### 5.3 端到端自检（两段连起来跑）
+
+完整的链路验证：
 
 ```bash
-go run ./cmd/faultfit -synthetic -domains 6 -days 365 -window 6h \
-    -trueP 0.004 -trueQ 0.02 -trueK 3
+# ① 生成合成的节点级记录（同时跑一遍聚合自检）
+go run ./cmd/faultagg -sample -sample-out nodes.csv
+
+# ② 节点级 → 域级
+go run ./cmd/faultagg -in nodes.csv -total az-a=64,az-b=64,az-c=64,az-d=64 \
+    -threshold 0.5 -minduration 1m -mergegap 2m -out domains.csv
+
+# ③ 域级 → 参数
+go run ./cmd/faultfit -in domains.csv -window 6h
 ```
+
+实测这条链路：216 条节点级记录 → 4 段域级区间（与注入真值一致，
+且正确识别出 az-b/az-c 的重叠）→ `{P=0.1, Q=0.2, K=2}`。
+
+### 5.4 `cmd/faultfit` 的自检
 
 按已知参数生成合成故障序列再反解，看能不能估回来。
 
@@ -183,7 +260,7 @@ go run ./cmd/faultfit -synthetic -domains 6 -days 365 -window 6h \
 > 而逐窗口直接数出来的是**边际**值。用边际值 = 区域事件算两遍。
 > 自检里这一步差了 **5 倍**（0.0200 vs 0.004）—— 这个坑正是自检发现的。
 
-### 5.1 相关性检验：lift 不能单独看
+### 5.5 相关性检验：lift 不能单独看
 
 `faultfit` 会为每一对域算 `lift = 实测共同失效占比 ÷ 独立假设预测`。
 lift ≫ 1 是区域事件存在的证据 —— **但只在"期望次数"够大时才可解读**。

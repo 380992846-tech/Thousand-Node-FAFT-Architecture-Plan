@@ -96,7 +96,8 @@ go run ./cmd/kvbench -spec 2x3 -duration 10s -warmup 3s -concurrency 32
 | `cmd/kvbench` | 一体化实验驱动 |
 | `cmd/faftbench` | FAFT 收益与代价分析 |
 | `cmd/raftbench` | **共识层微基准**：7 种模式 —— 吞吐 / 突发 / 可用性 / 复制落后 / 故障注入 / `MaxAppendEntries` / 多分片整域故障 |
-| `cmd/faultfit` | **故障日志 → 模型参数**：把生产日志拟合成 `pkg/faft` 能吃的 P/Q/K |
+| `cmd/faultagg` | **节点级 → 域级**：把监控导出的节点故障聚合成域级区间（判据显式参数化） |
+| `cmd/faultfit` | **域级 → 模型参数**：拟合成 `pkg/faft` 能吃的 P/Q/K |
 | `cmd/simbench` | 离散事件模拟器驱动 |
 | `docs/` | [BUGS](docs/BUGS.md) · [DESIGN](docs/DESIGN.md) · [MEASUREMENT](docs/MEASUREMENT.md) · [PAPER-DRAFT](docs/PAPER-DRAFT.md) · [FAULT-DATA](docs/FAULT-DATA.md) · [ROADMAP](docs/ROADMAP.md) |
 

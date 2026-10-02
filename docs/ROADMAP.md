@@ -89,7 +89,8 @@ BenchmarkBarrierVsCommitTimeout: commit=1ms/5ms/20ms → 5.72/6.46/5.87 ms
 | `cmd/faftbench` | FAFT 分析（`scale`/`cost`/`domain`/`curve`/`avail`/`solve`/`solve-uniform`/`solve-plan`/`regional`） |
 | `third_party/flexiraft` | **hashicorp/raft v1.6.1 的 FPaxos 改造版**：可配置 \|Q1\|/\|Q2\|；未设时与上游逐行等价 |
 | `cmd/raftbench` | **共识层微基准**：`bench`/`burst`/`avail`/`lag`/`fail`/`shards`/`sweep` 七种模式，实测 quorum 几何的收益与代价 |
-| `cmd/faultfit` | **故障日志 → 模型参数**：把域级故障区间拟合成 `{P,Q,K}`，带合成序列自检 |
+| `cmd/faultagg` | **节点级 → 域级**：把监控导出的节点故障聚合成域级区间；判据显式参数化，带往返自检 |
+| `cmd/faultfit` | **域级 → 模型参数**：把域级故障区间拟合成 `{P,Q,K}`，带合成序列自检 |
 | `scripts/run-raftbench.ps1` | 一键复现全部 raftbench 实验，结果落 `results/raftbench-*.json` |
 
 ### 1.5 方向验证（关键产出）
