@@ -305,6 +305,14 @@ func TestDefaultBaselinesComplete(t *testing.T) {
 	if names["majority"] != 1 {
 		t.Errorf("majority 出现 %d 次，必须唯一（它是降幅基准）", names["majority"])
 	}
+	// 函数名说"命名唯一"，之前只对 majority 断言了唯一性。
+	// 实测两个 FlexiRaftPlanner（默认 max(2,n/4) 与钉死 dq=2）同名，
+	// 结果表里出现两个 "flexiraft" 列，按名字统计时把 36 个点算成了 72 个。
+	for name, cnt := range names {
+		if cnt != 1 {
+			t.Errorf("baseline 名字 %q 出现 %d 次，结果表会串列、按名字统计会重复计数", name, cnt)
+		}
+	}
 	t.Logf("baseline 集合：%v", func() []string {
 		var out []string
 		for _, p := range bs {

@@ -1,0 +1,4147 @@
+{
+  "config": {
+    "domains": 9,
+    "replicas": 5,
+    "data_faults": 1,
+    "control_faults": 1,
+    "p_base": 0.001,
+    "target_data": 0.999,
+    "target_control": 0.9999,
+    "skew_list": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "q_list": [
+      0,
+      0.001,
+      0.01,
+      0.03
+    ],
+    "k_list": [
+      1,
+      2,
+      3
+    ]
+  },
+  "cells": [
+    {
+      "skew": 0,
+      "q": 0,
+      "k": 1,
+      "lb_feasible": true,
+      "lb_q2": 1,
+      "lb_q1": 5,
+      "lb_msgs": 2,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        }
+      ]
+    },
+    {
+      "skew": 0,
+      "q": 0,
+      "k": 2,
+      "lb_feasible": true,
+      "lb_q2": 1,
+      "lb_q1": 5,
+      "lb_msgs": 2,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        }
+      ]
+    },
+    {
+      "skew": 0,
+      "q": 0,
+      "k": 3,
+      "lb_feasible": true,
+      "lb_q2": 1,
+      "lb_q1": 5,
+      "lb_msgs": 2,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        }
+      ]
+    },
+    {
+      "skew": 0,
+      "q": 0.001,
+      "k": 1,
+      "lb_feasible": true,
+      "lb_q2": 3,
+      "lb_q1": 3,
+      "lb_msgs": 6,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        }
+      ]
+    },
+    {
+      "skew": 0,
+      "q": 0.001,
+      "k": 2,
+      "lb_feasible": true,
+      "lb_q2": 3,
+      "lb_q1": 3,
+      "lb_msgs": 6,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        }
+      ]
+    },
+    {
+      "skew": 0,
+      "q": 0.001,
+      "k": 3,
+      "lb_feasible": false,
+      "lb_q2": 0,
+      "lb_q1": 0,
+      "lb_msgs": 0,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 0,
+      "q": 0.01,
+      "k": 1,
+      "lb_feasible": true,
+      "lb_q2": 3,
+      "lb_q1": 3,
+      "lb_msgs": 6,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        }
+      ]
+    },
+    {
+      "skew": 0,
+      "q": 0.01,
+      "k": 2,
+      "lb_feasible": true,
+      "lb_q2": 3,
+      "lb_q1": 5,
+      "lb_msgs": 6,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        }
+      ]
+    },
+    {
+      "skew": 0,
+      "q": 0.01,
+      "k": 3,
+      "lb_feasible": false,
+      "lb_q2": 0,
+      "lb_q1": 0,
+      "lb_msgs": 0,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 0,
+      "q": 0.03,
+      "k": 1,
+      "lb_feasible": true,
+      "lb_q2": 3,
+      "lb_q1": 3,
+      "lb_msgs": 6,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        }
+      ]
+    },
+    {
+      "skew": 0,
+      "q": 0.03,
+      "k": 2,
+      "lb_feasible": true,
+      "lb_q2": 5,
+      "lb_q1": 5,
+      "lb_msgs": 10,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": true,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        }
+      ]
+    },
+    {
+      "skew": 0,
+      "q": 0.03,
+      "k": 3,
+      "lb_feasible": false,
+      "lb_q2": 0,
+      "lb_q1": 0,
+      "lb_msgs": 0,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 1,
+      "q": 0,
+      "k": 1,
+      "lb_feasible": true,
+      "lb_q2": 1,
+      "lb_q1": 5,
+      "lb_msgs": 2,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 1,
+      "q": 0,
+      "k": 2,
+      "lb_feasible": true,
+      "lb_q2": 1,
+      "lb_q1": 5,
+      "lb_msgs": 2,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 1,
+      "q": 0,
+      "k": 3,
+      "lb_feasible": true,
+      "lb_q2": 1,
+      "lb_q1": 5,
+      "lb_msgs": 2,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 1,
+      "q": 0.001,
+      "k": 1,
+      "lb_feasible": true,
+      "lb_q2": 1,
+      "lb_q1": 5,
+      "lb_msgs": 2,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 1,
+      "q": 0.001,
+      "k": 2,
+      "lb_feasible": true,
+      "lb_q2": 1,
+      "lb_q1": 5,
+      "lb_msgs": 2,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 1,
+      "q": 0.001,
+      "k": 3,
+      "lb_feasible": false,
+      "lb_q2": 0,
+      "lb_q1": 0,
+      "lb_msgs": 0,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 1,
+      "q": 0.01,
+      "k": 1,
+      "lb_feasible": true,
+      "lb_q2": 3,
+      "lb_q1": 3,
+      "lb_msgs": 6,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        }
+      ]
+    },
+    {
+      "skew": 1,
+      "q": 0.01,
+      "k": 2,
+      "lb_feasible": true,
+      "lb_q2": 3,
+      "lb_q1": 5,
+      "lb_msgs": 6,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        }
+      ]
+    },
+    {
+      "skew": 1,
+      "q": 0.01,
+      "k": 3,
+      "lb_feasible": false,
+      "lb_q2": 0,
+      "lb_q1": 0,
+      "lb_msgs": 0,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 1,
+      "q": 0.03,
+      "k": 1,
+      "lb_feasible": true,
+      "lb_q2": 3,
+      "lb_q1": 3,
+      "lb_msgs": 6,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        }
+      ]
+    },
+    {
+      "skew": 1,
+      "q": 0.03,
+      "k": 2,
+      "lb_feasible": true,
+      "lb_q2": 5,
+      "lb_q1": 5,
+      "lb_msgs": 10,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": true,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        }
+      ]
+    },
+    {
+      "skew": 1,
+      "q": 0.03,
+      "k": 3,
+      "lb_feasible": false,
+      "lb_q2": 0,
+      "lb_q1": 0,
+      "lb_msgs": 0,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 2,
+      "q": 0,
+      "k": 1,
+      "lb_feasible": true,
+      "lb_q2": 1,
+      "lb_q1": 5,
+      "lb_msgs": 2,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 2,
+      "q": 0,
+      "k": 2,
+      "lb_feasible": true,
+      "lb_q2": 1,
+      "lb_q1": 5,
+      "lb_msgs": 2,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 2,
+      "q": 0,
+      "k": 3,
+      "lb_feasible": true,
+      "lb_q2": 1,
+      "lb_q1": 5,
+      "lb_msgs": 2,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 2,
+      "q": 0.001,
+      "k": 1,
+      "lb_feasible": true,
+      "lb_q2": 1,
+      "lb_q1": 5,
+      "lb_msgs": 2,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 4,
+          "ratio_to_lower_bound": 3,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 2,
+      "q": 0.001,
+      "k": 2,
+      "lb_feasible": true,
+      "lb_q2": 1,
+      "lb_q1": 5,
+      "lb_msgs": 2,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 2,
+      "q": 0.001,
+      "k": 3,
+      "lb_feasible": false,
+      "lb_q2": 0,
+      "lb_q1": 0,
+      "lb_msgs": 0,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 2,
+      "q": 0.01,
+      "k": 1,
+      "lb_feasible": true,
+      "lb_q2": 3,
+      "lb_q1": 3,
+      "lb_msgs": 6,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        }
+      ]
+    },
+    {
+      "skew": 2,
+      "q": 0.01,
+      "k": 2,
+      "lb_feasible": true,
+      "lb_q2": 3,
+      "lb_q1": 5,
+      "lb_msgs": 6,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        }
+      ]
+    },
+    {
+      "skew": 2,
+      "q": 0.01,
+      "k": 3,
+      "lb_feasible": false,
+      "lb_q2": 0,
+      "lb_q1": 0,
+      "lb_msgs": 0,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 2,
+      "q": 0.03,
+      "k": 1,
+      "lb_feasible": true,
+      "lb_q2": 3,
+      "lb_q1": 3,
+      "lb_msgs": 6,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 2,
+      "q": 0.03,
+      "k": 2,
+      "lb_feasible": true,
+      "lb_q2": 5,
+      "lb_q1": 5,
+      "lb_msgs": 10,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": true,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        }
+      ]
+    },
+    {
+      "skew": 2,
+      "q": 0.03,
+      "k": 3,
+      "lb_feasible": false,
+      "lb_q2": 0,
+      "lb_q1": 0,
+      "lb_msgs": 0,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 3,
+      "q": 0,
+      "k": 1,
+      "lb_feasible": true,
+      "lb_q2": 1,
+      "lb_q1": 5,
+      "lb_msgs": 2,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 3,
+      "q": 0,
+      "k": 2,
+      "lb_feasible": true,
+      "lb_q2": 1,
+      "lb_q1": 5,
+      "lb_msgs": 2,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 3,
+      "q": 0,
+      "k": 3,
+      "lb_feasible": true,
+      "lb_q2": 1,
+      "lb_q1": 5,
+      "lb_msgs": 2,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 3,
+      "q": 0.001,
+      "k": 1,
+      "lb_feasible": true,
+      "lb_q2": 1,
+      "lb_q1": 5,
+      "lb_msgs": 2,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 3,
+      "q": 0.001,
+      "k": 2,
+      "lb_feasible": true,
+      "lb_q2": 1,
+      "lb_q1": 5,
+      "lb_msgs": 2,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 1,
+          "write_msgs": 2,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 3,
+      "q": 0.001,
+      "k": 3,
+      "lb_feasible": false,
+      "lb_q2": 0,
+      "lb_q1": 0,
+      "lb_msgs": 0,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 3,
+      "q": 0.01,
+      "k": 1,
+      "lb_feasible": true,
+      "lb_q2": 3,
+      "lb_q1": 3,
+      "lb_msgs": 6,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 3,
+      "q": 0.01,
+      "k": 2,
+      "lb_feasible": true,
+      "lb_q2": 3,
+      "lb_q1": 5,
+      "lb_msgs": 6,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 3,
+      "q": 0.01,
+      "k": 3,
+      "lb_feasible": false,
+      "lb_q2": 0,
+      "lb_q1": 0,
+      "lb_msgs": 0,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 3,
+      "q": 0.03,
+      "k": 1,
+      "lb_feasible": true,
+      "lb_q2": 3,
+      "lb_q1": 3,
+      "lb_msgs": 6,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": true,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 3,
+      "q": 0.03,
+      "k": 2,
+      "lb_feasible": true,
+      "lb_q2": 5,
+      "lb_q1": 5,
+      "lb_msgs": 10,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": true,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 1,
+          "at_lower_bound": true
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    },
+    {
+      "skew": 3,
+      "q": 0.03,
+      "k": 3,
+      "lb_feasible": false,
+      "lb_q2": 0,
+      "lb_q1": 0,
+      "lb_msgs": 0,
+      "arms": [
+        {
+          "planner": "faft-joint",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "majority",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "tikv-pd",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "flexiraft-dq2",
+          "feasible": false,
+          "q2": 2,
+          "write_msgs": 4,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "orca",
+          "feasible": false,
+          "q2": 3,
+          "write_msgs": 6,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        },
+        {
+          "planner": "faft-countselect",
+          "feasible": false,
+          "q2": 5,
+          "write_msgs": 10,
+          "gap_vs_lower_bound": 0,
+          "ratio_to_lower_bound": 0,
+          "at_lower_bound": false
+        }
+      ]
+    }
+  ],
+  "summary": [
+    {
+      "planner": "faft-joint",
+      "cells_lb_feasible": 36,
+      "at_lower_bound": 36,
+      "above_lower_bound": 0,
+      "missed_reachable_target": 0,
+      "median_ratio": 1
+    },
+    {
+      "planner": "majority",
+      "cells_lb_feasible": 36,
+      "at_lower_bound": 7,
+      "above_lower_bound": 12,
+      "missed_reachable_target": 17,
+      "median_ratio": 3
+    },
+    {
+      "planner": "tikv-pd",
+      "cells_lb_feasible": 36,
+      "at_lower_bound": 7,
+      "above_lower_bound": 12,
+      "missed_reachable_target": 17,
+      "median_ratio": 3
+    },
+    {
+      "planner": "flexiraft",
+      "cells_lb_feasible": 36,
+      "at_lower_bound": 0,
+      "above_lower_bound": 0,
+      "missed_reachable_target": 36,
+      "median_ratio": 0
+    },
+    {
+      "planner": "flexiraft-dq2",
+      "cells_lb_feasible": 36,
+      "at_lower_bound": 0,
+      "above_lower_bound": 0,
+      "missed_reachable_target": 36,
+      "median_ratio": 0
+    },
+    {
+      "planner": "orca",
+      "cells_lb_feasible": 36,
+      "at_lower_bound": 7,
+      "above_lower_bound": 12,
+      "missed_reachable_target": 17,
+      "median_ratio": 3
+    },
+    {
+      "planner": "faft",
+      "cells_lb_feasible": 36,
+      "at_lower_bound": 35,
+      "above_lower_bound": 0,
+      "missed_reachable_target": 1,
+      "median_ratio": 1
+    },
+    {
+      "planner": "faft-countselect",
+      "cells_lb_feasible": 36,
+      "at_lower_bound": 16,
+      "above_lower_bound": 0,
+      "missed_reachable_target": 20,
+      "median_ratio": 1
+    }
+  ],
+  "lb_feasible_cells": 36,
+  "lb_infeasible_cells": 12,
+  "differentiating_cells": 12,
+  "n_sweep": [
+    {
+      "n": 3,
+      "lb_q2": 1,
+      "lb_msgs": 2,
+      "joint_msgs": 2,
+      "joint_feasible": true,
+      "joint_ratio": 1,
+      "majority_msgs": 4
+    },
+    {
+      "n": 5,
+      "lb_q2": 1,
+      "lb_msgs": 2,
+      "joint_msgs": 2,
+      "joint_feasible": true,
+      "joint_ratio": 1,
+      "majority_msgs": 6
+    },
+    {
+      "n": 7,
+      "lb_q2": 1,
+      "lb_msgs": 2,
+      "joint_msgs": 2,
+      "joint_feasible": true,
+      "joint_ratio": 1,
+      "majority_msgs": 8
+    },
+    {
+      "n": 9,
+      "lb_q2": 1,
+      "lb_msgs": 2,
+      "joint_msgs": 2,
+      "joint_feasible": true,
+      "joint_ratio": 1,
+      "majority_msgs": 10
+    },
+    {
+      "n": 11,
+      "lb_q2": 1,
+      "lb_msgs": 2,
+      "joint_msgs": 2,
+      "joint_feasible": true,
+      "joint_ratio": 1,
+      "majority_msgs": 12
+    },
+    {
+      "n": 21,
+      "lb_q2": 1,
+      "lb_msgs": 2,
+      "joint_msgs": 2,
+      "joint_feasible": true,
+      "joint_ratio": 1,
+      "majority_msgs": 22
+    }
+  ],
+  "notes": [
+    "下界是**写消息数**的下界，不是可用性的下界：差距为 0 表示消息数已达理论最优；差距大于 0 只说明「未证明最优」，不说明方案差 —— 界本身可能偏松。",
+    "四条松弛（见 pkg/faft/lowerbound.go）：① 两条路径分别取上界（忽略耦合）；② 忽略域容量与同域堆积；③ 无事件项按最可靠域算；④ 事件项对成员数分拆取最大值。",
+    "松弛 ① 是最松的一条：真实系统要求 Q1 与 Q2 **同时**存活，松弛后各自单独达标即可，因此下界在控制目标很紧时会明显偏低。",
+    "D ≤ 12 时事件项按「命中全部 C(D,k) 组合」**精确求最大**；D \u003e 12 时拓扑用轮转采样，下界改用与命中集合无关的解析界，此时会偏松。",
+    "有 12 个参数点下界不可行：连「最可靠域 + 最理想分拆」都达不到目标，这些点上任何方法的不可行都不是方法缺陷。",
+    "⚠️ 只有 12/36 个可行点有区分力：其余点上所有可行方法都已达到下界，说明**下界在这些点上不够紧**（松弛 ① 忽略 Q1/Q2 耦合是最主要的原因）。引用「达到下界」时必须同时给出区分力点数，否则会被读成「谁做都一样」。"
+  ]
+}

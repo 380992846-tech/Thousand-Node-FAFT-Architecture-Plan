@@ -156,6 +156,19 @@ func main() {
 			os.Exit(1)
 		}
 
+	case "lowerbound":
+		// 下界对照：回答「离理论最优还差多远」。
+		// 没有这张表，「我们的解是最优的」只能写成「我们试过的都更好」。
+		fmt.Println("=== 可证下界对照（relaxed lower bound）===")
+		fmt.Println()
+		if err := runLowerBound(lbOpts{
+			domains: 9, replicas: 5, dataTol: 1, ctrlTol: 1,
+			nSweep: true, outPath: sensOut,
+		}); err != nil {
+			fmt.Fprintln(os.Stderr, "下界对照失败:", err)
+			os.Exit(1)
+		}
+
 	case "flexiraft-sweep":
 		// FlexiRaft 的收益取决于其 data-commit quorum 取值，
 		// 因此必须扫描该参数并报告整条曲线，不能只报一个点。

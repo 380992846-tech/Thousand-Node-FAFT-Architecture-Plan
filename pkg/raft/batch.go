@@ -514,11 +514,31 @@ type BatchStats struct {
 	BatchWaitMs float64 `json:"batch_wait_ms"`
 
 	// 以下为诊断计数，用于核对命令去向。
-	// 恒等式：Enqueued + Direct == FSMCommands（无失败时）。
+	//
+	// ⚠️ 这里的"直接提案"有**两条不同的路径**，它们与 Enqueued 的关系相反：
+	//
+	//	DirectDegraded  从未入队（批循环没跑 / 已停止 / 批处理关闭）
+	//	                ⇒ 只出现在 Direct 侧，不在 Enqueued 里
+	//	DirectTimeout   入了队，但等满 BatchMaxWait 后被摘出来单条提案
+	//	                ⇒ **同时**计入 Enqueued 与 Direct 侧
+	//
+	// 把它们合成一个 Direct 再写恒等式 `Enqueued + Direct == FSMCommands`
+	// 是错的：超时路径一触发，左边就会比右边大。
+	// 实测 BatchMaxWait=2ms 时 5 次运行里有 3 次失败 —— 而且失败与否取决于
+	// 机器负载，看起来像"偶发竞态"，实际是恒等式本身漏了一条路径。
+	//
+	// 正确的分类账（无失败时）：
+	//
+	//	Enqueued + DirectDegraded == FSMCommands + Released
+	//	Flushed + DirectTimeout   == Enqueued - Released
 	Enqueued int64 `json:"enqueued"`
 	Flushed  int64 `json:"flushed"`
-	// Direct 未经过批队列、直接单条提案的命令数。
+	// Direct 两条直接提案路径之和，保留给既有调用方。
 	Direct int64 `json:"direct"`
+	// DirectDegraded 从未入队的单条提案数。
+	DirectDegraded int64 `json:"direct_degraded"`
+	// DirectTimeout 入队后超时摘出、改走单条提案的命令数。
+	DirectTimeout int64 `json:"direct_timeout"`
 	// Released 因关闭/失去 Leadership/条目级失败而未提交的命令数。
 	Released int64 `json:"released"`
 }
@@ -562,14 +582,15 @@ func (ks *KVStore) BatchStats() BatchStats {
 		st.Commands = b.cmds.Load()
 		st.Enqueued = b.enqueued.Load()
 		st.Flushed = b.flushed.Load()
-		st.Direct = b.direct.Load()
+		st.DirectTimeout = b.direct.Load()
 		st.Released = b.released.Load()
 		if st.Batches > 0 {
 			st.Amortization = float64(st.Commands) / float64(st.Batches)
 		}
 	}
-	// batch == nil 时（批循环尚未启动）的那部分单条提案也要计入。
-	st.Direct += ks.batchDirect.Load()
+	// batch == nil 时（批循环尚未启动 / 已停止）的那部分单条提案单独计入。
+	st.DirectDegraded = ks.batchDirect.Load()
+	st.Direct = st.DirectTimeout + st.DirectDegraded
 	return st
 }
 

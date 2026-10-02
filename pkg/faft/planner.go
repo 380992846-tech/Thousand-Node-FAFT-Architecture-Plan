@@ -106,9 +106,17 @@ type FlexiRaftPlanner struct {
 }
 
 // Name 实现 QuorumPlanner。
+//
+// 钉死 DataQuorum 的实例必须带后缀：否则结果表里会出现两个都叫
+// "flexiraft" 的列（默认 max(2,n/4) 与钉死 2 各一个），
+// 按名字做的统计会把两者的计数加在一起 —— 实测汇总里
+// "未达可达目标 72" 就是这么来的（36 个点被数了两遍）。
 func (p FlexiRaftPlanner) Name() string {
 	if p.UseAvailabilityAware {
 		return "flexiraft+availaware"
+	}
+	if p.DataQuorum > 0 {
+		return fmt.Sprintf("flexiraft-dq%d", p.DataQuorum)
 	}
 	return "flexiraft"
 }

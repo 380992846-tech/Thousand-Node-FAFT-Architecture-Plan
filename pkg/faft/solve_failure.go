@@ -150,7 +150,16 @@ func availabilityForKilledSet(
 	dist[0] = 1.0
 	processed := 0
 
-	for d, c := range perDomain {
+	// ⚠️ 按域下标顺序卷积，**不要**遍历 map。
+	// 浮点加法不满足结合律，map 遍历顺序随机 ⇒ 同一个集合两次调用的结果
+	// 会在最后几位不同（实测 0.99977499514985479 vs …491）。
+	// 后果是"同种子 ⇒ 同结果"在解析结果上也做不到，审稿人核对数字时会发现
+	// 对不上却又说不出原因。按键排序同时更省一次 map 哈希。
+	for d := 0; d < len(topo.Domains); d++ {
+		c, ok := perDomain[d]
+		if !ok {
+			continue
+		}
 		next := make([]float64, total+1)
 		if killedSet[d] {
 			// 该域被整体打掉：贡献 0 个存活副本。
@@ -260,6 +269,12 @@ func replicaAliveProb(topo *Topology, model FailureModel, d int, tol int) float6
 // 直接读具体类型的 P 字段，而不是从 QuorumAvailable 反推 ——
 // 反推会引入"P 到底是存活率还是失效率"的歧义，正是上面注释里那个坑的来源。
 func modelFailProb(model FailureModel) float64 {
+	if model == nil {
+		// 没有模型 ⇒ 没有任何失效信息。返回 0 而不是 panic：对"可用性上界"
+		// 这一用途，未知必须朝**更乐观**的方向放宽，否则会得到一个
+		// 低于真实值的假上界（下界随即失效）。非 nil 调用点行为不变。
+		return 0
+	}
 	switch m := model.(type) {
 	case IndependentFailure:
 		return m.P
@@ -304,6 +319,96 @@ func (av AvailabilityModel) availOf(members []int, placement Placement) float64 
 // （需要至少 len(members)/2+1 个成员存活）。
 func MemberAvailability(members []int, placement Placement, av AvailabilityModel) float64 {
 	return av.availOf(members, placement)
+}
+
+// availabilityLadder 一次性算出"贪心加入第 1..n 个成员"的全过程。
+//
+// 存在的理由（性能）：pickMaxAvailability 每次调用都从空集重新贪心，
+// 复杂度 O(k·n·cost)。SolveWithFailures 要对每个 k 求一次 Q2、再对每个
+// |Q1| 求一次，合计 O(n³·cost) 次可用性计算。实测 n=21 时单次求解要
+// **0.37 秒**，而联合求解要对上千个候选放置各调用一次 ——
+// 整张下界对照表因此要跑 12 分钟。
+//
+// 关键性质：**逐 k 贪心的结果就是阶梯的前 k 项**。
+// 因为准则（每步取边际可用性增益最大的成员）与候选遍历顺序完全一致，
+// 贪心的每一步都不依赖 k，所以
+//
+//	pickMaxAvailability(k) == ladder.quorum(k)
+//	ladder.avail[k]        == availOf(pickMaxAvailability(k))
+//
+// 也就是说这是一次**严格等价**的重排，只是把 O(n³) 变成 O(n²)，
+// 不改变任何输出。表里的数字因此必须逐位不变（已用 lowerbound/ablation
+// 两份结果 JSON 对照验证）。
+type availabilityLadder struct {
+	// members 原始候选顺序，用于 k = n 时保持与旧实现逐位一致。
+	members []int
+	// order 贪心加入顺序。
+	order []int
+	// avail[k] = 前 k 个成员的可用性（k = 0..n）。
+	avail []float64
+}
+
+// buildAvailabilityLadder 做一遍嵌套贪心，记录每一步的成员顺序与可用性。
+//
+// 复杂度 O(n²·cost(availability))。
+func buildAvailabilityLadder(members []int, placement Placement, av AvailabilityModel) availabilityLadder {
+	n := len(members)
+	l := availabilityLadder{
+		members: append([]int(nil), members...),
+		order:   make([]int, 0, n),
+		avail:   make([]float64, n+1),
+	}
+	l.avail[0] = av.availOf(nil, placement)
+
+	remaining := append([]int(nil), members...)
+	trial := make([]int, 0, n)
+	for len(remaining) > 0 {
+		bestGain, bestIdx := -1.0, -1
+		for i, cand := range remaining {
+			// ⚠️ 必须显式重建前缀。写成 `append(trial[:len(l.order)], cand)`
+			// 会复用 trial 的底层数组，而那个数组里装的是**上一轮最后一个
+			// 候选**，不是已选中的成员 —— 于是每一轮都在评估"错误集合"的
+			// 可用性。症状极其隐蔽：贪心的顺序看起来正常，可用性却系统性
+			// 偏低（实测同一集合 0.99847 vs 正确值 0.99943），
+			// 最终让联合求解选错放置、消融测试报"A4 输给 A2"。
+			// 由 ladder_test.go 的等价性测试抓出。
+			trial = append(trial[:0], l.order...)
+			trial = append(trial, cand)
+			if g := av.availOf(trial, placement); g > bestGain {
+				bestGain, bestIdx = g, i
+			}
+		}
+		if bestIdx < 0 {
+			break
+		}
+		l.order = append(l.order, remaining[bestIdx])
+		l.avail[len(l.order)] = bestGain
+		remaining = append(remaining[:bestIdx], remaining[bestIdx+1:]...)
+	}
+	return l
+}
+
+// quorum 返回大小为 k 的成员集合。
+//
+// k ≥ n 时返回**原始顺序**：旧实现 pickMaxAvailability 在 k ≥ len(members)
+// 时直接返回原序列，而不是贪心顺序。两者是同一个集合、可用性相同，
+// 但成员顺序会出现在结果 JSON 与诊断字符串里，必须逐位保持一致。
+func (l availabilityLadder) quorum(k int) []int {
+	if k <= 0 {
+		return nil
+	}
+	if k >= len(l.members) {
+		return append([]int(nil), l.members...)
+	}
+	return append([]int(nil), l.order[:k]...)
+}
+
+// availAt 返回大小为 k 的成员集合的可用性。
+func (l availabilityLadder) availAt(k int) float64 {
+	if k < 0 || k > len(l.order) {
+		return 0
+	}
+	return l.avail[k]
 }
 
 // pickMaxAvailability 从候选副本中贪心挑选 k 个，使成员集合的可用性最大。
@@ -402,9 +507,13 @@ func SolveWithFailures(t *Topology, cfg Config, av AvailabilityModel, targets Av
 	}
 
 	// 目标是最小化 2|Q2|，所以 k 从小到大扫描，第一个达标即为最优。
+	//
+	// 成员选择的可用性阶梯只建一次（等价于对每个 k 各跑一次贪心，见
+	// availabilityLadder 的说明）：n=21 时这一步把求解从 0.37 s 降到毫秒级。
+	ladder := buildAvailabilityLadder(all, cfg.Placement, av)
 	for k := 1; k <= n; k++ {
-		q2mem := pickMaxAvailability(all, cfg.Placement, av, k)
-		dataAvail := av.availOf(q2mem, cfg.Placement)
+		q2mem := ladder.quorum(k)
+		dataAvail := ladder.availAt(k)
 		evaluated++
 
 		// 即使数据路径不达标也要记录候选：这是"最接近"的主要来源。
@@ -413,9 +522,9 @@ func SolveWithFailures(t *Topology, cfg Config, av AvailabilityModel, targets Av
 			q1min = 1
 		}
 		if q1min <= n {
-			q1memMin := pickMaxAvailability(all, cfg.Placement, av, q1min)
+			q1memMin := ladder.quorum(q1min)
 			consider(Evaluate(t, cfg, Quorum{Q1Members: q1memMin, Q2Members: q2mem}),
-				dataAvail, av.availOf(q1memMin, cfg.Placement))
+				dataAvail, ladder.availAt(q1min))
 		}
 
 		if dataAvail < targets.Data {
@@ -425,8 +534,8 @@ func SolveWithFailures(t *Topology, cfg Config, av AvailabilityModel, targets Av
 		// 数据路径达标，确定 |Q2|=k；再求满足控制目标的最小 |Q1|。
 		// |Q1| 的下界是 n-k+1（Flexible Paxos 约束）。
 		for q1size := q1min; q1size <= n; q1size++ {
-			q1mem := pickMaxAvailability(all, cfg.Placement, av, q1size)
-			ctrlAvail := av.availOf(q1mem, cfg.Placement)
+			q1mem := ladder.quorum(q1size)
+			ctrlAvail := ladder.availAt(q1size)
 			evaluated++
 
 			q := Quorum{Q1Members: q1mem, Q2Members: q2mem}

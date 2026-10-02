@@ -288,29 +288,41 @@ func TestBatchAmortization(t *testing.T) {
 
 	st := ks.BatchStats()
 	total := workers * each
-	t.Logf("期望 %d 条；FSM applied=%d cmds=%d；批统计 enqueued=%d flushed=%d direct=%d released=%d batches=%d commands=%d 摊薄=%.2f",
-		total, st.FSMApplied, st.FSMCommands, st.Enqueued, st.Flushed, st.Direct,
-		st.Released, st.Batches, st.Commands, st.Amortization)
+	t.Logf("期望 %d 条；FSM applied=%d cmds=%d；批统计 enqueued=%d flushed=%d "+
+		"direct(超时)=%d direct(退化)=%d released=%d batches=%d commands=%d 摊薄=%.2f",
+		total, st.FSMApplied, st.FSMCommands, st.Enqueued, st.Flushed,
+		st.DirectTimeout, st.DirectDegraded, st.Released, st.Batches, st.Commands, st.Amortization)
 	if n := errCount.Load(); n > 0 {
 		t.Fatalf("%d 个 Set 返回了错误", n)
 	}
 
 	// 分类账恒等式：每条命令都要有去处。
-	// 入队 + 直接提案 == FSM 实际应用 + 被释放。
-	if st.Enqueued+st.Direct != int64(st.FSMCommands)+st.Released {
-		t.Fatalf("命令去向对不上：入队 %d + 单条 %d != FSM 应用 %d + 释放 %d",
-			st.Enqueued, st.Direct, st.FSMCommands, st.Released)
+	//
+	// ⚠️ 这里原本写的是 `Enqueued + Direct == FSMCommands + Released`，
+	// 在 BatchMaxWait=2ms 的配置下**时通时不通**（实测 5 次运行 3 次失败），
+	// 看起来像偶发竞态，实际是恒等式漏掉了超时路径：
+	//
+	//	Enqueued       = Flushed + DirectTimeout + Released
+	//	FSMCommands    = Flushed + DirectTimeout + DirectDegraded   （无失败时）
+	//
+	// DirectTimeout 的那批命令**既**入过队、**又**走了单条提案，
+	// 所以把它加在 Enqueued 那一侧就会重复计数。只有从未入队的
+	// DirectDegraded 才该出现在那一侧。
+	if st.Enqueued+st.DirectDegraded != int64(st.FSMCommands)+st.Released {
+		t.Fatalf("命令去向对不上：入队 %d + 未入队单条 %d != FSM 应用 %d + 释放 %d",
+			st.Enqueued, st.DirectDegraded, st.FSMCommands, st.Released)
 	}
 	if st.Released != 0 {
 		t.Fatalf("有 %d 条命令被释放（不应发生）", st.Released)
 	}
-	// 经批提交的数量必须等于入队数量（无释放时）。
-	if st.Flushed != st.Enqueued {
-		t.Fatalf("入队 %d 但只有 %d 条经批提交", st.Enqueued, st.Flushed)
+	// 入队的命令要么经批提交，要么超时后自己单条提交。
+	if st.Flushed+st.DirectTimeout != st.Enqueued-st.Released {
+		t.Fatalf("入队 %d 条：经批 %d + 超时单条 %d + 释放 %d ≠ 入队总数",
+			st.Enqueued, st.Flushed, st.DirectTimeout, st.Released)
 	}
-	// 经批提交 + 直接提案必须覆盖全部命令。
+	// 经批提交 + 两条单条路径必须覆盖全部命令。
 	if st.Commands+st.Direct != int64(total) {
-		t.Fatalf("经批 %d + 直接 %d = %d，期望 %d",
+		t.Fatalf("经批 %d + 单条 %d = %d，期望 %d",
 			st.Commands, st.Direct, st.Commands+st.Direct, total)
 	}
 	// FSM 命令数必须等于总数 —— 验证批内解码没有丢命令。
@@ -325,17 +337,16 @@ func TestBatchAmortization(t *testing.T) {
 		"FSM applied=%d cmds=%d",
 		st.Batches, st.Commands, st.Amortization, st.FSMApplied, st.FSMCommands)
 
-	// 诊断恒等式：每条命令要么经批提交，要么走单条提案，要么被释放。
-	// 若这个恒等式不成立，说明有命令在批状态机里被静默丢弃。
-	t.Logf("诊断: 入队=%d 经批提交=%d 单条提案=%d 释放=%d",
-		st.Enqueued, st.Flushed, st.Direct, st.Released)
-	if st.Enqueued+st.Direct != int64(st.FSMCommands)+st.Released {
-		t.Fatalf("命令去向对不上：入队 %d + 单条 %d != FSM 应用 %d + 释放 %d",
-			st.Enqueued, st.Direct, st.FSMCommands, st.Released)
+	// 诊断恒等式（同上，第二次核对，防止前面某条 Fatalf 被改坏）。
+	t.Logf("诊断: 入队=%d 经批提交=%d 超时单条=%d 未入队单条=%d 释放=%d",
+		st.Enqueued, st.Flushed, st.DirectTimeout, st.DirectDegraded, st.Released)
+	if st.Enqueued+st.DirectDegraded != int64(st.FSMCommands)+st.Released {
+		t.Fatalf("命令去向对不上：入队 %d + 未入队单条 %d != FSM 应用 %d + 释放 %d",
+			st.Enqueued, st.DirectDegraded, st.FSMCommands, st.Released)
 	}
-	if st.Flushed != st.Enqueued-st.Released {
-		t.Fatalf("入队 %d 中只有 %d 条经批提交，%d 条被释放（期望 0）",
-			st.Enqueued, st.Flushed, st.Released)
+	if st.Flushed+st.DirectTimeout != st.Enqueued-st.Released {
+		t.Fatalf("入队 %d 条：经批 %d + 超时单条 %d ≠ %d（释放应为 0）",
+			st.Enqueued, st.Flushed, st.DirectTimeout, st.Enqueued-st.Released)
 	}
 
 	// 16 个并发 worker 下至少应该摊到 2 条以上；否则批处理没生效。
