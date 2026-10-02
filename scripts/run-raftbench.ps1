@@ -8,13 +8,14 @@
 #   powershell -ExecutionPolicy Bypass -File scripts\run-raftbench.ps1
 #   powershell -ExecutionPolicy Bypass -File scripts\run-raftbench.ps1 -SkipBuild
 #   powershell -ExecutionPolicy Bypass -File scripts\run-raftbench.ps1 -Only sweep
-#   -Only 取值：all | sweep | avail | scale | mae | fail
+#   -Only 取值：all | sweep | avail | scale | mae | fail | burst | shards
 #
 # 实验 A（sweep）   quorum 几何 × 注入延迟 —— 收益侧主实验
 # 实验 B（avail）   |Q1| 变大后的选主可用性 —— 可用性代价
 # 实验 C（scale）   规模维度 n=5/7/9
 # 实验 D（mae）     MaxAppendEntries 转折点 —— |Q2| 变小的可行性条件
 # 实验 E（fail）    故障注入下的安全性三层判定 —— 论文的底线问题
+# 实验 F（shards）  多分片 + 整域故障 —— FAFT 核心主张的直接检验
 #
 # 全部跑完约 20–30 分钟（本机）。|Q2|=1 的组需要等 follower 追平才能做
 # 一致性检查，所以每组末尾会有几十秒到两分钟的"安静时间"，属正常。
@@ -25,7 +26,7 @@
 param(
   [string]$GoExe = 'go',
   [switch]$SkipBuild,
-  [ValidateSet('all', 'sweep', 'avail', 'scale', 'mae', 'fail')]
+  [ValidateSet('all', 'sweep', 'avail', 'scale', 'mae', 'fail', 'burst', 'shards')]
   [string]$Only = 'all'
 )
 
@@ -156,6 +157,36 @@ if ($Only -eq 'all' -or $Only -eq 'fail') {
         -failload 3s -failaft 3s -concurrency 64 -timeout 10s -electtimeout 8s -settle 60s `
         -out (Join-Path $Results "raftbench-fail-$tag.json")
     if ($LASTEXITCODE -ne 0) { Warn "  $tag 失败，继续" }
+  }
+}
+
+# ── 实验 F：多分片 + 整域故障（FAFT 核心主张的直接检验）─────────────
+#
+# 唯一能检验「决定可达性的是 quorum 的组织结构而不是大小」的形状。
+# 副本按 (shard+i) % D 摊到 D 个故障域上，然后杀掉整域，统计还有多少
+# 分片可用。判据是「该分片还有没有 leader」，算术界是「存活数 >= |Q1|」。
+#
+# ⚠️ 规模上限是硬性的：分片数 × 副本数 <= 3000。
+# 实测 1000x5 = 5000 实例连续跑到第 7 次会把整台机器打到失去响应
+# （不是内存问题 —— 出事时还剩 22.8GB；是选举风暴打满 16 个核）。
+# 本模式量的是**比例**，400 分片与 1000 分片给出同一个数，没必要冒险。
+if ($Only -eq 'all' -or $Only -eq 'shards') {
+  Step "实验 F：多分片 + 整域故障（400 分片）"
+  $matrix = @(
+    @{N=3; Dm=5; A=2; B=2; K=1}, @{N=3; Dm=5; A=3; B=1; K=1}, @{N=3; Dm=5; A=2; B=2; K=2},
+    @{N=5; Dm=5; A=3; B=3; K=1}, @{N=5; Dm=5; A=4; B=2; K=1}, @{N=5; Dm=5; A=5; B=1; K=1},
+    @{N=5; Dm=3; A=3; B=3; K=1}, @{N=5; Dm=3; A=4; B=2; K=1},
+    @{N=5; Dm=5; A=3; B=3; K=2}, @{N=5; Dm=5; A=4; B=2; K=2}
+  )
+  foreach ($cfg in $matrix) {
+    $tag = "S400-n$($cfg.N)-d$($cfg.Dm)-q1$($cfg.A)-q2$($cfg.B)-kill$($cfg.K)"
+    Step "  $tag"
+    & $Exe -mode shards -shards 400 -n $cfg.N -domains $cfg.Dm `
+        -q1 $cfg.A -q2 $cfg.B -hb 200ms -electto 200ms `
+        -shardsteady 1s -shardrecover 10s -killdomains $cfg.K -electtimeout 30s `
+        -out (Join-Path $Results "raftbench-shards-$tag.json")
+    if ($LASTEXITCODE -ne 0) { Warn "  $tag 失败，继续" }
+    Start-Sleep -Seconds 2
   }
 }
 

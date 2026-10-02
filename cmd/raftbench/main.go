@@ -219,6 +219,10 @@ type buildOpts struct {
 	// mae = MaxAppendEntries：每条 AppendEntries 最多带多少条日志。
 	// 0 表示用上游默认（64）。它决定复制追赶速度的上限 ≈ mae/delay。
 	mae int
+	// hbTO / elecTO 覆盖心跳与选举超时。0 表示用默认（50ms）。
+	// 分片数上千时要放大：否则 3000 个 Raft 实例的心跳+选举定时器
+	// 本身就会把 CPU 吃满，测出来的就不再是结构而是调度器。
+	hbTO, elecTO time.Duration
 }
 
 func buildCluster(o buildOpts) (*cluster, error) {
@@ -271,7 +275,7 @@ func buildCluster(o buildOpts) (*cluster, error) {
 	configuration := fraft.Configuration{Servers: servers}
 
 	for _, nd := range cl.nodes {
-		cfg := newConfig(nd.id, q1, q2, o.mae)
+		cfg := newConfig(nd.id, q1, q2, o.mae, o.hbTO, o.elecTO)
 		if err := fraft.BootstrapCluster(cfg, nd.store, nd.store, nd.snaps, nd.trans, configuration); err != nil {
 			cl.shutdown()
 			return nil, fmt.Errorf("引导 %s 失败: %w", nd.id, err)
@@ -280,7 +284,7 @@ func buildCluster(o buildOpts) (*cluster, error) {
 
 	// 4. 启动。
 	for _, nd := range cl.nodes {
-		cfg := newConfig(nd.id, q1, q2, o.mae)
+		cfg := newConfig(nd.id, q1, q2, o.mae, o.hbTO, o.elecTO)
 		r, err := fraft.NewRaft(cfg, nd.fsm, nd.store, nd.store, nd.snaps, nd.trans)
 		if err != nil {
 			cl.shutdown()
@@ -291,13 +295,19 @@ func buildCluster(o buildOpts) (*cluster, error) {
 	return cl, nil
 }
 
-func newConfig(id fraft.ServerID, q1, q2, mae int) *fraft.Config {
+func newConfig(id fraft.ServerID, q1, q2, mae int, hbTO, elecTO time.Duration) *fraft.Config {
 	cfg := fraft.DefaultConfig()
 	cfg.LocalID = id
-	cfg.HeartbeatTimeout = 50 * time.Millisecond
-	cfg.ElectionTimeout = 50 * time.Millisecond
+	if hbTO <= 0 {
+		hbTO = 50 * time.Millisecond
+	}
+	if elecTO <= 0 {
+		elecTO = 50 * time.Millisecond
+	}
+	cfg.HeartbeatTimeout = hbTO
+	cfg.ElectionTimeout = elecTO
 	cfg.CommitTimeout = 5 * time.Millisecond
-	cfg.LeaderLeaseTimeout = 25 * time.Millisecond
+	cfg.LeaderLeaseTimeout = hbTO / 2
 	cfg.SnapshotThreshold = 1 << 22 // 基准期间不触发快照
 	cfg.SnapshotInterval = time.Hour
 	cfg.TrailingLogs = 1 << 22
@@ -448,11 +458,51 @@ type result struct {
 	// 这个数**必须**是 0：它就是"崩溃重启后数据仍在"的直接检验。
 	FailVictimMissing int `json:"fail_victim_missing"`
 
+	// burst 模式：同步突发负载（千卡 checkpoint 的形状）
+	//
+	// 主指标是 drain time —— 发起到全部完成的耗时，也就是训练侧的停顿时间。
+	BurstCount      int                `json:"burst_count"`
+	BurstOpsEach    int                `json:"burst_ops_each"`
+	BurstDrainMs    []float64          `json:"burst_drain_ms"`
+	BurstDrainMin   float64            `json:"burst_drain_min_ms"`
+	BurstDrainP50   float64            `json:"burst_drain_p50_ms"`
+	BurstDrainP99   float64            `json:"burst_drain_p99_ms"`
+	BurstDrainMax   float64            `json:"burst_drain_max_ms"`
+	BurstThrP50     float64            `json:"burst_throughput_p50_ops_per_sec"`
+	PerBurstLatency []bench.Snapshot   `json:"per_burst_latency_ms,omitempty"`
+
+	// shards 模式：多分片 + 整域故障（见 shards.go 开头的说明）
+	ShardCount       int     `json:"shard_count"`
+	ShardDomains     int     `json:"shard_domains"`
+	ShardKilled      int     `json:"shard_domains_killed"`
+	ShardKilledNodes int     `json:"shard_replicas_killed"`
+	ShardAliveHist   string  `json:"shard_alive_histogram"`
+	ShardAvailable   int     `json:"shard_available"`
+	ShardAvailRate   float64 `json:"shard_available_rate"`
+	// ShardEverAvail: 恢复窗口内**曾经**选出过 leader 的分片数。
+	// 与 ShardAvailable（窗口末快照）分开报，是为了把「集群挂了」与
+	// 「集群在反复重选、时而可用」区分开 —— 前者是失效，后者是摇摆。
+	ShardEverAvail   int     `json:"shard_ever_available"`
+	ShardEverRate    float64 `json:"shard_ever_available_rate"`
+	// ShardTransient: 注入故障后**首个采样**的 leader 占比。
+	// 它反映「原 leader 在 LeaderLeaseTimeout 内尚未退位」这个瞬态 ——
+	// 是一个真实的短暂服务窗口，但**不是恢复**，所以必须与 ever 分开报。
+	ShardTransient   float64 `json:"shard_transient_peak"`
+	ShardLeaderFrac  float64 `json:"shard_leader_fraction_mean"`
+	ShardVoteRecover float64 `json:"shard_requestvote_per_sec_recover"`
+	ShardPredicted   int     `json:"shard_predicted_available"`
+	ShardPredRate    float64 `json:"shard_predicted_rate"`
+	ShardBuildMs     float64 `json:"shard_build_ms"`
+	ShardReadyMs     float64 `json:"shard_all_leaders_ms"`
+	ShardReadyCount  int     `json:"shard_leaders_ready"`
+	ShardHeartbeat   float64 `json:"shard_heartbeat_rpc_per_sec"`
+	ShardVoteRPS     float64 `json:"shard_requestvote_per_sec"`
+
 	Notes []string `json:"notes"`
 }
 
 func main() {
-	mode := flag.String("mode", "bench", "bench | avail | lag | fail | sweep")
+	mode := flag.String("mode", "bench", "bench | avail | lag | fail | burst | shards | sweep")
 	label := flag.String("label", "", "结果标签（默认自动生成）")
 	n := flag.Int("n", 5, "副本数")
 	q1 := flag.Int("q1", 0, "election quorum |Q1|（0 = 多数）")
@@ -481,6 +531,19 @@ func main() {
 		"它决定单个 follower 的复制追赶上限 ≈ mae/注入延迟")
 	failLoad := flag.Duration("failload", 3*time.Second, "fail 模式：杀 leader 之前先施压多久")
 	failAft := flag.Duration("failaft", 3*time.Second, "fail 模式：选出新 leader 之后再施压多久（检验切换后仍能服务）")
+	bursts := flag.Int("bursts", 10, "burst 模式：突发次数")
+	opsPerBurst := flag.Int("opsperburst", 50000, "burst 模式：每个突发提交多少条")
+	idle := flag.Duration("idle", 2*time.Second, "burst 模式：突发之间的静默时长（模拟两个 checkpoint 之间的训练步）")
+	shardCount := flag.Int("shards", 1000, "shards 模式：分片数")
+	domains := flag.Int("domains", 5, "shards 模式：故障域数")
+	killDomains := flag.Int("killdomains", 1, "shards 模式：注入故障时杀掉几个域")
+	shardSteady := flag.Duration("shardsteady", 3*time.Second, "shards 模式：注入故障前先观察多久（量心跳开销）")
+	shardRecover := flag.Duration("shardrecover", 10*time.Second, "shards 模式：注入故障后等多久再统计可用性")
+	hbTO := flag.Duration("hb", 0, "覆盖 HeartbeatTimeout（0 = 50ms）。分片上千时要放大，否则定时器本身吃满 CPU")
+	shardPoll := flag.Duration("shardpoll", 100*time.Millisecond, "shards 模式：恢复期轮询间隔。调小会显著增加扫描开销")
+	maxInst := flag.Int("maxinstances", 0, "shards 模式：覆盖 Raft 实例总数上限（默认 3000，见 shards.go 的实测依据）")
+	shardSettle := flag.Duration("shardsettle", 2*time.Second, "shards 模式：剔除「原 leader 退位延迟」的起始偏移（见 shards.go 第 4 步注释）")
+	elecTO := flag.Duration("electto", 0, "覆盖 ElectionTimeout（0 = 50ms）")
 	flag.Parse()
 
 	// 本机噪声本来就大（同一段忙循环十次测量差 ±40%），再叠加 GC 就是双重噪声。
@@ -534,6 +597,31 @@ func main() {
 			settle:       *settle,
 			clockFloor:   floor,
 			gogc:         *gogc,
+		})
+	case "burst":
+		res, err = runBurst(burstOpts{
+			buildOpts:    buildOpts{n: *n, q1: *q1, q2: *q2, delay: *delay, sigma: *sigma, seed: *seed, payload: *payload, mae: *mae},
+			label:        *label,
+			bursts:       *bursts,
+			opsPerBurst:  *opsPerBurst,
+			idle:         *idle,
+			conc:         *conc,
+			timeout:      *timeout,
+			electTimeout: *electTimeout,
+			clockFloor:   floor,
+			gogc:         *gogc,
+			mae:          *mae,
+		})
+	case "shards":
+		res, err = runShards(shardsOpts{
+			label: *label,
+			n:     *n, shards: *shardCount, domains: *domains,
+			q1: *q1, q2: *q2,
+			delay: *delay, sigma: *sigma, seed: *seed, payload: *payload, mae: *mae,
+			kill: *killDomains, steady: *shardSteady, recover: *shardRecover,
+			electT: *electTimeout, hbTO: *hbTO, elecTO: *elecTO,
+			clockUs: floor.Microseconds(), gogc: *gogc,
+			pollEvery: *shardPoll, maxInstances: *maxInst, settle: *shardSettle,
 		})
 	case "sweep":
 		var ds []time.Duration
@@ -1616,6 +1704,171 @@ func runFail(o failOpts) (*result, error) {
 	}
 	return res, nil
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// burst 模式：同步突发负载 —— 千卡训练里 checkpoint 的形状
+//
+// 为什么必须单独做这个模式：真实千卡训练**不是稳态 QPS**。
+// 每 N 步所有 rank 同时写 checkpoint，几千个客户端在几秒内一起打，
+// 打完就安静。稳态基准测不到这种形状，而它恰恰是 quorum 几何最吃紧的时刻：
+// 突发期间 leader 是唯一瓶颈，|Q2| 直接决定每个写要等多久才能提交。
+//
+// 具体做法：把施压切成 K 个突发。每个突发内并发提交固定条数，
+// 记录「发起到全部完成」的耗时（drain time，也就是训练侧的停顿时间）；
+// 突发之间完全静默（模拟两个 checkpoint 之间的训练步）。
+//
+// 主指标是 **drain time**，不是 ops/s —— 因为它直接对应
+// 「checkpoint 让训练停了多久」这个运维真正关心的数。
+// ─────────────────────────────────────────────────────────────────────
+
+type burstOpts struct {
+	buildOpts
+	label        string
+	bursts       int
+	opsPerBurst  int
+	idle         time.Duration
+	conc         int
+	timeout      time.Duration
+	electTimeout time.Duration
+	clockFloor   time.Duration
+	gogc         int
+	mae          int
+}
+
+func percentileOfSorted(sorted []float64, p float64) float64 {
+	if len(sorted) == 0 {
+		return 0
+	}
+	if p <= 0 {
+		return sorted[0]
+	}
+	if p >= 1 {
+		return sorted[len(sorted)-1]
+	}
+	i := int(math.Ceil(p*float64(len(sorted)))) - 1
+	if i < 0 {
+		i = 0
+	}
+	if i >= len(sorted) {
+		i = len(sorted) - 1
+	}
+	return sorted[i]
+}
+
+func runBurst(o burstOpts) (*result, error) {
+	progress("[burst] n=%d |Q1|=%d |Q2|=%d delay=%v 突发 %d×%d 条 间隔 %v 并发 %d",
+		o.n, effectiveQuorum(o.n, o.q1), effectiveQuorum(o.n, o.q2), o.delay,
+		o.bursts, o.opsPerBurst, o.idle, o.conc)
+
+	cl, err := buildCluster(o.buildOpts)
+	if err != nil {
+		return nil, err
+	}
+	defer cl.shutdown()
+
+	if _, err := cl.waitLeader(o.electTimeout); err != nil {
+		return nil, err
+	}
+	if err := warmupRun(cl, 500, 8, o.payload, o.timeout); err != nil {
+		return nil, fmt.Errorf("预热失败: %w", err)
+	}
+
+	var seqBase uint64 = 1 << 41
+	drains := make([]float64, 0, o.bursts)
+	thrs := make([]float64, 0, o.bursts)
+	perBurstLat := make([]bench.Snapshot, 0, o.bursts)
+
+	for b := 0; b < o.bursts; b++ {
+		hist := bench.NewHistogram()
+		var wg sync.WaitGroup
+		var issued atomic.Int64
+		burstBase := seqBase + uint64(b)*uint64(o.opsPerBurst+o.conc+16)
+
+		start := time.Now()
+		for w := 0; w < o.conc; w++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for {
+					i := int(issued.Add(1)) - 1
+					if i >= o.opsPerBurst {
+						return
+					}
+					cur := cl.leader()
+					if cur == nil {
+						time.Sleep(time.Millisecond)
+						continue
+					}
+					t0 := time.Now()
+					if err := cur.raft.Apply(makeCmd(o.payload, burstBase+uint64(i)), o.timeout).Error(); err != nil {
+						continue
+					}
+					hist.Observe(uint64(time.Since(t0).Nanoseconds()))
+				}
+			}()
+		}
+		wg.Wait()
+		drain := time.Since(start).Seconds() * 1000.0
+
+		drains = append(drains, drain)
+		if drain > 0 {
+			thrs = append(thrs, float64(hist.Count())/(drain/1000.0))
+		}
+		perBurstLat = append(perBurstLat, hist.Snapshot())
+		progress("  突发 %d：%d 条 / %.1fms = %.0f ops/s（p50=%.2fms p99=%.2fms）",
+			b, hist.Count(), drain, float64(hist.Count())/(drain/1000.0),
+			hist.Snapshot().P50Ms, hist.Snapshot().P99Ms)
+
+		if b < o.bursts-1 && o.idle > 0 {
+			time.Sleep(o.idle)
+		}
+	}
+
+	dSorted := append([]float64(nil), drains...)
+	sort.Float64s(dSorted)
+	tSorted := append([]float64(nil), thrs...)
+	sort.Float64s(tSorted)
+
+	res := &result{
+		Mode:             "burst",
+		N:                o.n,
+		Q1:               cl.q1,
+		Q2:               cl.q2,
+		Majority:         majority(o.n),
+		Concurrency:      o.conc,
+		PayloadBytes:     o.payload,
+		InjectedDelayUs:  o.delay.Microseconds(),
+		ClockFloorUs:     o.clockFloor.Microseconds(),
+		GCPercent:        o.gogc,
+		MaxAppendEntries: o.mae,
+		BurstCount:       o.bursts,
+		BurstOpsEach:     o.opsPerBurst,
+		BurstDrainMs:     drains,
+		BurstDrainP50:    percentileOfSorted(dSorted, 0.50),
+		BurstDrainP99:    percentileOfSorted(dSorted, 0.99),
+		BurstDrainMin:    percentileOfSorted(dSorted, 0),
+		BurstDrainMax:    percentileOfSorted(dSorted, 1),
+		BurstThrP50:      percentileOfSorted(tSorted, 0.50),
+		PerBurstLatency:  perBurstLat,
+	}
+	if o.label == "" {
+		res.Label = fmt.Sprintf("raftbench-burst-n%d-q1%d-q2%d-d%v", o.n, cl.q1, cl.q2, o.delay)
+	} else {
+		res.Label = o.label
+	}
+
+	res.AppliedPerNode, res.LastIdxPerNode, res.HashPerNode, res.Consistent, res.ConsistencyMsg = checkConsistency(cl, o.settleFor())
+
+	res.Notes = []string{
+		"负载形状：同步突发（每个突发内并发提交固定条数，突发之间静默）—— 模拟千卡训练的 checkpoint。",
+		"主指标是 **drain time**（发起到全部完成的耗时），因为它直接对应「checkpoint 让训练停了多久」。",
+		"稳态基准测不到这个形状：突发期间 leader 是唯一瓶颈，|Q2| 直接决定每个写要等多久。",
+		fmt.Sprintf("|Q1|=%d |Q2|=%d n=%d，注入单程延迟 %v。", cl.q1, cl.q2, o.n, o.delay),
+	}
+	return res, nil
+}
+
+func (o burstOpts) settleFor() time.Duration { return 60 * time.Second }
 
 // ─────────────────────────────────────────────────────────────────────
 // sweep：扫 (|Q1|,|Q2|) × 注入延迟，输出 JSON 数组
