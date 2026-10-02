@@ -138,6 +138,19 @@ func EvidenceManifest() []Claim {
 				"必须报区间与趋势方向",
 		},
 		{
+			Statement: "故障切换后没有已确认的写丢失或被回滚：三层判定全部通过 —— " +
+				"① 每条已确认的写至少存在于一个节点、② 切换前已确认的写都在新 leader 上、" +
+				"③ 被杀 leader 的日志含它确认过的全部写（n=5，2ms 注入延迟，三层各 0 缺失）",
+			Evidence: EvidenceMeasured,
+			Where:    "cmd/raftbench -mode fail -> results/raftbench-fail-q1*.json（MEASUREMENT.md §5.7）",
+			CanClaim: "在 |Q1|+|Q2|>N 的几组配置下，硬停 leader 不会让已确认的写消失；" +
+				"以及 |Q2|=1 时「已确认但只存在于一个副本上」的量级（实测 33.7 万条，存活节点各缺 275 条）",
+			CannotClaim: "**这不是安全性证明**。它做的是证伪：只要三层里任何一层出问题方案就是错的。" +
+				"安全性靠 FPaxos 的理论论证，实测只是把「理论说不会出事」变成" +
+				"「在这些条件下确实没出事」。样本量也远不足以覆盖所有故障交错",
+		},
+
+		{
 			Statement: "|Q2| 变小的可行性条件是可调且零成本的：把 MaxAppendEntries 从上游默认 64 " +
 				"提到 256，落后量从单调增长（1.1 万→4.3 万条）变成稳定有界（约 2.5k–4k 条），" +
 				"而吞吐不变（150k–174k ops/s，落在噪声内）",

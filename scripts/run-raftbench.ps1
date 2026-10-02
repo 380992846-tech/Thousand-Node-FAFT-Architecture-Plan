@@ -8,12 +8,13 @@
 #   powershell -ExecutionPolicy Bypass -File scripts\run-raftbench.ps1
 #   powershell -ExecutionPolicy Bypass -File scripts\run-raftbench.ps1 -SkipBuild
 #   powershell -ExecutionPolicy Bypass -File scripts\run-raftbench.ps1 -Only sweep
-#   -Only 取值：all | sweep | avail | scale | mae
+#   -Only 取值：all | sweep | avail | scale | mae | fail
 #
 # 实验 A（sweep）   quorum 几何 × 注入延迟 —— 收益侧主实验
 # 实验 B（avail）   |Q1| 变大后的选主可用性 —— 可用性代价
 # 实验 C（scale）   规模维度 n=5/7/9
 # 实验 D（mae）     MaxAppendEntries 转折点 —— |Q2| 变小的可行性条件
+# 实验 E（fail）    故障注入下的安全性三层判定 —— 论文的底线问题
 #
 # 全部跑完约 20–30 分钟（本机）。|Q2|=1 的组需要等 follower 追平才能做
 # 一致性检查，所以每组末尾会有几十秒到两分钟的"安静时间"，属正常。
@@ -24,7 +25,7 @@
 param(
   [string]$GoExe = 'go',
   [switch]$SkipBuild,
-  [ValidateSet('all', 'sweep', 'avail', 'scale', 'mae')]
+  [ValidateSet('all', 'sweep', 'avail', 'scale', 'mae', 'fail')]
   [string]$Only = 'all'
 )
 
@@ -136,6 +137,24 @@ if ($Only -eq 'all' -or $Only -eq 'mae') {
     & $Exe -mode bench -n 5 -q1 5 -q2 1 -delay 5ms -mae $mae `
         -ops 200000 -warmup 2000 -concurrency 512 -repeat 4 -duration 2s -settle 180s `
         -out (Join-Path $Results "raftbench-mae-$tag.json")
+    if ($LASTEXITCODE -ne 0) { Warn "  $tag 失败，继续" }
+  }
+}
+
+# ── 实验 E：故障注入下的安全性 ──────────────────────────────────────
+#
+# 论文的底线问题：故障切换之后，客户端已经收到「成功」的写还在不在？
+# 判据分三层（无丢失 / 无回滚 / 崩溃可恢复），必须分开看 ——
+# 混在一起会让任何方案都"不安全"（被杀节点必然缺它死后才确认的写）。
+if ($Only -eq 'all' -or $Only -eq 'fail') {
+  Step "实验 E：故障注入下的安全性（杀 leader，三层判定）"
+  foreach ($cfg in @(@(3, 3), @(4, 2), @(5, 1))) {
+    $q1 = $cfg[0]; $q2 = $cfg[1]
+    $tag = "q1$q1-q2$q2"
+    Step "  $tag"
+    & $Exe -mode fail -n 5 -q1 $q1 -q2 $q2 -delay 2ms `
+        -failload 3s -failaft 3s -concurrency 64 -timeout 10s -electtimeout 8s -settle 60s `
+        -out (Join-Path $Results "raftbench-fail-$tag.json")
     if ($LASTEXITCODE -ne 0) { Warn "  $tag 失败，继续" }
   }
 }

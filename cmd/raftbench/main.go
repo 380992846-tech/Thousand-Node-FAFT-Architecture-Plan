@@ -421,11 +421,38 @@ type result struct {
 	LagHistogram    map[string]int `json:"lag_histogram,omitempty"`
 	LagMeanReplicas float64        `json:"lag_mean_replicas"`
 
+	// fail 模式：故障注入下的安全性实证
+	//
+	// 这一组要回答的问题只有一个，但它是整篇论文的底线：
+	// **故障切换之后，客户端已经收到「成功」的写，有没有丢？**
+	// FPaxos 用 |Q1|+|Q2|>N 在理论上保证不回滚；这里把它变成可复现的实测。
+	FailAckedWrites  int      `json:"fail_acked_writes"`
+	FailAckedBefore  int      `json:"fail_acked_before_kill"`
+	FailAckedAfter   int      `json:"fail_acked_after_kill"`
+	FailLostWrites   int      `json:"fail_lost_acked_writes"`
+	FailMissingMax   uint64   `json:"fail_missing_max_seq"`
+	FailSafetyOK     bool     `json:"fail_safety_ok"`
+	FailoverMs       float64  `json:"failover_ms"`
+	FailNewLeader    string   `json:"fail_new_leader"`
+	FailNewLeaderOK  bool     `json:"fail_new_leader_elected"`
+	FailVictim       string   `json:"fail_victim"`
+	FailNodesWithAll []bool   `json:"fail_nodes_with_all_acked"`
+	FailNodeMissing  []int    `json:"fail_node_missing_counts"`
+	FailNodeNames    []string `json:"fail_node_names"`
+	FailVictimBefore uint64   `json:"fail_victim_last_index_at_kill"`
+	FailVictimAfter  uint64   `json:"fail_victim_last_index_after"`
+	// FailNewLeaderMissing: 切换前已确认、但**新 leader 没有**的写数量。
+	// 这是真正的回滚指标 —— 非 0 就意味着选举限制没起作用。
+	FailNewLeaderMissing int `json:"fail_new_leader_missing"`
+	// FailVictimMissing: 被杀的 leader 缺少多少条它自己确认过的写。
+	// 这个数**必须**是 0：它就是"崩溃重启后数据仍在"的直接检验。
+	FailVictimMissing int `json:"fail_victim_missing"`
+
 	Notes []string `json:"notes"`
 }
 
 func main() {
-	mode := flag.String("mode", "bench", "bench | avail | sweep")
+	mode := flag.String("mode", "bench", "bench | avail | lag | fail | sweep")
 	label := flag.String("label", "", "结果标签（默认自动生成）")
 	n := flag.Int("n", 5, "副本数")
 	q1 := flag.Int("q1", 0, "election quorum |Q1|（0 = 多数）")
@@ -452,6 +479,8 @@ func main() {
 		"默认 GOGC=100 会让 GC 频繁扫描它们，把噪声打进吞吐。设 -1 关闭 GC（内存换稳定）")
 	mae := flag.Int("mae", 0, "MaxAppendEntries：每条 AppendEntries 最多带几条日志（0 = 上游默认 64）。"+
 		"它决定单个 follower 的复制追赶上限 ≈ mae/注入延迟")
+	failLoad := flag.Duration("failload", 3*time.Second, "fail 模式：杀 leader 之前先施压多久")
+	failAft := flag.Duration("failaft", 3*time.Second, "fail 模式：选出新 leader 之后再施压多久（检验切换后仍能服务）")
 	flag.Parse()
 
 	// 本机噪声本来就大（同一段忙循环十次测量差 ±40%），再叠加 GC 就是双重噪声。
@@ -492,6 +521,19 @@ func main() {
 			timeout:      *timeout,
 			electTimeout: *electTimeout,
 			clockFloor:   floor,
+		})
+	case "fail":
+		res, err = runFail(failOpts{
+			buildOpts:    buildOpts{n: *n, q1: *q1, q2: *q2, delay: *delay, sigma: *sigma, seed: *seed, payload: *payload, mae: *mae},
+			label:        *label,
+			loadTime:     *failLoad,
+			aftTime:      *failAft,
+			conc:         *conc,
+			timeout:      *timeout,
+			electTimeout: *electTimeout,
+			settle:       *settle,
+			clockFloor:   floor,
+			gogc:         *gogc,
 		})
 	case "sweep":
 		var ds []time.Duration
@@ -1198,6 +1240,379 @@ func runLag(o lagOpts) (*result, error) {
 		"|Q2|=1 时下界是 1 —— 也就是说客户端收到成功时，数据可能只在一个副本上。",
 		"这不违反 FPaxos 安全性（|Q1|+|Q2|>N 保证不回滚），但意味着**介质丢失**会丢已提交的数据，" +
 			"且 leader 挂掉后集群会一直不可用直到它回来。这是 |Q2| 变小的真实代价。",
+	}
+	return res, nil
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// fail 模式：故障切换之后，已确认的写还在不在？
+//
+// 这是整篇论文的底线问题，也是唯一一个"错了就全盘皆输"的实验。
+// FPaxos 用 |Q1|+|Q2| > N 从理论上保证已提交的日志不会被回滚
+// （Howard et al., OPODIS 2016 §4.2）；这里把它变成可复现的实测：
+//
+//  1. 持续施压，客户端把**每一条收到成功响应的序号**记下来（acked 集合）
+//  2. 在负载中途硬停 leader（Shutdown + 关传输），模拟真实故障
+//  3. 等新 leader 选出（选不出就如实记录 —— 那本身就是 |Q1|=n 的代价）
+//  4. 收尾后扫描**每个节点的日志**，检查 acked 集合是否是它的子集
+//
+// 判据是集合包含，不是条数比较：只比条数抓不住"换了内容"。
+// 被杀的 leader 的日志也要查 —— 它的 store 在内存里还活着，
+// 这正好直接验证"崩溃重启后数据仍在"。
+//
+// 注意这个实验**不能**证明安全性（那需要形式化证明或大量随机交错），
+// 它能做的是**证伪**：只要有一次 acked 的写不见了，方案就是错的。
+// 论文里必须这样表述。
+// ─────────────────────────────────────────────────────────────────────
+
+type failOpts struct {
+	buildOpts
+	label        string
+	loadTime     time.Duration
+	aftTime      time.Duration
+	conc         int
+	timeout      time.Duration
+	electTimeout time.Duration
+	settle       time.Duration
+	clockFloor   time.Duration
+	gogc         int
+}
+
+// collectAckedSeqs 扫描一个节点的日志，返回 seq -> 该 seq 所在的日志下标。
+//
+// 只认 LogCommand，且要求 Data 至少 8 字节 —— 配置项与 noop 的 Data
+// 不是我们的序号编码，混进来会污染集合。
+func collectAckedSeqs(nd *node) map[uint64]uint64 {
+	out := make(map[uint64]uint64)
+	last, err := nd.store.LastIndex()
+	if err != nil {
+		return out
+	}
+	var l fraft.Log
+	for i := uint64(1); i <= last; i++ {
+		if err := nd.store.GetLog(i, &l); err != nil {
+			continue
+		}
+		if l.Type != fraft.LogCommand || len(l.Data) < 8 {
+			continue
+		}
+		out[binary.BigEndian.Uint64(l.Data[:8])] = i
+	}
+	return out
+}
+
+func runFail(o failOpts) (*result, error) {
+	progress("[fail] n=%d |Q1|=%d |Q2|=%d delay=%v 施压 %v 后杀 leader",
+		o.n, effectiveQuorum(o.n, o.q1), effectiveQuorum(o.n, o.q2), o.delay, o.loadTime)
+
+	cl, err := buildCluster(o.buildOpts)
+	if err != nil {
+		return nil, err
+	}
+	defer cl.shutdown()
+
+	if _, err := cl.waitLeader(o.electTimeout); err != nil {
+		return nil, err
+	}
+	if err := warmupRun(cl, 500, 8, o.payload, o.timeout); err != nil {
+		return nil, fmt.Errorf("预热失败: %w", err)
+	}
+	seqBase := uint64(1) << 40 // 与预热的序号区间分开，避免混淆
+	var nextSeq atomic.Uint64
+	nextSeq.Store(seqBase)
+
+	// ── 1. 持续施压，记录每一条收到成功的序号 ──
+	var ackMu sync.Mutex
+	acked := make(map[uint64]bool)
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	for w := 0; w < o.conc; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				cur := cl.leader()
+				if cur == nil {
+					time.Sleep(time.Millisecond)
+					continue
+				}
+				s := nextSeq.Add(1)
+				if err := cur.raft.Apply(makeCmd(o.payload, s), o.timeout).Error(); err != nil {
+					continue
+				}
+				ackMu.Lock()
+				acked[s] = true
+				ackMu.Unlock()
+			}
+		}()
+	}
+
+	time.Sleep(o.loadTime)
+
+	// ── 2. 注入故障：硬停 leader ──
+	//
+	// 关键：必须在**杀之前**把已确认集合整份快照下来。杀了之后还会继续
+	// 产生新的确认（切换成功时），那些写被杀掉的节点当然不会有 ——
+	// 混在一起会得出错误的"丢数据"结论。
+	victim := cl.leader()
+	if victim == nil {
+		close(stop)
+		wg.Wait()
+		return nil, fmt.Errorf("施压期间没有 leader，故障注入无法进行")
+	}
+	victimLastBefore := victim.raft.LastIndex()
+
+	ackMu.Lock()
+	ackedBeforeSet := make(map[uint64]bool, len(acked))
+	for s := range acked {
+		ackedBeforeSet[s] = true
+	}
+	ackedBeforeCount := len(ackedBeforeSet)
+	ackMu.Unlock()
+
+	progress("故障注入：硬停 leader %s（此前已确认 %d 条写，其日志末尾 %d）",
+		victim.id, ackedBeforeCount, victimLastBefore)
+	if err := victim.raft.Shutdown().Error(); err != nil {
+		progress("  警告：Shutdown 返回 %v", err)
+	}
+	victim.raw.Close()
+
+	// ── 3. 等新 leader；选不出来就如实记录 ──
+	failStart := time.Now()
+	var newLeader *node
+	deadline := time.Now().Add(o.electTimeout)
+	for time.Now().Before(deadline) {
+		for _, nd := range cl.nodes {
+			if nd != victim && nd.raft.State() == fraft.Leader {
+				newLeader = nd
+			}
+		}
+		if newLeader != nil {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	failoverMs := float64(time.Since(failStart).Microseconds()) / 1000.0
+	if newLeader != nil {
+		progress("  新 leader = %s，耗时 %.1fms", newLeader.id, failoverMs)
+	} else {
+		progress("  %.0fms 内没有选出新 leader（存活 %d < |Q1|=%d 时这是**必然**的）",
+			failoverMs, o.n-1, cl.q1)
+	}
+
+	// ── 4. 若已选出新 leader，再压一段时间，检验切换后仍能正常服务 ──
+	if newLeader != nil && o.aftTime > 0 {
+		time.Sleep(o.aftTime)
+	}
+	close(stop)
+	wg.Wait()
+
+	ackMu.Lock()
+	ackedFinal := make([]uint64, 0, len(acked))
+	for s := range acked {
+		ackedFinal = append(ackedFinal, s)
+	}
+	ackMu.Unlock()
+
+	// ── 5. 等存活节点追平，然后判定安全性 ──
+	//
+	// ⚠️ 判据必须分三层，混在一起会得出错误的"丢数据"结论。
+	// 第一版就是这么错的：它拿**全时段**的 acked 集合去查每个节点，
+	// 于是被杀掉的 leader 必然"缺"了它死后才被确认的那些写 ——
+	// 那不是丢数据，那是它已经死了。
+	//
+	//   ① 无丢失（durability）：任何 acked 的写必须存在于**至少一个**节点的日志里
+	//   ② 无回滚（consistency）：**杀之前**已确认的写必须都在**新 leader** 的日志里
+	//   ③ 崩溃可恢复：被杀 leader 自己的日志必须包含它确认过的**全部**写
+	//
+	// ③ 是 |Q2| 变小时最该盯的一条：|Q2|=1 时 leader 确认的写可能只有它自己有，
+	// 所以它一挂，那些写就"寄存在一个死节点上"，直到它回来。
+	// 这不是丢失，但确实是 |Q2|=1 的真实风险面。
+	settleDeadline := time.Now().Add(o.settle)
+	for {
+		converged := true
+		for _, nd := range cl.nodes {
+			if nd == victim {
+				continue
+			}
+			seqs := collectAckedSeqs(nd)
+			for s := range ackedBeforeSet {
+				if _, ok := seqs[s]; !ok {
+					converged = false
+					break
+				}
+			}
+			if !converged {
+				break
+			}
+		}
+		if converged || time.Now().After(settleDeadline) {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	names := make([]string, 0, len(cl.nodes))
+	for _, nd := range cl.nodes {
+		names = append(names, string(nd.id))
+	}
+
+	// 收集每个节点的日志序号集合，只扫一次。
+	perNode := make([]map[uint64]uint64, len(cl.nodes))
+	withAll := make([]bool, len(cl.nodes))
+	missingCounts := make([]int, len(cl.nodes))
+	for i, nd := range cl.nodes {
+		perNode[i] = collectAckedSeqs(nd)
+		missing := 0
+		for _, s := range ackedFinal {
+			if _, ok := perNode[i][s]; !ok {
+				missing++
+			}
+		}
+		missingCounts[i] = missing
+		withAll[i] = missing == 0
+	}
+
+	// ① 无丢失：每条 acked 的写至少存在于一个节点。
+	lostTotal := 0
+	var missingMax uint64
+	for _, s := range ackedFinal {
+		found := false
+		for i := range cl.nodes {
+			if _, ok := perNode[i][s]; ok {
+				found = true
+				break
+			}
+		}
+		if !found {
+			lostTotal++
+			if s > missingMax {
+				missingMax = s
+			}
+		}
+	}
+
+	victimIdx := -1
+	for i, nd := range cl.nodes {
+		if nd == victim {
+			victimIdx = i
+		}
+	}
+
+	// ② 无回滚：杀之前确认的写必须都在新 leader 的日志里。
+	newLeaderMissing := -1 // -1 表示没有新 leader，该项不适用
+	if newLeader != nil {
+		newLeaderMissing = 0
+		nl := collectAckedSeqs(newLeader)
+		for s := range ackedBeforeSet {
+			if _, ok := nl[s]; !ok {
+				newLeaderMissing++
+			}
+		}
+	}
+
+	// ③ 崩溃可恢复：被杀 leader 的日志必须含它确认过的全部写。
+	victimMissing := 0
+	if victimIdx >= 0 {
+		for s := range ackedBeforeSet {
+			if _, ok := perNode[victimIdx][s]; !ok {
+				victimMissing++
+			}
+		}
+	}
+
+	victimLastAfter := victim.raft.LastIndex()
+
+	res := &result{
+		Mode:             "fail",
+		N:                o.n,
+		Q1:               cl.q1,
+		Q2:               cl.q2,
+		Majority:         majority(o.n),
+		Ops:              len(ackedFinal),
+		Concurrency:      o.conc,
+		PayloadBytes:     o.payload,
+		InjectedDelayUs:  o.delay.Microseconds(),
+		ClockFloorUs:     o.clockFloor.Microseconds(),
+		GCPercent:        o.gogc,
+		MaxAppendEntries: o.mae,
+
+		FailAckedWrites:      len(ackedFinal),
+		FailAckedBefore:      ackedBeforeCount,
+		FailAckedAfter:       len(ackedFinal) - ackedBeforeCount,
+		FailLostWrites:       lostTotal,
+		FailMissingMax:       missingMax,
+		FailNewLeaderMissing: newLeaderMissing,
+		FailVictimMissing:    victimMissing,
+		FailSafetyOK:         lostTotal == 0 && newLeaderMissing <= 0 && victimMissing == 0,
+		FailoverMs:           failoverMs,
+		FailNewLeaderOK:      newLeader != nil,
+		FailVictim:           string(victim.id),
+		FailNodesWithAll:     withAll,
+		FailNodeMissing:      missingCounts,
+		FailNodeNames:        names,
+		FailVictimBefore:     victimLastBefore,
+		FailVictimAfter:      victimLastAfter,
+	}
+	if newLeader != nil {
+		res.FailNewLeader = string(newLeader.id)
+	}
+	if o.label == "" {
+		res.Label = fmt.Sprintf("raftbench-fail-n%d-q1%d-q2%d-d%v", o.n, cl.q1, cl.q2, o.delay)
+	} else {
+		res.Label = o.label
+	}
+
+	res.Notes = []string{
+		"故障注入：负载中途硬停 leader（Shutdown + 关传输），随后分三层判定安全性。",
+		"① 无丢失：每条已确认的写必须存在于**至少一个**节点的日志里。",
+		"② 无回滚：**杀之前**已确认的写必须都在**新 leader** 的日志里。",
+		"③ 崩溃可恢复：被杀 leader 自己的日志必须包含它确认过的**全部**写。",
+		"⚠️ 三层必须分开看。第一版实现把它们混在一起，于是被杀 leader 必然" +
+			"「缺」了它死后才确认的写 —— 那不是丢数据，是它已经死了。",
+		"⚠️ 这个实验**不能证明**安全性（那需要形式化证明或大量随机交错），它能做的是**证伪**：" +
+			"只要三层里任何一层出问题，方案就是错的。论文里必须这样表述。",
+		fmt.Sprintf("|Q1|=%d |Q2|=%d n=%d：|Q1|+|Q2|=%d > n，满足 FPaxos 安全性条件。",
+			cl.q1, cl.q2, o.n, cl.q1+cl.q2),
+	}
+	switch {
+	case lostTotal > 0:
+		res.Notes = append(res.Notes,
+			fmt.Sprintf("❌ **① 无丢失被证伪**：%d 条已确认的写在任何节点的日志里都找不到（最大缺失序号 %d）。"+
+				"这是灾难性缺陷 —— quorum 不相交或提交规则有错。", lostTotal, missingMax))
+	case newLeaderMissing > 0:
+		res.Notes = append(res.Notes,
+			fmt.Sprintf("❌ **② 无回滚被证伪**：新 leader %s 缺少 %d 条切换前已确认的写。"+
+				"选举限制没起作用。", newLeader.id, newLeaderMissing))
+	case victimMissing > 0:
+		res.Notes = append(res.Notes,
+			fmt.Sprintf("❌ **③ 崩溃可恢复被证伪**：被杀的 leader %s 缺少 %d 条它自己确认过的写。",
+				victim.id, victimMissing))
+	default:
+		res.Notes = append(res.Notes,
+			fmt.Sprintf("✅ 三层全部通过：%d 条已确认的写（切换前 %d / 切换后 %d）没有任何一条丢失或被回滚。",
+				len(ackedFinal), ackedBeforeCount, len(ackedFinal)-ackedBeforeCount))
+	}
+	if newLeader == nil {
+		res.Notes = append(res.Notes,
+			fmt.Sprintf("本轮没有选出新 leader：存活 %d 个副本 < |Q1|=%d（%.0fms 内未选出）。"+
+				"这是 |Q1| 变大的**代价**，不是缺陷 —— 已确认的写仍然安全"+
+				"（在被杀 leader 的日志里，③ 已验证），但集群在此期间不可用。", o.n-1, cl.q1, failoverMs))
+	}
+	// |Q2| 小于多数时，leader 会跑在复制前面 —— 它一挂，那些"已确认但还没
+	// 复制出去"的写就寄存在一个死节点上，直到它回来。这不是丢失（① 已验），
+	// 但它是 |Q2| 变小的真实风险面，量出来给读者看。
+	if victimIdx >= 0 && newLeader == nil {
+		res.Notes = append(res.Notes,
+			fmt.Sprintf("被杀 leader %s 的日志里有 %d 条命令，其余节点因无人可复制而停在原处。"+
+				"|Q2| 小于多数时，这部分就是「寄存在死节点上的已确认写」——"+
+				"安全性没问题（原 leader 重启后数据仍在），但这段时间集群既不可用、"+
+				"数据也只有一份。", victim.id, len(perNode[victimIdx])))
 	}
 	return res, nil
 }
