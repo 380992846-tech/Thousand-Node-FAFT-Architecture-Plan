@@ -31,3 +31,8 @@ Thumbs.db
 # 实验结果默认输出（论文用的结果请显式提交到 results/）
 /out/
 *.csv.tmp
+
+# 探路用的临时结果：脚本中途试参数留下的，不属于任何一组正式实验。
+# 判据是"能不能被一条命令复现" —— 能复现的才进 results/。
+results/tmp-*
+results/*.tmp.json
