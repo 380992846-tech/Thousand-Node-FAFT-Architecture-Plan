@@ -169,6 +169,21 @@ func main() {
 			os.Exit(1)
 		}
 
+	case "exhaustive":
+		// 穷举对照：在论文主配置（9 域 / 5 副本，9^5 = 59049 个放置）上
+		// **把最优解真的求出来**，与贪心、与下界三方对照。
+		// 下界在 24/48 个点上所有方法都达到，说明界不够紧 ——
+		// 那些点的最优性只能靠穷举来证。
+		fmt.Println("=== 穷举对照（9^5 = 59049 个放置）===")
+		fmt.Println()
+		if err := runExhaustive(exhOpts{
+			domains: 9, replicas: 5, dataTol: 1, ctrlTol: 1,
+			outPath: sensOut,
+		}); err != nil {
+			fmt.Fprintln(os.Stderr, "穷举对照失败:", err)
+			os.Exit(1)
+		}
+
 	case "flexiraft-sweep":
 		// FlexiRaft 的收益取决于其 data-commit quorum 取值，
 		// 因此必须扫描该参数并报告整条曲线，不能只报一个点。

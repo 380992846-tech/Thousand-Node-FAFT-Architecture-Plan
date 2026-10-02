@@ -382,8 +382,11 @@ func printLowerBound(r *lbReport) {
 	fmt.Println()
 
 	fmt.Printf("下界可行 / 不可行的参数点：%d / %d\n", r.LBCellsFeasible, r.LBCellsInfeasible)
-	fmt.Printf("其中有区分力的点（存在「可达但未达下界」的方法）：%d / %d\n\n",
+	fmt.Printf("其中有区分力的点（存在「可达但未达下界」的方法）：%d / %d\n",
 		r.DifferentiatingCells, r.LBCellsFeasible)
+	fmt.Println("  ⚠️ 没有区分力 ≠ 界太松：穷举复核（faftbench exhaustive）显示下界在主配置的")
+	fmt.Println("     36/36 个可行点上**恰好等于真实最优**，所以那些点是**参数点不区分方法**。")
+	fmt.Println()
 
 	fmt.Println("汇总（**只在下界可行的参数点上统计** —— 目标本身不可达的点，" +
 		"比较消息数没有意义）：")
@@ -501,9 +504,11 @@ func lbNotes(r *lbReport) []string {
 	}
 	if r.DifferentiatingCells*2 < r.LBCellsFeasible {
 		notes = append(notes, fmt.Sprintf(
-			"⚠️ 只有 %d/%d 个可行点有区分力：其余点上所有可行方法都已达到下界，"+
-				"说明**下界在这些点上不够紧**（松弛 ① 忽略 Q1/Q2 耦合是最主要的原因）。"+
-				"引用「达到下界」时必须同时给出区分力点数，否则会被读成「谁做都一样」。",
+			"只有 %d/%d 个可行点有区分力：其余点上所有可行方法都已达到下界。"+
+				"⚠️ 这不等于「界太松」—— 穷举复核（`faftbench exhaustive`，9^5 = 59049 个放置）"+
+				"显示下界在主配置的 36/36 个可行点上**恰好等于真实最优**，"+
+				"所以那些点的含义是**参数点不区分方法**。"+
+				"引用时必须两个数一起给（区分力点数 + 下界紧度），否则会被读成「谁做都一样」。",
 			r.DifferentiatingCells, r.LBCellsFeasible))
 	}
 	return notes

@@ -29,6 +29,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -41,8 +42,7 @@ import (
 )
 
 func main() {
-	var (
-		spec        = flag.String("spec", "4x3", "分片规格 SHARDSxREPLICAS，例如 200x5")
+	var (		spec        = flag.String("spec", "4x3", "分片规格 SHARDSxREPLICAS，例如 200x5")
 		learners    = flag.Int("learners", 0, "每分片额外的 learner（非投票副本）数")
 		dir         = flag.String("dir", "", "Raft 数据目录（默认临时目录）")
 		baseRaft    = flag.Int("raft-port", 18000, "起始 Raft 端口")
@@ -73,6 +73,10 @@ func main() {
 		fault     = flag.Bool("fault", false, "注入故障：硬停一个副本")
 		faultAt   = flag.Duration("fault-at", 5*time.Second, "故障注入时刻（相对测量开始）")
 		faultShard = flag.Int("fault-shard", 0, "在哪个分片注入故障")
+
+		// exitGrace 测量结束后的退出宽限期；超时则打印全部 goroutine 栈并强制退出。
+		exitGrace = flag.Duration("exit-grace", 30*time.Second,
+			"测量结束后的退出宽限期，超时打印 goroutine 栈并强制退出（0=不管）")
 
 		modelOnly = flag.Bool("model", false, "只运行分析模型，不起集群")
 		payload   = flag.Int("payload", 256, "分析模型的负载字节数")
@@ -302,6 +306,36 @@ func main() {
 		fmt.Fprintf(os.Stderr, "!!! 安全性违规：同一任期出现多个 Leader: %v\n", dups)
 		os.Exit(3)
 	}
+
+	// 7. 退出看门狗。
+	//
+	// ⚠️ 为什么必须有（BUG-36）：实测遇到过"结果已经写完、进程却不退出"的情况 ——
+	// 脚本用 `& $Bin ...` 等子进程结束，于是**整组实验静默卡死 24 分钟**，
+	// 日志里连一行提示都没有，看起来像机器慢，实际是进程挂在清理阶段。
+	// 压测驱动不能有这种失效模式：卡住必须**响亮地失败**，并留下定位信息。
+	startExitWatchdog(*exitGrace)
+}
+
+// startExitWatchdog 在宽限期后强制退出，并打印全部 goroutine 栈。
+//
+// 正常路径下 main 会先返回，这个 goroutine 根本不会醒 —— 它只在
+// "该退没退"的时候才动作。打印的栈是定位这类挂起的唯一线索，
+// 所以宁可刷屏也不能省。
+func startExitWatchdog(grace time.Duration) {
+	if grace <= 0 {
+		return
+	}
+	go func() {
+		time.Sleep(grace)
+		buf := make([]byte, 1<<20)
+		n := runtime.Stack(buf, true)
+		fmt.Fprintf(os.Stderr,
+			"\n!!! kvbench 在测量结束 %s 之后仍未退出，强制结束（exit 9）。\n"+
+				"!!! 这是缺陷，已记入 docs/BUGS.md 的 BUG-36。\n"+
+				"!!! 请把下面这段 goroutine 栈一起保留下来（它指出卡在哪一步）：\n\n%s\n",
+			grace, buf[:n])
+		os.Exit(9)
+	}()
 }
 
 type faultRecord struct {

@@ -1,0 +1,103 @@
+{
+  "label": "32x3-c128",
+  "mode": "closed",
+  "notes": "",
+  "cluster": {
+    "shards": 32,
+    "replicas": 3,
+    "learners": 0,
+    "nodes": 96
+  },
+  "workload": "read_ratio=0.50 keys=100000 dist=zipf value_size=128 zipf_theta=0.99",
+  "concurrency": 128,
+  "target_rate": 0,
+  "ops": 32063,
+  "errors": 375,
+  "error_rate": 0.011560515444848634,
+  "duration_ms": 4021.699,
+  "throughput": 7972.500579543578,
+  "error_classes": {
+    "bench: get k00000001 -\u003e 502 Bad Gateway": 124,
+    "bench: get k00000216 -\u003e 502 Bad Gateway": 66,
+    "bench: get k00008151 -\u003e 502 Bad Gateway": 2,
+    "bench: put k00000001 -\u003e 502 Bad Gateway": 121,
+    "bench: put k00000216 -\u003e 502 Bad Gateway": 62
+  },
+  "latency": {
+    "count": 32063,
+    "mean_ms": 14.841965124910333,
+    "min_ms": 0.3562,
+    "p50_ms": 11.01744,
+    "p90_ms": 30.85245,
+    "p99_ms": 62.935522,
+    "p99_9_ms": 111.763713,
+    "max_ms": 126.0646
+  },
+  "latency_by_op": {
+    "get": {
+      "count": 16192,
+      "mean_ms": 2.939719787549407,
+      "min_ms": 0.3562,
+      "p50_ms": 2.046756,
+      "p90_ms": 5.731589,
+      "p99_ms": 13.166861,
+      "p99_9_ms": 73.738995,
+      "max_ms": 96.2234
+    },
+    "put": {
+      "count": 15871,
+      "mean_ms": 26.984940142398084,
+      "min_ms": 7.4454,
+      "p50_ms": 25.309755,
+      "p90_ms": 36.871533,
+      "p99_ms": 83.042085,
+      "p99_9_ms": 113.998988,
+      "max_ms": 126.0646
+    }
+  },
+  "leader_distribution": {
+    "n0-1": 1,
+    "n1-1": 1,
+    "n10-2": 1,
+    "n11-0": 1,
+    "n12-1": 1,
+    "n13-0": 1,
+    "n14-0": 1,
+    "n15-0": 1,
+    "n16-0": 1,
+    "n17-2": 1,
+    "n18-1": 1,
+    "n19-0": 1,
+    "n2-2": 1,
+    "n20-0": 1,
+    "n21-0": 1,
+    "n22-1": 1,
+    "n23-2": 1,
+    "n24-1": 1,
+    "n25-1": 1,
+    "n26-0": 1,
+    "n27-1": 1,
+    "n28-0": 1,
+    "n29-1": 1,
+    "n3-0": 1,
+    "n30-0": 1,
+    "n31-0": 1,
+    "n4-2": 1,
+    "n5-1": 1,
+    "n6-1": 1,
+    "n7-1": 1,
+    "n8-0": 1,
+    "n9-0": 1
+  },
+  "leader_max": 1,
+  "leader_mean": 1,
+  "shards_with_leader": 32,
+  "env": {
+    "go_version": "go1.24.6",
+    "goos": "windows",
+    "goarch": "amd64",
+    "num_cpu": 16,
+    "started_at": "2026-10-02T19:56:10+08:00",
+    "hostname": "OSS-WANGX37"
+  }
+}

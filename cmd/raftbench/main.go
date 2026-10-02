@@ -44,8 +44,10 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -436,21 +438,39 @@ type result struct {
 	// 这一组要回答的问题只有一个，但它是整篇论文的底线：
 	// **故障切换之后，客户端已经收到「成功」的写，有没有丢？**
 	// FPaxos 用 |Q1|+|Q2|>N 在理论上保证不回滚；这里把它变成可复现的实测。
-	FailAckedWrites  int      `json:"fail_acked_writes"`
-	FailAckedBefore  int      `json:"fail_acked_before_kill"`
-	FailAckedAfter   int      `json:"fail_acked_after_kill"`
-	FailLostWrites   int      `json:"fail_lost_acked_writes"`
-	FailMissingMax   uint64   `json:"fail_missing_max_seq"`
-	FailSafetyOK     bool     `json:"fail_safety_ok"`
-	FailoverMs       float64  `json:"failover_ms"`
-	FailNewLeader    string   `json:"fail_new_leader"`
-	FailNewLeaderOK  bool     `json:"fail_new_leader_elected"`
-	FailVictim       string   `json:"fail_victim"`
-	FailNodesWithAll []bool   `json:"fail_nodes_with_all_acked"`
-	FailNodeMissing  []int    `json:"fail_node_missing_counts"`
-	FailNodeNames    []string `json:"fail_node_names"`
-	FailVictimBefore uint64   `json:"fail_victim_last_index_at_kill"`
-	FailVictimAfter  uint64   `json:"fail_victim_last_index_after"`
+	FailAckedWrites int `json:"fail_acked_writes"`
+	FailAckedBefore int `json:"fail_acked_before_kill"`
+	// FailAckedAfter: **切换点之后**（新 leader 确认之后）新增的确认数。
+	//
+	// ⚠️ 语义已收窄（评审指出）：原来它算的是"杀之后新增的确认数"，
+	// 那个数把三类东西混在了一起：
+	//   ① 濒死 leader 的 in-flight 确认（杀之前发出、杀之后才返回）
+	//   ② 选举等待期间（最多 electTimeout）的零星确认
+	//   ③ 真正切换成功后的确认 ← 这一条才是"切换后仍能服务"的证据
+	// 没有选出新 leader 时，③ 根本不存在，旧口径却仍会报出一个不小的数。
+	// 现在：快照取在新 leader 确认的那一刻；**无新 leader 时本字段为 -1（不适用）**。
+	FailAckedAfter int `json:"fail_acked_after_switch"`
+	// FailAckedFailover: ① + ② —— 杀之后、切换点之前的确认数。
+	// 它**不能**当作"切换后仍能服务"的证据，单独报出来是为了让账目闭合：
+	//
+	//	FailAckedBefore + FailAckedFailover + FailAckedAfter == FailAckedWrites
+	FailAckedFailover int      `json:"fail_acked_during_failover"`
+	// FailWritersStuck: 关掉负载后是否有写入方没返回（卡在 Apply future 上）。
+	// true 时 acked 集合只含**已收到**的确认 —— 安全性判定仍成立（少算不会漏判丢失），
+	// 但"服务能力"类字段不可用。
+	FailWritersStuck bool `json:"fail_writers_stuck"`
+	FailLostWrites    int      `json:"fail_lost_acked_writes"`
+	FailMissingMax    uint64   `json:"fail_missing_max_seq"`
+	FailSafetyOK      bool     `json:"fail_safety_ok"`
+	FailoverMs        float64  `json:"failover_ms"`
+	FailNewLeader     string   `json:"fail_new_leader"`
+	FailNewLeaderOK   bool     `json:"fail_new_leader_elected"`
+	FailVictim        string   `json:"fail_victim"`
+	FailNodesWithAll  []bool   `json:"fail_nodes_with_all_acked"`
+	FailNodeMissing   []int    `json:"fail_node_missing_counts"`
+	FailNodeNames     []string `json:"fail_node_names"`
+	FailVictimBefore  uint64   `json:"fail_victim_last_index_at_kill"`
+	FailVictimAfter   uint64   `json:"fail_victim_last_index_after"`
 	// FailNewLeaderMissing: 切换前已确认、但**新 leader 没有**的写数量。
 	// 这是真正的回滚指标 —— 非 0 就意味着选举限制没起作用。
 	FailNewLeaderMissing int `json:"fail_new_leader_missing"`
@@ -543,6 +563,12 @@ func main() {
 	shardPoll := flag.Duration("shardpoll", 100*time.Millisecond, "shards 模式：恢复期轮询间隔。调小会显著增加扫描开销")
 	maxInst := flag.Int("maxinstances", 0, "shards 模式：覆盖 Raft 实例总数上限（默认 3000，见 shards.go 的实测依据）")
 	shardSettle := flag.Duration("shardsettle", 2*time.Second, "shards 模式：剔除「原 leader 退位延迟」的起始偏移（见 shards.go 第 4 步注释）")
+	scaleShards := flag.String("scaleshards", "1000,400",
+		"shards-scale 模式：要对照的分片数（逗号分隔）。默认 1000,400 —— "+
+			"这正是 shards.go 注释里引用过的那个对照，此前 1000 分片侧没有落盘证据")
+	scaleReps := flag.Int("scalereps", 3, "shards-scale 模式：每个规模重复轮数")
+	exitGrace := flag.Duration("exit-grace", 30*time.Second,
+		"结果输出后若进程仍未退出，打印 goroutine 栈并强制退出（0=不管，见 BUG-39）")
 	elecTO := flag.Duration("electto", 0, "覆盖 ElectionTimeout（0 = 50ms）")
 	flag.Parse()
 
@@ -623,6 +649,40 @@ func main() {
 			clockUs: floor.Microseconds(), gogc: *gogc,
 			pollEvery: *shardPoll, maxInstances: *maxInst, settle: *shardSettle,
 		})
+	case "shards-scale":
+		// 同一结构、不同分片数：验证"可用比例与规模无关"并把两侧写进同一份 JSON。
+		// 起因：shards.go 注释引用过这个对照，但 1000 分片那一侧没有落盘证据。
+		var counts []int
+		for _, s := range strings.Split(*scaleShards, ",") {
+			s = strings.TrimSpace(s)
+			if s == "" {
+				continue
+			}
+			v, cerr := strconv.Atoi(s)
+			if cerr != nil {
+				fmt.Fprintln(os.Stderr, "解析 -scaleshards 失败:", cerr)
+				os.Exit(2)
+			}
+			counts = append(counts, v)
+		}
+		if err := runShardsScale(shardsScaleOpts{
+			base: shardsOpts{
+				n: *n, domains: *domains, q1: *q1, q2: *q2,
+				delay: *delay, sigma: *sigma, seed: *seed, payload: *payload, mae: *mae,
+				kill: *killDomains, steady: *shardSteady, recover: *shardRecover,
+				electT: *electTimeout, hbTO: *hbTO, elecTO: *elecTO,
+				clockUs: floor.Microseconds(), gogc: *gogc,
+				pollEvery: *shardPoll, maxInstances: *maxInst, settle: *shardSettle,
+			},
+			shardCounts: counts,
+			reps:        *scaleReps,
+			outPath:     *out,
+		}); err != nil {
+			fmt.Fprintln(os.Stderr, "运行失败:", err)
+			os.Exit(1)
+		}
+		return
+
 	case "sweep":
 		var ds []time.Duration
 		for _, s := range strings.Split(*delays, ",") {
@@ -673,6 +733,34 @@ func main() {
 		fmt.Printf("→ %s\n", *out)
 	}
 	fmt.Println(string(data))
+
+	// 退出看门狗 —— 与 kvbench 同一处失效模式（BUG-36）。
+	//
+	// 实测撞到过：fail 模式下 |Q1|=n 杀掉一个副本后，存活节点永远选不出 leader
+	// （**这是必然的，不是缺陷**），但集群关闭路径/残余 goroutine 让进程不退出，
+	// 整轮实验再也没结束，日志里只有刷屏的 requestVote 报错。
+	// 结果写完不代表进程会退出 —— 卡住必须响亮地失败，并留下 goroutine 栈。
+	startExitWatchdog(*exitGrace)
+}
+
+// startExitWatchdog 在宽限期后强制退出，并打印全部 goroutine 栈。
+//
+// 正常路径下 main 会先返回，这个 goroutine 根本不会醒。
+func startExitWatchdog(grace time.Duration) {
+	if grace <= 0 {
+		return
+	}
+	go func() {
+		time.Sleep(grace)
+		buf := make([]byte, 1<<20)
+		n := runtime.Stack(buf, true)
+		fmt.Fprintf(os.Stderr,
+			"\n!!! raftbench 在结果输出后 %s 仍未退出，强制结束（exit 9）。\n"+
+				"!!! 这是缺陷，已记入 docs/BUGS.md 的 BUG-39。\n"+
+				"!!! 请保留下面这段 goroutine 栈（它指出卡在哪一步）：\n\n%s\n",
+			grace, buf[:n])
+		os.Exit(9)
+	}()
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1486,8 +1574,23 @@ func runFail(o failOpts) (*result, error) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	failoverMs := float64(time.Since(failStart).Microseconds()) / 1000.0
+
+	// 切换点快照 —— 必须取在**新 leader 确认的那一刻**，而不是杀的那一刻。
+	//
+	// ⚠️ 评审指出的坑：写入方在选举等待期间一直在跑（最多 electTimeout）。
+	// 若把"杀之后新增的确认数"整个当成"切换后仍能服务"的证据，
+	// 那个数里混着两类完全不同的东西：
+	//   · 濒死 leader 的 in-flight 确认（杀之前发出、杀之后才返回）
+	//   · 选举等待期间的零星确认
+	// 没有新 leader 时压根不存在"切换后"这个窗口，却仍会报出一个看着不小的数。
+	// 所以快照点前移到切换确认，且无新 leader 时该指标记为 -1（不适用）。
+	ackedAtSwitch := -1
 	if newLeader != nil {
-		progress("  新 leader = %s，耗时 %.1fms", newLeader.id, failoverMs)
+		ackMu.Lock()
+		ackedAtSwitch = len(acked)
+		ackMu.Unlock()
+		progress("  新 leader = %s，耗时 %.1fms（切换点快照：已确认 %d 条）",
+			newLeader.id, failoverMs, ackedAtSwitch)
 	} else {
 		progress("  %.0fms 内没有选出新 leader（存活 %d < |Q1|=%d 时这是**必然**的）",
 			failoverMs, o.n-1, cl.q1)
@@ -1498,7 +1601,14 @@ func runFail(o failOpts) (*result, error) {
 		time.Sleep(o.aftTime)
 	}
 	close(stop)
-	wg.Wait()
+	// 等待有上界：写入方可能永久卡在 Apply 的 future 上（见 waitGroupTimeout）。
+	// 卡住不改变安全性结论，但**静默卡住会让整组实验作废**，所以如实报出来。
+	writersDone := waitGroupTimeout(&wg, o.timeout*3)
+	if !writersDone {
+		progress("  ⚠️ 关掉负载后仍有写入方未返回（等满 %v）：多为卡在 Apply future 上。"+
+			"后面用到的 acked 集合是**已收到的部分**，安全性判定仍然成立（少算不会漏判丢失），"+
+			"但吞吐类字段不可用。", o.timeout*3)
+	}
 
 	ackMu.Lock()
 	ackedFinal := make([]uint64, 0, len(acked))
@@ -1616,6 +1726,15 @@ func runFail(o failOpts) (*result, error) {
 
 	victimLastAfter := victim.raft.LastIndex()
 
+	// 确认数的三段分解（必须对得上，见 failAckAccounting）。
+	duringFailover, afterSwitch, acctOK := failAckAccounting(
+		len(ackedFinal), ackedBeforeCount, ackedAtSwitch, newLeader != nil)
+	if !acctOK {
+		// 账目对不上说明快照点取错了 —— 这时报出的任何"切换后确认数"都不可信。
+		progress("  ⚠️ 确认数账目不平：before=%d during=%d after=%d total=%d",
+			ackedBeforeCount, duringFailover, afterSwitch, len(ackedFinal))
+	}
+
 	res := &result{
 		Mode:             "fail",
 		N:                o.n,
@@ -1632,7 +1751,9 @@ func runFail(o failOpts) (*result, error) {
 
 		FailAckedWrites:      len(ackedFinal),
 		FailAckedBefore:      ackedBeforeCount,
-		FailAckedAfter:       len(ackedFinal) - ackedBeforeCount,
+		FailAckedAfter:       afterSwitch,
+		FailAckedFailover:    duringFailover,
+		FailWritersStuck:     !writersDone,
 		FailLostWrites:       lostTotal,
 		FailMissingMax:       missingMax,
 		FailNewLeaderMissing: newLeaderMissing,
@@ -1703,6 +1824,58 @@ func runFail(o failOpts) (*result, error) {
 				"数据也只有一份。", victim.id, len(perNode[victimIdx])))
 	}
 	return res, nil
+}
+
+// waitGroupTimeout 等一组 goroutine 结束，超时返回 false（不阻塞）。
+//
+// ⚠️ 为什么不能直接用 wg.Wait()（实测踩到）：
+// 写入 goroutine 可能**永久卡在 `raft.Apply(...).Error()`** —— 命令已经入队，
+// 但节点既提交不了（够不到 quorum）、又没有关闭，那个 future 就永远不会完成。
+// 典型触发条件正是 fail 模式最该测的那种配置：|Q1| = n 时杀掉一个副本，
+// 剩下的节点永远选不出 leader（这是**必然**的，不是缺陷），
+// 而卡在 Apply 里的写入方把 `wg.Wait()` 拖死 —— 整轮实验再也不结束。
+//
+// 所以等待必须有上界，并且要把"还有几个没回来"如实报出来：
+// 卡住不是错误结论，但**静默卡住**会让整组实验作废（BUG-36/BUG-39）。
+func waitGroupTimeout(wg *sync.WaitGroup, d time.Duration) bool {
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+	select {
+	case <-done:
+		return true
+	case <-time.After(d):
+		return false
+	}
+}
+
+// failAckAccounting 把"杀之前 / 切换中 / 切换后"的确认数拆开，并核对账目。
+//
+// 拆开的理由见 FailAckedAfter 的注释：三段的含义完全不同，混在一起会得出
+// "切换后仍能服务"这种**没有证据**的结论（评审指出）。
+//
+//	switchAt = -1 表示没有选出新 leader：此时"切换后"这个窗口不存在，
+//	after 返回 -1（不适用），during 取全部"杀之后"的确认数。
+//	第二段仍有信息量（濒死 leader 的 in-flight 确认 + 选举期间的零星确认），
+//	但它**不能**被读成切后服务能力。
+//
+// 返回值 ok 表示账目闭合：before + during + after == total。
+func failAckAccounting(total, before, switchAt int, hasNewLeader bool) (during, after int, ok bool) {
+	if !hasNewLeader || switchAt < 0 {
+		during = total - before
+		if during < 0 {
+			during = 0
+		}
+		return during, -1, before+during == total
+	}
+	during = switchAt - before
+	after = total - switchAt
+	if during < 0 {
+		during = 0
+	}
+	if after < 0 {
+		after = 0
+	}
+	return during, after, before+during+after == total
 }
 
 // ─────────────────────────────────────────────────────────────────────

@@ -1,0 +1,143 @@
+{
+  "purpose": "验证「整域故障后的可用分片比例」是否与分片数无关 —— 并把两侧数据写进同一份文件，使该说法可被直接复核。（此前 shards.go 的注释引用了这个对照，但 1000 分片那一侧没有落盘证据。）",
+  "config": {
+    "replicas_per_shard": 3,
+    "domains": 5,
+    "q1": 2,
+    "q2": 2,
+    "domains_killed": 1,
+    "injected_delay_us": 0,
+    "reps": 3,
+    "shard_counts": [
+      1000,
+      400
+    ]
+  },
+  "runs": [
+    {
+      "shards": 1000,
+      "rep": 1,
+      "instances": 3000,
+      "available_rate": 0.716,
+      "predicted_rate": 1,
+      "ever_available_rate": 1,
+      "transient_rate": 0.78,
+      "available": 716,
+      "predicted": 1000,
+      "build_ms": 430.082,
+      "all_leaders_ms": 995.663,
+      "requestvote_per_sec": 2954
+    },
+    {
+      "shards": 1000,
+      "rep": 2,
+      "instances": 3000,
+      "available_rate": 0.905,
+      "predicted_rate": 1,
+      "ever_available_rate": 1,
+      "transient_rate": 0.721,
+      "available": 905,
+      "predicted": 1000,
+      "build_ms": 352.148,
+      "all_leaders_ms": -1,
+      "requestvote_per_sec": 7199.666666666667
+    },
+    {
+      "shards": 1000,
+      "rep": 3,
+      "instances": 3000,
+      "available_rate": 0.96,
+      "predicted_rate": 1,
+      "ever_available_rate": 1,
+      "transient_rate": 0.745,
+      "available": 960,
+      "predicted": 1000,
+      "build_ms": 143.738,
+      "all_leaders_ms": -1,
+      "requestvote_per_sec": 5823
+    },
+    {
+      "shards": 400,
+      "rep": 1,
+      "instances": 1200,
+      "available_rate": 1,
+      "predicted_rate": 1,
+      "ever_available_rate": 1,
+      "transient_rate": 0.775,
+      "available": 400,
+      "predicted": 400,
+      "build_ms": 70.119,
+      "all_leaders_ms": 102.498,
+      "requestvote_per_sec": 534
+    },
+    {
+      "shards": 400,
+      "rep": 2,
+      "instances": 1200,
+      "available_rate": 1,
+      "predicted_rate": 1,
+      "ever_available_rate": 1,
+      "transient_rate": 0.7725,
+      "available": 400,
+      "predicted": 400,
+      "build_ms": 53.659,
+      "all_leaders_ms": 82.865,
+      "requestvote_per_sec": 428
+    },
+    {
+      "shards": 400,
+      "rep": 3,
+      "instances": 1200,
+      "available_rate": 0.975,
+      "predicted_rate": 1,
+      "ever_available_rate": 1,
+      "transient_rate": 0.5525,
+      "available": 390,
+      "predicted": 400,
+      "build_ms": 53.243,
+      "all_leaders_ms": 103.167,
+      "requestvote_per_sec": 368
+    }
+  ],
+  "per_scale": [
+    {
+      "shards": 1000,
+      "runs": 3,
+      "median_available_rate": 0.905,
+      "median_predicted_rate": 1,
+      "max_abs_gap_to_bound": 0.28400000000000003,
+      "min_rate": 0.716,
+      "max_rate": 0.96,
+      "observed_equals_bound_every_run": false
+    },
+    {
+      "shards": 400,
+      "runs": 3,
+      "median_available_rate": 1,
+      "median_predicted_rate": 1,
+      "max_abs_gap_to_bound": 0.025000000000000022,
+      "min_rate": 0.975,
+      "max_rate": 1,
+      "observed_equals_bound_every_run": false
+    }
+  ],
+  "cross_scale": {
+    "median_rate_by_shards": {
+      "1000": 0.905,
+      "400": 1
+    },
+    "max_abs_rate_diff": 0.28400000000000003,
+    "diff_in_binomial_sigma": 11.360000000000001,
+    "sigma_used": 0.025,
+    "same_within_sampling_noise": false,
+    "detail": "所有 6 轮之间的最大可用比例差 0.2840；按最小规模 S=400 与 p=0.5（最保守，σ 取上界）算得 σ=0.02500，相当于 11.4 σ。"
+  },
+  "notes": [
+    "「可用」= 恢复窗口末刻该分片仍有 leader。算术界 = 存活副本数 ≥ |Q1| 的分片占比。",
+    "判据一（强）：**每个规模内部**观测比例是否等于算术界（逐轮核对，见 per_scale.bound_exact）。不等就说明「存活数 ≥ |Q1|」只是必要条件，不是充分条件。",
+    "判据二（跨规模）：差值必须与抽样噪声比。样本数就是分片数，σ ≈ sqrt(0.25/S)（p=0.5 是最保守取值），S=400 与 S=1000 的噪声不同。",
+    "⚠️ 跨规模比较**不能只看中位数**：实测 S=1000 的三轮是 34.3% / 50.9% / 100.0%，中位数 50.9% 把 3 倍波动抹平了 —— 必须同时报 min–max（见 per_scale）。",
+    "ever_available_rate 含「原 leader 退位延迟」造成的假可用（实测 32%–83% 的分片在首个采样仍报 leader），它不是恢复率，只能作对照 —— 见 shards.go 第 4 步的长注释。",
+    "本装置是**单进程多 Raft 组**，量的是「分片数」的扩展，不是「机器数」的扩展：3000 个 Raft 实例共享 16 个逻辑核时，CPU 饱和会让选举 RPC 超时并进入活锁。"
+  ]
+}

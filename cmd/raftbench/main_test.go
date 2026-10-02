@@ -139,6 +139,93 @@ func TestMakeCmdIsUniquePerCall(t *testing.T) {
 	}
 }
 
+// TestFailAckAccounting 守的是评审指出的那个坑：
+//
+//	"如果新 leader 一直没选出来，acked 集合会一直涨到超时，
+//	 FailAckedAfter 就会被后面超时那段时间污染。"
+//
+// 三段必须分得清，而且账目要闭合：
+//
+//	before + during(切换中) + after(切换后) == total
+//
+// 无新 leader 时 after 必须是 -1（不适用），不能是一个被污染的数。
+func TestFailAckAccounting(t *testing.T) {
+	cases := []struct {
+		name                    string
+		total, before, switchAt int
+		newLeader               bool
+		wantDuring, wantAfter   int
+	}{
+		{
+			name:   "选出新 leader：三段各就各位",
+			total:  1000, before: 800, switchAt: 850, newLeader: true,
+			wantDuring: 50, wantAfter: 150,
+		},
+		{
+			name:   "切换点就等于杀点：没有切换中的确认",
+			total:  500, before: 500, switchAt: 500, newLeader: true,
+			wantDuring: 0, wantAfter: 0,
+		},
+		{
+			// 这条是关键：没有新 leader 时，杀之后的确认数**全部**属于
+			// "切换中"（濒死 leader 的 in-flight + 选举期间的零星确认），
+			// after 必须是不适用，而不是把这个数当成"切换后仍能服务"。
+			name:   "没选出新 leader：after 不适用",
+			total:  900, before: 900, switchAt: -1, newLeader: false,
+			wantDuring: 0, wantAfter: -1,
+		},
+		{
+			name:   "没选出新 leader 且杀后仍有确认",
+			total:  900, before: 850, switchAt: -1, newLeader: false,
+			wantDuring: 50, wantAfter: -1,
+		},
+		{
+			name:   "声称有新 leader 但切换点缺失（防御）",
+			total:  900, before: 850, switchAt: -1, newLeader: true,
+			wantDuring: 50, wantAfter: -1,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			during, after, ok := failAckAccounting(c.total, c.before, c.switchAt, c.newLeader)
+			if during != c.wantDuring || after != c.wantAfter {
+				t.Fatalf("during=%d after=%d，期望 %d / %d", during, after, c.wantDuring, c.wantAfter)
+			}
+			if !ok {
+				t.Fatalf("账目不闭合：before=%d during=%d after=%d total=%d",
+					c.before, during, after, c.total)
+			}
+			// 账目恒等式：after 不适用（-1）时只核对前两段。
+			sum := c.before + during
+			if after >= 0 {
+				sum += after
+			}
+			if sum != c.total {
+				t.Fatalf("before+during+after = %d ≠ total %d", sum, c.total)
+			}
+		})
+	}
+}
+
+// TestFailAckAccountingNeverAttributesTimeoutToSwitch 把评审那句话直接钉成断言：
+// **没有新 leader 时，"杀之后"的确认数一个都不能算进 after。**
+func TestFailAckAccountingNeverAttributesTimeoutToSwitch(t *testing.T) {
+	// 模拟选举超时期间累积了 300 条确认（濒死 leader 的 in-flight + 零星确认）
+	const total, before = 1300, 1000
+	during, after, ok := failAckAccounting(total, before, -1, false)
+	if !ok {
+		t.Fatal("账目应闭合")
+	}
+	if after != -1 {
+		t.Fatalf("无新 leader 时 after 必须是 -1（不适用），实际 %d —— "+
+			"这个数会被读成「切换后仍能服务」", after)
+	}
+	if during != 300 {
+		t.Fatalf("这 300 条应全部归入「切换中」，实际 during=%d", during)
+	}
+}
+
 func contains(s, sub string) bool {
 	for i := 0; i+len(sub) <= len(s); i++ {
 		if s[i:i+len(sub)] == sub {

@@ -68,12 +68,19 @@ foreach ($s in $Shards) {
       $attempts++
       $json = Join-Path $Out ("kvbench-shards-{0}-r{1}.json" -f $spec, $r)
       $log  = Join-Path $Out ("kvbench-shards-{0}-r{1}.log" -f $spec, $r)
+      # ⚠️ PowerShell 陷阱：脚本开头设了 $ErrorActionPreference='Stop'，
+      # 而 `*>` 会把子进程的 stderr 变成 ErrorRecord —— 于是**子进程只要往
+      # stderr 写一行，整个脚本就被终止**（实测在另一组扫描里被这个坑断过）。
+      # 调用原生程序期间临时放开 EAP，拿到退出码后再收回来。
+      $ErrorActionPreference = 'Continue'
       & $Bin -spec $spec -duration $Duration -warmup $Warmup `
           -concurrency $Concurrency -read-ratio $ReadRatio `
           -label $spec -out-json $json *> $log
+      $childExit = $LASTEXITCODE
+      $ErrorActionPreference = 'Stop'
 
-      if ($LASTEXITCODE -ne 0) {
-        Write-Host "[shards] $spec 第 $r 轮失败（exit $LASTEXITCODE），日志 $log" -ForegroundColor Red
+      if ($childExit -ne 0) {
+        Write-Host "[shards] $spec 第 $r 轮失败（exit $childExit），日志 $log" -ForegroundColor Red
         continue
       }
       $j = Get-Content $json -Encoding UTF8 -Raw | ConvertFrom-Json
