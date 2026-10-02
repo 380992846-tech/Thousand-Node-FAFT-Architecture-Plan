@@ -25,6 +25,7 @@ package faft
 
 import (
 	"fmt"
+	"math"
 	"sort"
 )
 
@@ -224,6 +225,31 @@ func SolveJoint(t *Topology, cfg Config, av AvailabilityModel, targets Availabil
 	}
 
 	curFP.PlacementAware = true
+
+	// ── 保障：消融臂的解必须落在联合搜索的解空间里 ──
+	//
+	// 原则："**联合优化器永远不应该输给自己的消融臂**" ——
+	// A2（优化放置 + majority 几何）与 A3（默认放置 + FAFT 几何）的方案
+	// 都在联合搜索的可行域内，所以联合求解至少要能找回它们。
+	//
+	// 不加这一步会怎样：消融表里出现「▼ 联合反而不如某臂」，看起来像方法缺陷，
+	// 实际是搜索没找到那个解。实测在 skew=0、K=3、Q≥1e-2 的 3 个点上出现过 ——
+	// 全是域完全等价的退化区域。
+	//
+	// 这里至少把**默认放置**（A3 的放置）纳入比较；贪心本身已经会评估
+	// 由 `completePlacement` 生成的摊开式放置，那覆盖了 A2 的主要形态。
+	defaultPl := defaultPlacement(n, len(t.Domains))
+	if !samePlacement(defaultPl, curPlacement) {
+		dfp := evalWith(defaultPl)
+		if scoreOf(dfp, targets).betterThan(curSc) {
+			curFP = dfp
+			curPlacement = defaultPl
+			curSc = scoreOf(dfp, targets)
+			improvements++
+		}
+	}
+
+	curFP.PlacementAware = true
 	curFP.Diagnostics = fmt.Sprintf(
 		"%s｜联合求解：放置 %v（贪心 %d 步 + 局部搜索 %d 次改进，共评估 %d 个候选）",
 		curFP.Diagnostics, curPlacement, greedyLen, improvements, evaluated)
@@ -406,7 +432,290 @@ func ExhaustiveJoint(t *Topology, cfg Config, av AvailabilityModel, targets Avai
 	}
 }
 
-// JointPlanner 把联合求解包装成 QuorumPlanner，便于进 ComparePlanners 对照。
+// ─────────────────────────────────────────────────────────────────────
+// 消融阶梯：把「放置」与「几何」的贡献分开
+//
+// ── 为什么必须要这一节 ───────────────────────────────────────────────
+// `faftbench sens` 用「联合求解」对比「baseline（放置固定为 i%nDom）」，
+// 在 90 个参数点上取得 43 个写消息数严格占优（典型形态是 |Q2| 从 3 降到 1）。
+//
+// 但审稿人会立刻问：**baseline 的放置是写死的，而你的方法自己选放置 ——
+// 这算不算给方法多给了一个自由变量？**
+//
+// 这个问题**只能靠消融回答**，不能靠论述。本节的四臂阶梯把两个自由度
+// 分别锁定，隔离出各自的贡献：
+//
+//	A1 naive        默认放置   + majority 几何      现成做法（基线）
+//	A2 placement    优化放置   + majority 几何      只看「放置」的贡献
+//	A3 geometry     默认放置   + FAFT 几何/成员     只看「几何」的贡献
+//	A4 joint        优化放置   + FAFT 几何/成员     完整方法
+//
+// 读法：
+//	A2 − A1 = 放置单独的贡献
+//	A3 − A1 = 几何/成员单独的贡献
+//	A4 − max(A2, A3) = **「联合」本身带来的额外贡献** ← 这才是 C1 的证据
+//
+// 如果 A4 ≈ max(A2,A3)，说明两个自由度是**可加的**，那"联合优化"这个
+// 提法就站不住 —— 分开做两次就够了。这个可能性必须被诚实地检验。
+// ─────────────────────────────────────────────────────────────────────
+
+// SolvePlacementOnly 固定 quorum 几何，**只优化放置**。
+//
+// 与 SolveJoint 的区别：几何（|Q1|、|Q2|）被钉死，因此写消息数是常数，
+// 目标退化为"最大化可用性裕度"。搜索策略相同（贪心 + 局部搜索）。
+//
+// 用途：消融的 A2 臂 —— 隔离出"放置"单独的贡献。
+func SolvePlacementOnly(t *Topology, cfg Config, av AvailabilityModel,
+	targets AvailabilityTargets, q1size, q2size int) JointPlan {
+	cfg = cfg.withDefaults(t)
+	n := cfg.Replicas
+	if len(t.Domains) == 0 || n <= 0 {
+		fp := SolveWithFailures(t, cfg, av, targets)
+		return JointPlan{FailurePlan: fp}
+	}
+	if av.Model == nil {
+		av.Model = IndependentFailure{P: 0.001}
+	}
+	q1size = clampInt(q1size, 1, n)
+	q2size = clampInt(q2size, 1, n)
+
+	evalAt := func(placement []int) FailurePlan {
+		c := cfg
+		c.Placement = placement
+		q := Quorum{
+			Q1Members: firstN(q1size),
+			Q2Members: firstN(q2size),
+		}
+		plan := Evaluate(t, c, q)
+		fp := FailurePlan{
+			Plan:                plan,
+			DataAvailability:    av.availOf(q.Q2Members, placement),
+			ControlAvailability: av.availOf(q.Q1Members, placement),
+			FailureModel:        modelName(av.Model),
+		}
+		fp.MeetsData = fp.DataAvailability >= DefaultTargets().Data
+		fp.MeetsControl = fp.ControlAvailability >= DefaultTargets().Control
+		fp.Meets = fp.MeetsData && fp.MeetsControl
+		fp.PlacementAware = true
+		fp.Diagnostics = fmt.Sprintf("固定几何放置优化：|Q1|=%d |Q2|=%d 写消息=%d",
+			q1size, q2size, plan.WriteMsgsPerOp)
+		return fp
+	}
+
+	used := make([]int, len(t.Domains))
+	evaluated := 0
+	placement := make([]int, 0, n)
+	for len(placement) < n {
+		bestD := -1
+		bestKey := math.Inf(-1)
+		for d := range t.Domains {
+			if c := t.Domains[d].Capacity; c > 0 && used[d] >= c {
+				continue
+			}
+			trial := append(append([]int{}, placement...), d)
+			used[d]++
+			full := completePlacement(t, trial, n, used)
+			used[d]--
+			fp := evalAt(full)
+			evaluated++
+			// 几何固定 ⇒ 消息数是常数 ⇒ 只比可行性/裕度。
+			key := armKey(fp, targets)
+			if bestD < 0 || key > bestKey {
+				bestD, bestKey = d, key
+			}
+		}
+		if bestD < 0 {
+			break
+		}
+		placement = append(placement, bestD)
+		used[bestD]++
+	}
+	cur := completePlacement(t, placement, n, used)
+	curFP := evalAt(cur)
+	curKey := armKey(curFP, targets)
+
+	// 局部搜索：固定几何下只需最大化裕度。
+	for round := 0; round < 8; round++ {
+		improved := false
+		for i := 0; i < n; i++ {
+			from := cur[i]
+			for d := range t.Domains {
+				if d == from {
+					continue
+				}
+				cnt := 0
+				for _, x := range cur {
+					if x == d {
+						cnt++
+					}
+				}
+				if c := t.Domains[d].Capacity; c > 0 && cnt >= c {
+					continue
+				}
+				trial := append([]int{}, cur...)
+				trial[i] = d
+				fp := evalAt(trial)
+				evaluated++
+				if k := armKey(fp, targets); k > curKey {
+					cur, curFP, curKey = trial, fp, k
+					improved = true
+				}
+			}
+		}
+		if !improved {
+			break
+		}
+	}
+	curFP.Diagnostics = fmt.Sprintf("%s｜放置 %v（共评估 %d 个候选）",
+		curFP.Diagnostics, cur, evaluated)
+	return JointPlan{
+		FailurePlan:     curFP,
+		Placement:       cur,
+		PlacementSearch: fmt.Sprintf("固定几何放置搜索：评估 %d 个候选", evaluated),
+		Evaluated:       evaluated,
+	}
+}
+
+// AblationArm 消融阶梯的一臂。
+type AblationArm struct {
+	Key         string  `json:"key"`
+	Name        string  `json:"name"`
+	Placement   []int   `json:"placement"`
+	Q1Size      int     `json:"q1_size"`
+	Q2Size      int     `json:"q2_size"`
+	WriteMsgs   int     `json:"write_msgs_per_op"`
+	DataAvail   float64 `json:"data_availability"`
+	CtrlAvail   float64 `json:"control_availability"`
+	Feasible    bool    `json:"feasible"`
+	MinMargin   float64 `json:"min_rel_margin"`
+	Description string  `json:"description"`
+}
+
+// AblationLadder 跑四臂消融。
+func AblationLadder(t *Topology, cfg Config, av AvailabilityModel, targets AvailabilityTargets) []AblationArm {
+	cfg = cfg.withDefaults(t)
+	n := cfg.Replicas
+	maj := n/2 + 1
+
+	mk := func(key, name, desc string, fp FailurePlan, pl []int) AblationArm {
+		return AblationArm{
+			Key: key, Name: name, Description: desc,
+			Placement: pl,
+			Q1Size:    len(fp.Quorum.Q1Members),
+			Q2Size:    len(fp.Quorum.Q2Members),
+			WriteMsgs: fp.WriteMsgsPerOp,
+			DataAvail: fp.DataAvailability,
+			CtrlAvail: fp.ControlAvailability,
+			Feasible:  fp.MeetsData && fp.MeetsControl,
+			MinMargin: minRelMargin(fp.DataAvailability, fp.ControlAvailability, targets),
+		}
+	}
+
+	// A1：默认放置 + majority 几何（现成做法）
+	a1 := SolveWithFailures(t, Config{
+		Replicas: n, DataFaults: cfg.DataFaults, ControlFaults: cfg.ControlFaults,
+		LogBytes: cfg.LogBytes, WriteRatio: cfg.WriteRatio,
+		Placement: defaultPlacement(n, len(t.Domains)),
+	}, av, AvailabilityTargets{Data: 0, Control: 0})
+	// 注意：A1 用 majority 的门槛看可用性，而不是 FAFT 的目标，
+	// 否则它会为了达标而改几何，"只看放置"这一臂就污染了。
+	a1 = planWithFixedGeometry(t, cfg, av, defaultPlacement(n, len(t.Domains)), maj, maj)
+
+	// A2：为 majority 几何优化的放置 + majority 几何
+	a2j := SolvePlacementOnly(t, cfg, av, targets, maj, maj)
+
+	// A3：默认放置 + FAFT 几何/成员（现有的 FaftPlanner）
+	a3 := SolveWithFailures(t, cfg, av, targets)
+
+	// A4：联合优化
+	a4j := SolveJoint(t, cfg, av, targets)
+
+	return []AblationArm{
+		mk("A1", "naive", "默认放置 i%nDom + majority 几何（现成做法）",
+			a1, defaultPlacement(n, len(t.Domains))),
+		mk("A2", "placement-only", "**为 majority 几何优化的放置** + majority 几何 —— 隔离「放置」的贡献",
+			a2j.FailurePlan, a2j.Placement),
+		mk("A3", "geometry-only", "默认放置 + FAFT 几何与成员选择 —— 隔离「几何+成员」的贡献",
+			a3, cfg.Placement),
+		mk("A4", "joint", "**联合优化放置与几何**（完整方法）",
+			a4j.FailurePlan, a4j.Placement),
+	}
+}
+
+// planWithFixedGeometry 在给定放置下，用固定大小的 quorum 评估。
+func planWithFixedGeometry(t *Topology, cfg Config, av AvailabilityModel,
+	placement []int, q1size, q2size int) FailurePlan {
+	c := cfg
+	c.Placement = placement
+	q := Quorum{Q1Members: firstN(q1size), Q2Members: firstN(q2size)}
+	plan := Evaluate(t, c, q)
+	fp := FailurePlan{
+		Plan:                plan,
+		DataAvailability:    av.availOf(q.Q2Members, placement),
+		ControlAvailability: av.availOf(q.Q1Members, placement),
+		FailureModel:        modelName(av.Model),
+	}
+	fp.MeetsData = fp.DataAvailability >= DefaultTargets().Data
+	fp.MeetsControl = fp.ControlAvailability >= DefaultTargets().Control
+	fp.Meets = fp.MeetsData && fp.MeetsControl
+	return fp
+}
+
+// armKey 消融各臂的统一比较键：可行优先，其次裕度。
+//
+// 消融的各臂**几何不同**，写消息数不可直接比 —— 只能先比可行性，
+// 再比可用性裕度。否则"A1 消息数是 6、A4 是 2"会被误读成 A4 更好，
+// 而实际上 A1 可能是达标的而 A4 不是。
+func armKey(fp FailurePlan, targets AvailabilityTargets) float64 {
+	feasible := fp.MeetsData && fp.MeetsControl
+	m := minRelMargin(fp.DataAvailability, fp.ControlAvailability, targets)
+	if feasible {
+		return 1000 + m // 可行的一律排在不可行之前
+	}
+	return m
+}
+
+func firstN(n int) []int {
+	out := make([]int, 0, n)
+	for i := 0; i < n; i++ {
+		out = append(out, i)
+	}
+	return out
+}
+
+func defaultPlacement(n, domains int) []int {
+	if domains <= 0 {
+		domains = 1
+	}
+	out := make([]int, n)
+	for i := range out {
+		out[i] = i % domains
+	}
+	return out
+}
+
+// samePlacement 判断两个放置是否逐位相同。
+func samePlacement(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func clampInt(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
 type JointPlanner struct {
 	Targets AvailabilityTargets
 }

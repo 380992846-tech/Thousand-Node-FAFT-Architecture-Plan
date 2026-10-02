@@ -16,6 +16,7 @@
 //	faftbench curve         # n=1000 的完整权衡曲线
 //	faftbench avail         # 独立失效 vs 相关失效的可用性高估量
 //	faftbench sens          # **敏感性扫描**：联合求解在故障参数空间的哪些区域占优
+//	faftbench ablation      # **消融阶梯**：联合优化 vs 分开优化两次（C1 的直接证据）
 package main
 
 import (
@@ -129,6 +130,19 @@ func main() {
 		fmt.Println("=== Baseline 对照：同一故障模型下的 quorum 规划器 ===")
 		fmt.Println()
 		runPlannerComparison()
+
+	case "ablation":
+		// 消融阶梯：把「放置」与「几何」两个自由度的贡献分开。
+		//
+		// 它只回答一句话：**「联合优化」是否真的优于「分开优化两次」。**
+		// 敏感性扫描得到「联合占优 43/90」，但那个对照里 baseline 的放置是
+		// 写死的 —— 审稿人会问"是不是给方法多给了一个自由变量"。只有消融能回答。
+		fmt.Println("=== 消融阶梯：联合优化 vs 分开优化两次 ===")
+		fmt.Println()
+		if err := runAblation(ablationOpts{domains: 9, replicas: 5, dataTol: 1, ctrlTol: 1, outPath: sensOut}); err != nil {
+			fmt.Fprintln(os.Stderr, "消融失败:", err)
+			os.Exit(1)
+		}
 
 	case "sens":
 		// 敏感性扫描：结论在故障参数空间的哪些区域里成立。
