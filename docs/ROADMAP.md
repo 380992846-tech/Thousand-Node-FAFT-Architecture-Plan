@@ -88,7 +88,8 @@ BenchmarkBarrierVsCommitTimeout: commit=1ms/5ms/20ms → 5.72/6.46/5.87 ms
 | `cmd/kvbench` | 一体化实验驱动：同命令 + 同种子 => 同结果 |
 | `cmd/faftbench` | FAFT 分析（`scale`/`cost`/`domain`/`curve`/`avail`/`solve`/`solve-uniform`/`solve-plan`/`regional`） |
 | `third_party/flexiraft` | **hashicorp/raft v1.6.1 的 FPaxos 改造版**：可配置 \|Q1\|/\|Q2\|；未设时与上游逐行等价 |
-| `cmd/raftbench` | **共识层微基准**：`bench`/`avail`/`lag`/`sweep` 四种模式，实测 quorum 几何的收益与代价 |
+| `cmd/raftbench` | **共识层微基准**：`bench`/`burst`/`avail`/`lag`/`fail`/`shards`/`sweep` 七种模式，实测 quorum 几何的收益与代价 |
+| `cmd/faultfit` | **故障日志 → 模型参数**：把域级故障区间拟合成 `{P,Q,K}`，带合成序列自检 |
 | `scripts/run-raftbench.ps1` | 一键复现全部 raftbench 实验，结果落 `results/raftbench-*.json` |
 
 ### 1.5 方向验证（关键产出）
@@ -442,7 +443,11 @@ go run ./cmd/raftbench -mode bench -n 5 -q1 3 -q2 3 -delay 5ms \
 go run ./cmd/raftbench -mode avail -n 5 -q1 5 -q2 1 -kill 0 -trials 7
 go run ./cmd/raftbench -mode lag   -n 5 -q1 5 -q2 1 -delay 1ms -lagops 1500
 
-# 8. baseline 对照（解析级）
+# 8. 故障参数拟合（有真实故障日志时）
+go run ./cmd/faultfit -in failures.csv -window 6h -physical 20m -out-json faultparams.json
+go run ./cmd/faultfit -synthetic -domains 6 -days 365 -window 6h -trueP 0.004 -trueQ 0.02 -trueK 3  # 自检
+
+# 9. baseline 对照（解析级）
 go run ./cmd/faftbench planners  # majority / FlexiRaft / Orca / TiKV PD / FAFT
 go run ./cmd/faftbench evidence  # 全部结论的证据等级清单
 ```

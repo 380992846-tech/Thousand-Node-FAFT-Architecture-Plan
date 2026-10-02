@@ -95,9 +95,10 @@ go run ./cmd/kvbench -spec 2x3 -duration 10s -warmup 3s -concurrency 32
 | `third_party/flexiraft` | **hashicorp/raft 的 FPaxos 改造版**（可配置 \|Q1\|/\|Q2\|） |
 | `cmd/kvbench` | 一体化实验驱动 |
 | `cmd/faftbench` | FAFT 收益与代价分析 |
-| `cmd/raftbench` | **共识层微基准**：quorum 几何对提交吞吐/延迟的实测 |
+| `cmd/raftbench` | **共识层微基准**：7 种模式 —— 吞吐 / 突发 / 可用性 / 复制落后 / 故障注入 / `MaxAppendEntries` / 多分片整域故障 |
+| `cmd/faultfit` | **故障日志 → 模型参数**：把生产日志拟合成 `pkg/faft` 能吃的 P/Q/K |
 | `cmd/simbench` | 离散事件模拟器驱动 |
-| `docs/` | [BUGS](docs/BUGS.md) · [DESIGN](docs/DESIGN.md) · [MEASUREMENT](docs/MEASUREMENT.md) · [ROADMAP](docs/ROADMAP.md) |
+| `docs/` | [BUGS](docs/BUGS.md) · [DESIGN](docs/DESIGN.md) · [MEASUREMENT](docs/MEASUREMENT.md) · [PAPER-DRAFT](docs/PAPER-DRAFT.md) · [FAULT-DATA](docs/FAULT-DATA.md) · [ROADMAP](docs/ROADMAP.md) |
 
 ---
 
@@ -109,6 +110,10 @@ go run ./cmd/kvbench -spec 2x3 -duration 10s -warmup 3s -concurrency 32
   文献空白、理论支撑、FAFT 设计、baselines、指标、消融、风险
 - **[docs/MEASUREMENT.md](docs/MEASUREMENT.md)** —— **证据分级与本机限制**：
   哪些数字是实测、哪些是解析、时钟地板的实测数据、注入延迟的语义
+- **[docs/PAPER-DRAFT.md](docs/PAPER-DRAFT.md)** —— **论文骨架**：把已有结果按章节摆好，
+  逐条标注证据等级与产出位置，附审稿人质疑自检清单
+- **[docs/FAULT-DATA.md](docs/FAULT-DATA.md)** —— **故障参数从哪来**：要挖哪些数据、
+  怎么统计、拿不到怎么做敏感性扫描
 - **[docs/ROADMAP.md](docs/ROADMAP.md)** —— 已完成 / 未完成 / **验证缺口**
 - **[docs/related-work-notes.md](docs/related-work-notes.md)** —— 顶会调研原始笔记
 - **[_research_pdfs/](_research_pdfs/)** —— 调研引用的一手 PDF 与文本
