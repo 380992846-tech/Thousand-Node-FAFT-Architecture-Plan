@@ -105,7 +105,7 @@ go run ./cmd/kvbench -spec 2x3 -duration 10s -warmup 3s -concurrency 32
 
 ## 文档
 
-- **[docs/BUGS.md](docs/BUGS.md)** —— **42 项**缺陷的完整审计（39 条带编号，BUG-18 缺号；
+- **[docs/BUGS.md](docs/BUGS.md)** —— **44 项**缺陷的完整审计（41 条带编号，BUG-18 缺号；
   另 3 条未编号的新发现）：源码位置、成因、
   发现方式、修复与回归测试
 - **[docs/DESIGN.md](docs/DESIGN.md)** —— 论文方向与实验方案：
@@ -118,8 +118,10 @@ go run ./cmd/kvbench -spec 2x3 -duration 10s -warmup 3s -concurrency 32
   时钟地板限制、确定性复现的真实范围；开篇纠正三处与事实不符的提法
 - **[docs/FAULT-DATA.md](docs/FAULT-DATA.md)** —— **故障参数从哪来**：要挖哪些数据、
   怎么统计、拿不到怎么做敏感性扫描
+- **[docs/MACHINE-REQUEST.md](docs/MACHINE-REQUEST.md)** —— **机时申请（一页版）**：
+  结论是 **0 张 GPU**，要 6–15 台分布在独立故障域的 CPU 节点；可直接转给导师/资源管理员
 - **[docs/ROADMAP.md](docs/ROADMAP.md)** —— 已完成 / 未完成 / **验证缺口**，
-  以及 **§三之二 机时申请**（要什么、为什么、消掉哪几条 L —— 可直接转给资源管理员）
+  以及 §三之二 机时申请的详细论证
 - **[docs/related-work-notes.md](docs/related-work-notes.md)** —— 顶会调研原始笔记
 - **[_research_pdfs/](_research_pdfs/)** —— 调研引用的一手 PDF 与文本
 

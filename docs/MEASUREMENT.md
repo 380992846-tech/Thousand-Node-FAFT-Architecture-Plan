@@ -634,7 +634,7 @@ flexiraft-dq2        36       0        0         36            —
 
 1. **联合求解在全部 36 个可行点上达到下界** ⇒ 在这些点上它的写消息数**可证最优**。
 2. **只有 12 个点有区分力**：其余 24 个点上所有可行方法都已达到下界。
-   ⚠️ 这**不是**"界太松"—— 见下面 §5.11 的穷举复核：下界在 36/36 个可行点上
+   ⚠️ 这**不是**"界太松"—— 见下面 §5.9.1 的穷举复核：下界在 36/36 个可行点上
    **恰好等于真实最优**。所以那 24 个点的含义是"**该参数点不区分方法**"
    （约束把 |Q2| 顶到了同一个值）。
    > 第一版把这件事写成了"下界不够紧（松弛 ① 最松）"—— 那是一次**没有证据的推断**，
@@ -642,7 +642,7 @@ flexiraft-dq2        36       0        0         36            —
 3. **12 个下界不可行的点上，任何方法的不可行都不是方法缺陷**：
    连"最可靠域 + 最理想分拆"都达不到目标，目标本身不可达。
 
-#### 5.11 穷举复核：把主配置的最优解真的求出来
+#### 5.9.1 穷举复核：把主配置的最优解真的求出来
 
 > 证据等级：**ANALYSIS**（对模型的精确枚举，不涉及 wall-clock）。
 > 复现：`bin\faftbench.exe exhaustive results\faftbench-exhaustive.json`（约 45 分钟）
@@ -824,6 +824,89 @@ Go 的 map 遍历顺序随机，浮点加法不满足结合律，于是**同一�
 
 ---
 
+### 5.11 Orca 端到端：动态排除机制的第一手实测
+
+> 证据等级：**MEASURED**。复现：
+> `bin\raftbench.exe -mode orca -n 5 -delay 1ms -orcakill 3 -electtimeout 3s -settle 20s`
+> 结果：`results/raftbench-orca-n5-kill3-{leader,noleader}.json`
+
+#### 先说一件必须先澄清的事：Orca 的静态几何**不是**独立 baseline
+
+`pkg/faft/planner_orca.go` 里 Orca 的构造是
+
+```
+Q2 = k+1,  Q1 = n - Q2 + 1
+```
+
+而 `FlexiRaftPlanner{DataQuorum: k+1}` 用的也是 `Q1 = n - Q2 + 1`（`planner.go:167`）。
+**两者逐位相同。** 也就是说对照表里的 `orca` 行与 `flexiraft-dq{k+1}` 行是同一套机制，
+把它们当成两个独立 baseline 会高估对照的多样性。Orca 唯一独立的内容是
+**把已判定故障的副本从 quorum 计算中排除**（动态 quorum）——
+而那一半此前没实现（`planner_orca.go` 的 Notes 里写着）。
+
+所以"Orca 端到端"实质是：把排除机制落到 `third_party/flexiraft`，再测它到底换来什么。
+本轮新增 `-mode orca`，两种做法**分开测**（不替原文选一种）：
+
+| 模式 | `\|Q2\|` 的算法 | `\|Q1\|` 的算法 | 交集保证 |
+|---|---|---|---|
+| `full-set` | 在**非排除**成员上算 | 仍在**全部**成员上算（`N-Q2+1`） | 保持 `\|Q1\|+\|Q2\|>N` |
+| `live-set` | 在**非排除**成员上算 | 也在**非排除**成员上算 | **可能被破坏** |
+
+#### 两个场景，结论相反
+
+n=5、注入延迟 1ms、杀 3 个副本、再施压 3 秒：
+
+**场景 A：先杀 leader**（考的是 `|Q1|` —— 要不要重新选举）
+
+| 臂 | 几何 | 杀后成功提交 | 选出新 leader | 三层安全性 |
+|---|---|---|---|---|
+| majority | (3,3) | **0** | ✗ | ✅ |
+| orca-static | (4,2) | **0** | ✗ | ✅ |
+| orca-full | (4,2) + full-set | **0** | ✗ | ✅ |
+| **orca-live** | (4,2) + live-set | **11,239** | ✓ 93ms | ❌ **回滚 3 条** |
+
+**场景 B：保留 leader，只杀 follower**（考的是 `|Q2|` —— 能不能不等死副本）
+
+| 臂 | 几何 | 杀后成功提交 | 安全性 |
+|---|---|---|---|
+| majority | (3,3) | **0** | ✅ |
+| orca-static | (4,2) | **107** | ✅ |
+| orca-full | (4,2) + full-set | **129** | ✅ |
+| orca-live | (4,2) + live-set | **11,109** | ✅ |
+
+#### 三条结论
+
+1. **"缩小 `|Q2|`"单独用，收益很小**：场景 B 里 majority 0 条、orca-static 107 条 ——
+   有收益（0 → 107），但相对 live-set 的 11,109 差 **80 倍**。
+   原因是 **`|Q1|` 同时支配选举与 leader 的自我验证**：3/5 节点已死，
+   `|Q1|=4` 无法达成，leader 在 lease 超时后**退位**，之后又选不出新 leader，
+   所以只在退位前提交了一小批。
+   > 这戳破了一个很自然的想法：以为"少等几个副本"就能在故障后继续服务。
+   > FPaxos 的 `|Q1|+|Q2|>N` 把两者绑在一起 —— `|Q2|` 变小必然让 `|Q1|` 变大。
+
+2. **真正能换来可用性的是缩小 `|Q1|`（live-set），但那会破坏安全性**：
+   场景 A 里它是唯一还能服务的臂（11,239 条），代价是**3 条已确认的写在新 leader 上不存在**
+   —— 客户端收到过成功、随后被回滚。这是共识安全性的直接证伪，不是性能问题。
+
+3. **因此"动态排除"要能用，必须补上我们没实现的那套机制**：排除集合在被用来缩小
+   quorum 之前，应当先经过某种"已提交的确认"（等价于成员变更/收敛条件），
+   否则就是拿安全性换可用性。这正好印证了 `planner_orca.go` 当初那句
+   "未实现动态 quorum 的完整运行时机制（故障检测器状态机、排除后的安全性论证、
+   排除集合的收敛条件）"—— 现在这句话有了**实测依据**，而不再只是免责声明。
+
+#### 必读的边界（论文里要照抄）
+
+- ⚠️ 我们**未获得 Orca 论文全文**：上述结构性描述来自检索到的摘要，
+  `k` 的定义与排除集合的维护方式**可能与原文有差异**。
+  **第 2 条是对"我们的重建"的证伪，不能直接说成"Orca 不安全"。**
+- 故障检测器在本模式里就是模式本身（它知道自己杀了谁）⇒ 测到的是
+  **检测完全正确**时的上界。真实系统的**误判**（把活节点当死节点）没建模，
+  而误判正是 live-set 模式的主要风险来源。
+- 三轮一致、结果稳定：场景 A 的 live-set 回滚分别为 7 / 3 条，
+  场景 B 的 107/129 与 11,109 也在重复中出现同量级值。
+
+---
+
 ## 6. 复现命令
 
 ```powershell
@@ -852,8 +935,14 @@ go run ./cmd/faftbench evidence
 # §5.9 的下界对照（ANALYSIS 级；含穷举守门测试，故必须先过 go test）
 go run ./cmd/faftbench lowerbound results\faftbench-lowerbound.json
 
-# §5.11 穷举复核：主配置（9^5 = 59049 个放置）上把最优解求出来（约 45 分钟）
+# §5.9.1 穷举复核：主配置（9^5 = 59049 个放置）上把最优解求出来（约 45 分钟）
 bin\faftbench.exe exhaustive results\faftbench-exhaustive.json
+
+# §5.11 Orca 端到端：动态排除机制（两个场景，各约 40 秒）
+bin\raftbench.exe -mode orca -n 5 -delay 1ms -orcakill 3 -electtimeout 3s -settle 20s `
+    -out results\raftbench-orca-n5-kill3-leader.json
+bin\raftbench.exe -mode orca -n 5 -delay 1ms -orcakill 3 -orcakeepleader -electtimeout 3s -settle 20s `
+    -out results\raftbench-orca-n5-kill3-noleader.json
 
 # §5.10 端到端分片扩展（MEASURED 级；真实 fsync，约 3 分钟）
 powershell -ExecutionPolicy Bypass -File scripts\run-kvbench-shards.ps1

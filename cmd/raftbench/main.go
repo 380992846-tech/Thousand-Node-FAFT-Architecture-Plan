@@ -225,6 +225,9 @@ type buildOpts struct {
 	// 分片数上千时要放大：否则 3000 个 Raft 实例的心跳+选举定时器
 	// 本身就会把 CPU 吃满，测出来的就不再是结构而是调度器。
 	hbTO, elecTO time.Duration
+	// exclusionMode 是【Orca 动态 quorum】的排除模式，见 orca.go。
+	// 0（默认）= 不排除任何成员，与上游 / FlexiRaft static 逐行等价。
+	exclusionMode fraft.ExclusionMode
 }
 
 func buildCluster(o buildOpts) (*cluster, error) {
@@ -277,7 +280,7 @@ func buildCluster(o buildOpts) (*cluster, error) {
 	configuration := fraft.Configuration{Servers: servers}
 
 	for _, nd := range cl.nodes {
-		cfg := newConfig(nd.id, q1, q2, o.mae, o.hbTO, o.elecTO)
+		cfg := newConfig(nd.id, q1, q2, o.mae, o.hbTO, o.elecTO, o.exclusionMode)
 		if err := fraft.BootstrapCluster(cfg, nd.store, nd.store, nd.snaps, nd.trans, configuration); err != nil {
 			cl.shutdown()
 			return nil, fmt.Errorf("引导 %s 失败: %w", nd.id, err)
@@ -286,7 +289,7 @@ func buildCluster(o buildOpts) (*cluster, error) {
 
 	// 4. 启动。
 	for _, nd := range cl.nodes {
-		cfg := newConfig(nd.id, q1, q2, o.mae, o.hbTO, o.elecTO)
+		cfg := newConfig(nd.id, q1, q2, o.mae, o.hbTO, o.elecTO, o.exclusionMode)
 		r, err := fraft.NewRaft(cfg, nd.fsm, nd.store, nd.store, nd.snaps, nd.trans)
 		if err != nil {
 			cl.shutdown()
@@ -297,7 +300,8 @@ func buildCluster(o buildOpts) (*cluster, error) {
 	return cl, nil
 }
 
-func newConfig(id fraft.ServerID, q1, q2, mae int, hbTO, elecTO time.Duration) *fraft.Config {
+func newConfig(id fraft.ServerID, q1, q2, mae int, hbTO, elecTO time.Duration,
+	mode fraft.ExclusionMode) *fraft.Config {
 	cfg := fraft.DefaultConfig()
 	cfg.LocalID = id
 	if hbTO <= 0 {
@@ -317,6 +321,8 @@ func newConfig(id fraft.ServerID, q1, q2, mae int, hbTO, elecTO time.Duration) *
 	cfg.LogLevel = "ERROR"
 	cfg.DataQuorumSize = q2
 	cfg.ElectionQuorumSize = q1
+	// 【Orca 动态 quorum】排除模式：0 = 不排除（默认，与上游一致）。
+	cfg.ExclusionMode = mode
 	if mae > 0 {
 		// 每条 AppendEntries 最多携带多少条日志。上游默认 64。
 		//
@@ -522,7 +528,7 @@ type result struct {
 }
 
 func main() {
-	mode := flag.String("mode", "bench", "bench | avail | lag | fail | burst | shards | sweep")
+	mode := flag.String("mode", "bench", "bench | avail | lag | fail | burst | shards | sweep | shards-scale | orca")
 	label := flag.String("label", "", "结果标签（默认自动生成）")
 	n := flag.Int("n", 5, "副本数")
 	q1 := flag.Int("q1", 0, "election quorum |Q1|（0 = 多数）")
@@ -567,6 +573,13 @@ func main() {
 		"shards-scale 模式：要对照的分片数（逗号分隔）。默认 1000,400 —— "+
 			"这正是 shards.go 注释里引用过的那个对照，此前 1000 分片侧没有落盘证据")
 	scaleReps := flag.Int("scalereps", 3, "shards-scale 模式：每个规模重复轮数")
+
+	orcaKill   := flag.Int("orcakill", 3, "orca 模式：注入故障时杀几个副本（先杀 leader）")
+	orcaKillAt := flag.Duration("orcakillat", time.Second, "orca 模式：预热结束多久后注入故障")
+	orcaAfter  := flag.Duration("orcaafter", 3*time.Second, "orca 模式：注入故障后继续施压多久")
+	orcaConc   := flag.Int("orcaconc", 16, "orca 模式：并发写入数")
+	orcaKeepLeader := flag.Bool("orcakeepleader", false,
+		"orca 模式：只杀 follower、保留 leader —— 与「杀 leader」是两个完全不同的场景，结论也相反")
 	exitGrace := flag.Duration("exit-grace", 30*time.Second,
 		"结果输出后若进程仍未退出，打印 goroutine 栈并强制退出（0=不管，见 BUG-39）")
 	elecTO := flag.Duration("electto", 0, "覆盖 ElectionTimeout（0 = 50ms）")
@@ -649,6 +662,43 @@ func main() {
 			clockUs: floor.Microseconds(), gogc: *gogc,
 			pollEvery: *shardPoll, maxInstances: *maxInst, settle: *shardSettle,
 		})
+	case "orca":
+		// Orca 端到端（见 orca.go）：静态几何 + 动态排除两种做法各跑一遍，
+		// 每个臂都过三层安全判据 + "同一任期两个 leader"检查。
+		orep, oerr := runOrcaMode(orcaOpts{
+			buildOpts: buildOpts{
+				n: *n, q1: *q1, q2: *q2,
+				delay: *delay, sigma: *sigma, seed: *seed, payload: *payload, mae: *mae,
+				hbTO: *hbTO, elecTO: *elecTO,
+			},
+			label:        *label,
+			kill:         *orcaKill,
+			killAt:       *orcaKillAt,
+			after:        *orcaAfter,
+			settle:       *settle,
+			conc:         *orcaConc,
+			keepLeader:   *orcaKeepLeader,
+			timeout:      *timeout,
+			electTimeout: *electTimeout,
+			clockFloor:   floor,
+			gogc:         *gogc,
+		})
+		if oerr != nil {
+			fmt.Fprintln(os.Stderr, "orca 模式失败:", oerr)
+			os.Exit(1)
+		}
+		if *out != "" {
+			if werr := writeOrcaReport(*out, orep); werr != nil {
+				fmt.Fprintln(os.Stderr, "写结果失败:", werr)
+				os.Exit(1)
+			}
+		}
+		fmt.Println()
+		for _, v := range orep.Verdict {
+			fmt.Printf("· %s\n", v)
+		}
+		return
+
 	case "shards-scale":
 		// 同一结构、不同分片数：验证"可用比例与规模无关"并把两侧写进同一份 JSON。
 		// 起因：shards.go 注释引用过这个对照，但 1000 分片那一侧没有落盘证据。

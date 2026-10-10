@@ -180,6 +180,22 @@ type Config struct {
 	DataQuorumSize     int
 	ElectionQuorumSize int
 
+	// 【本 fork 新增，Orca 动态 quorum】
+	//
+	// ExclusionMode 决定"被判定为故障的副本从 quorum 计算中排除"之后，
+	// **选举 quorum 怎么算**。取值见 ExclusionOff / ExclusionLiveSet / ExclusionFullSet。
+	//
+	//	  0（默认）   不排除任何成员 —— 与上游 hashicorp/raft、FlexiRaft static 一致
+	//	  1 live-set  |Q1| 与 |Q2| 都在**非排除成员**上算（激进，安全性依赖"排除是真的"）
+	//	  2 full-set  只有 |Q2| 在非排除成员上算，|Q1| 仍在全部成员上算（保守，
+	//	              保持 |Q1|+|Q2|>N，但选举门槛会随排除而变大）
+	//
+	// 运行时通过 Raft.SetExcludedVoters 提供排除集合（由故障检测器给出）。
+	// 两种模式的行为差异是**实测对象**，不在这里预设哪一种对。
+	//
+	// 同样**不属于** ReloadableConfig：切换模式会让"已提交"的定义漂移。
+	ExclusionMode ExclusionMode
+
 	// CommitTimeout specifies the time without an Apply operation before the
 	// leader sends an AppendEntry RPC to followers, to ensure a timely commit of
 	// log entries.

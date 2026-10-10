@@ -213,6 +213,18 @@ type Raft struct {
 
 	// mainThreadSaturation measures the saturation of the main raft goroutine.
 	mainThreadSaturation *saturationMetric
+
+	// 【本 fork 新增，Orca 动态 quorum】
+	// exclusionMu 保护 excludedVoters。它必须能被**主线程之外**调用者读写
+	// （故障检测器在别的 goroutine 上），所以用独立互斥量而不是 raftState 的锁。
+	exclusionMu sync.Mutex
+	// excludedVoters 是被判定为故障、应从 quorum 计算中排除的投票成员。
+	// 空表示不排除任何成员（默认，与上游一致）。
+	excludedVoters []ServerID
+	// curCommitment 是当前任期的 commitment，同样受 exclusionMu 保护。
+	// 存在的理由见 SetExcludedVoters 的线程模型说明：故障检测器在主线程之外，
+	// 直接读 leaderState.commitment 是数据竞争。
+	curCommitment *commitment
 }
 
 // BootstrapCluster initializes a server's storage with the given cluster

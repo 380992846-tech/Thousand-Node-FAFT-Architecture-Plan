@@ -412,6 +412,13 @@ func (r *Raft) setupLeaderState() {
 		// 【本 fork 新增】FlexiRaft 的 data-commit quorum |Q2|。
 		// 0 => 多数（上游行为）。
 		r.dataQuorumSize())
+	// 【本 fork 新增，Orca 动态 quorum】当选时带上当前的排除集合。
+	// 不做这一步的话，新 leader 上任会把排除集合清空 —— 而"排除"正是
+	// 动态 quorum 的全部内容，清空等于这个机制只在任期边界之间偶尔生效。
+	r.publishCommitment(r.leaderState.commitment)
+	if excl := r.excludedVotersSnapshot(); len(excl) > 0 {
+		r.leaderState.commitment.setExcluded(excl)
+	}
 	r.leaderState.inflight = list.New()
 	r.leaderState.replState = make(map[ServerID]*followerReplication)
 	r.leaderState.notify = make(map[*verifyFuture]struct{})
@@ -1057,11 +1064,29 @@ func (r *Raft) checkLeaderLease() time.Duration {
 // ─────────────────────────────────────────────────────────────────────
 func (r *Raft) quorumSize() int {
 	voters := r.voterCount()
+	// 【本 fork 新增，Orca 动态 quorum】排除模式下 Q1 由模式决定（见 ExclusionMode）。
+	// 没有排除集合时退回静态配置，保证 ExclusionOff 与 Orca-static 的行为
+	// 与 FlexiRaft static 逐位一致。
+	if mode := r.config().ExclusionMode; mode != ExclusionOff {
+		if excl := r.excludedVotersSnapshot(); len(excl) > 0 {
+			return r.electionQuorumFor(r.dataQuorumSize(), mode)
+		}
+	}
 	// 【改动】使用可配置的 election quorum；越界或未设时回退多数。
 	if q := r.config().ElectionQuorumSize; q > 0 && q <= voters {
 		return q
 	}
 	return voters/2 + 1
+}
+
+// excludedVotersSnapshot 返回排除集合的副本（供非主线程调用者读取）。
+func (r *Raft) excludedVotersSnapshot() []ServerID {
+	r.exclusionMu.Lock()
+	defer r.exclusionMu.Unlock()
+	if len(r.excludedVoters) == 0 {
+		return nil
+	}
+	return append([]ServerID(nil), r.excludedVoters...)
 }
 
 // dataQuorumSize returns the 【本 fork 新增】FlexiRaft data-commit quorum |Q2|.
@@ -1074,6 +1099,135 @@ func (r *Raft) dataQuorumSize() int {
 		return q
 	}
 	return voters/2 + 1
+}
+
+// ---------------------------------------------------------------------------
+// 【本 fork 新增，Orca 动态 quorum】
+// ---------------------------------------------------------------------------
+
+// ExclusionMode 决定"排除故障副本"之后，**选举 quorum 怎么算**。
+//
+// 这是整个动态 quorum 里唯一真正危险的决定，所以做成显式模式而不是内部默认值：
+//
+//	ExclusionOff    —— 不排除任何成员（默认，与上游 / FlexiRaft static 一致）。
+//	ExclusionLiveSet —— |Q2| 与 |Q1| 都在**非排除成员**上算：
+//	                    Q2 = min(k+1, |L|)，Q1 = |L| - Q2 + 1（L = 非排除成员）。
+//	                    好处：掉线副本不再占 quorum 名额，存活节点少也能选主/提交。
+//	                    ⚠️ 风险：被**误判**为故障的节点（网络分区、GC 停顿）如果
+//	                    带旧配置自行选举，它的 Q1 与在位 leader 的 Q2 可能不相交 ——
+//	                    交集保证从"全票集"退化到"存活集"，**这是排除机制真正的安全性缺口**。
+//	                    （相对 P 的 0.5^4 已到 6% margin，仍需实测证伪而非论证。）
+//	ExclusionFullSet —— |Q2| 在非排除成员上算，但 |Q1| 仍在**全部**投票成员上算：
+//	                    Q1 = N - Q2 + 1。这样 |Q1|+|Q2|>N 仍然成立，安全性有保证；
+//	                    代价是选举门槛随 Q2 变小而变大（n=5,k=1 时要 4/5 票），
+//	                    故障多了就选不出主 —— 可能"安全但没用"。
+//
+// 两种模式都端到端实测（cmd/raftbench -mode orca），由三层安全判据 + "同一任期
+// 两个 leader"检查去证伪。**不预设哪一种对** —— 这正是我们缺的那块证据。
+type ExclusionMode int
+
+const (
+	// ExclusionOff 不排除任何成员。
+	ExclusionOff ExclusionMode = iota
+	// ExclusionLiveSet quorum 全部在非排除成员上算（激进）。
+	ExclusionLiveSet
+	// ExclusionFullSet 只有 data quorum 在非排除成员上算（保守）。
+	ExclusionFullSet
+)
+
+func (m ExclusionMode) String() string {
+	switch m {
+	case ExclusionLiveSet:
+		return "live-set"
+	case ExclusionFullSet:
+		return "full-set"
+	default:
+		return "off"
+	}
+}
+
+// SetExcludedVoters 【本 fork 新增，Orca 动态 quorum】设置被排除的投票成员。
+//
+// 由**故障检测器**调用（在本项目里是 cmd/raftbench：它知道自己杀了谁）。
+// leader 上会立即生效于提交门槛；非 leader 上只影响选举 quorum 的计算。
+//
+// ⚠️ 线程模型：本方法会被主线程**之外**的调用者调用，而
+// `r.leaderState.commitment` 是主线程的字段（由 setupLeaderState 写）。
+// 直接读它就是数据竞争 —— `-race` 会当场报。
+// 所以这里用 curCommitment 这个**受 exclusionMu 保护**的指针：
+// setupLeaderState 写它、本方法读它，读写都在锁内。
+func (r *Raft) SetExcludedVoters(ids []ServerID) {
+	r.exclusionMu.Lock()
+	r.excludedVoters = append([]ServerID(nil), ids...)
+	c := r.curCommitment
+	r.exclusionMu.Unlock()
+
+	// 只在确认自己仍是 leader 时才动提交门槛：curCommitment 可能是上一任期的
+	// 对象（那时 setExcluded 没有意义，但也不会有害）。新任期上任时
+	// setupLeaderState 会重新应用排除集合。
+	if c != nil && r.getState() == Leader {
+		c.setExcluded(ids)
+	}
+}
+
+// publishCommitment 由 setupLeaderState 调用，把当前任期的 commitment 暴露给
+// 故障检测器（见 SetExcludedVoters 的线程模型说明）。
+func (r *Raft) publishCommitment(c *commitment) {
+	r.exclusionMu.Lock()
+	r.curCommitment = c
+	r.exclusionMu.Unlock()
+}
+
+// ExcludedVoters 返回当前排除集合（用于结果 JSON 与断言）。
+func (r *Raft) ExcludedVoters() []ServerID {
+	r.exclusionMu.Lock()
+	defer r.exclusionMu.Unlock()
+	return append([]ServerID(nil), r.excludedVoters...)
+}
+
+// liveVoterCount 返回**非排除**的投票成员数（下界 1）。
+func (r *Raft) liveVoterCount() int {
+	n := r.voterCount()
+	r.exclusionMu.Lock()
+	excl := len(r.excludedVoters)
+	r.exclusionMu.Unlock()
+	if n-excl < 1 {
+		return 1
+	}
+	return n - excl
+}
+
+// electionQuorumFor 按模式计算选举 quorum |Q1|。
+//
+// 返回值必须 ≥ 1；调用方保证只在非 ExclusionOff 时使用。
+func (r *Raft) electionQuorumFor(q2 int, mode ExclusionMode) int {
+	n := r.voterCount()
+	switch mode {
+	case ExclusionLiveSet:
+		nL := r.liveVoterCount()
+		if q2 > nL {
+			q2 = nL
+		}
+		q1 := nL - q2 + 1
+		if q1 < 1 {
+			q1 = 1
+		}
+		if q1 > n {
+			q1 = n
+		}
+		return q1
+	case ExclusionFullSet:
+		q1 := n - q2 + 1
+		if q1 < 1 {
+			q1 = 1
+		}
+		if q1 > n {
+			q1 = n
+		}
+		return q1
+	default:
+		return r.quorumSize()
+	}
 }
 
 // voterCount returns the number of voting servers in the latest configuration.
